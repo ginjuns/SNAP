@@ -74,13 +74,16 @@ QJsonObject KioskServer::handle(const QJsonObject &req)
     } else if (cmd == "ADD_PRODUCT") {
         QByteArray image;
         ok = decodeImage(req, &image, &err)
-             && m_db->addProduct(req.value("name").toString(), req.value("price").toInt(), image, &err);
+             && m_db->addProduct(req.value("name").toString(), req.value("price").toInt(),
+                                 req.value("stock").toInt(), image, &err);
     } else if (cmd == "UPDATE_PRODUCT") {
         QVariantMap fields;
         if (req.contains("name"))
             fields["name"] = req.value("name").toString();
         if (req.contains("price"))
             fields["price"] = req.value("price").toInt();
+        if (req.contains("stock"))
+            fields["stock"] = req.value("stock").toInt();
         QByteArray image;
         ok = decodeImage(req, &image, &err);
         if (ok) {

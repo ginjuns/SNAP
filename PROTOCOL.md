@@ -30,23 +30,23 @@
 ### PRODUCTS: 상품 목록
 ```json
 {"cmd":"PRODUCTS"}
-→ {"ok":true,"data":[{"id":1,"name":"아메리카노","price":3000,"image":"iVBORw0KG..."}, ...]}
+→ {"ok":true,"data":[{"id":1,"name":"아메리카노","price":3000,"stock":20,"image":"iVBORw0KG..."}, ...]}
 ```
 
 ### ADD_PRODUCT: 상품 추가
 ```json
-{"cmd":"ADD_PRODUCT","name":"녹차라떼","price":4000,"image":"/9j/4AAQ..."}
+{"cmd":"ADD_PRODUCT","name":"녹차라떼","price":4000,"stock":30,"image":"/9j/4AAQ..."}
 → {"ok":true,"data":null}
 ```
-`image`는 생략할 수 있습니다. 상품명이 이미 있으면(대소문자 무시) 실패합니다.
+`stock`(재고, 생략 시 0)과 `image`는 생략할 수 있습니다. 상품명이 이미 있으면(대소문자 무시) 실패합니다.
 
 ### UPDATE_PRODUCT: 상품 수정 (사진 변경 등)
 ```json
 {"cmd":"UPDATE_PRODUCT","productId":1,"image":"/9j/4AAQ..."}
-{"cmd":"UPDATE_PRODUCT","productId":1,"name":"아이스 아메리카노","price":3500}
+{"cmd":"UPDATE_PRODUCT","productId":1,"name":"아이스 아메리카노","price":3500,"stock":50}
 → {"ok":true,"data":null}
 ```
-보낸 항목(`name`, `price`, `image`)만 바뀝니다. `"image":""`를 보내면 사진이 삭제됩니다.
+보낸 항목(`name`, `price`, `stock`, `image`)만 바뀝니다. `"image":""`를 보내면 사진이 삭제됩니다.
 
 ### DELETE_PRODUCT: 상품 삭제
 ```json
@@ -63,6 +63,7 @@
 - `method`: `card` 또는 `face`. `face`는 충전 잔액에서 차감하며, 잔액이 부족하면 실패합니다.
 - `balance`는 `face` 결제일 때만 들어 있습니다.
 - 금액은 서버가 DB 가격으로 계산합니다.
+- 결제한 수량만큼 재고(`stock`)가 차감되며, 재고보다 많이 사면 실패합니다. (예: `"'샌드위치' 재고가 부족합니다. (남은 수량 2개)"`)
 
 ### SALES: 매출 조회
 ```json

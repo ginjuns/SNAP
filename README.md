@@ -13,6 +13,7 @@ sudo apt install mysql-server libqt5sql5-mysql      # Qt MySQL 드라이버 포�
 sudo mysql < server/schema.sql                       # DB, 테이블, 샘플 데이터, 접속 계정 생성
 cp server/server.ini.example server/server.ini       # 접속 정보 (비밀번호를 바꿨다면 수정)
 ```
+- **이미 DB를 만들어 둔 경우**, 재고 기능을 쓰려면 `sudo mysql < server/migrate_stock.sql`을 한 번 실행하세요. 기존 상품의 재고는 10개로 채워집니다.
 - 테이블 구성은 `server/schema.sql`에 있습니다. 상품 사진은 `MEDIUMBLOB`(최대 16MB)에 저장합니다.
 - `server.ini`에는 비밀번호가 있으므로 git에 올라가지 않습니다.
 

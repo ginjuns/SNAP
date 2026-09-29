@@ -59,6 +59,11 @@ bool Database::open(const QSettings &config, QString *err)
             return false;
         }
     }
+    if (!q.exec("SELECT stock FROM products LIMIT 1")) {
+        *err = "products 테이블에 재고(stock) 칸이 없습니다.\n"
+               "sudo mysql < server/migrate_stock.sql 을 한 번 실행하세요.";
+        return false;
+    }
     return true;
 }
 
@@ -85,7 +90,7 @@ bool Database::user(int id, QVariant *out, QString *err)
 bool Database::products(QVariant *out, QString *err)
 {
     QSqlQuery q;
-    if (!q.exec("SELECT id, name, price, image FROM products ORDER BY id"))
+    if (!q.exec("SELECT id, name, price, stock, image FROM products ORDER BY id"))
         return fail(q, err);
     QVariantList list;
     while (q.next()) {
@@ -93,18 +98,19 @@ bool Database::products(QVariant *out, QString *err)
         m["id"] = q.value(0).toInt();
         m["name"] = q.value(1).toString();
         m["price"] = q.value(2).toInt();
-        m["image"] = QString::fromLatin1(q.value(3).toByteArray().toBase64());   // 사진 없으면 ""
+        m["stock"] = q.value(3).toInt();
+        m["image"] = QString::fromLatin1(q.value(4).toByteArray().toBase64());   // 사진 없으면 ""
         list << m;
     }
     *out = list;
     return true;
 }
 
-bool Database::addProduct(const QString &rawName, int price, const QByteArray &image, QString *err)
+bool Database::addProduct(const QString &rawName, int price, int stock, const QByteArray &image, QString *err)
 {
     const QString name = rawName.trimmed();
-    if (name.isEmpty() || price <= 0) {
-        *err = "상품명과 가격을 올바르게 입력하세요.";
+    if (name.isEmpty() || price <= 0 || stock < 0) {
+        *err = "상품명, 가격, 재고를 올바르게 입력하세요.";
         return false;
     }
     bool taken = false;
@@ -116,9 +122,10 @@ bool Database::addProduct(const QString &rawName, int price, const QByteArray &i
     }
 
     QSqlQuery q;
-    q.prepare("INSERT INTO products (name, price, image) VALUES (?, ?, ?)");
+    q.prepare("INSERT INTO products (name, price, stock, image) VALUES (?, ?, ?, ?)");
     q.addBindValue(name);
     q.addBindValue(price);
+    q.addBindValue(stock);
     q.addBindValue(image.isEmpty() ? QVariant(QVariant::ByteArray) : QVariant(image));   // 사진 없으면 NULL
     return q.exec() || fail(q, err);
 }
@@ -161,13 +168,21 @@ bool Database::updateProduct(int id, const QVariantMap &fields, QString *err)
         sets << "price = ?";
         values << fields.value("price").toInt();
     }
+    if (fields.contains("stock")) {
+        if (fields.value("stock").toInt() < 0) {
+            *err = "재고는 0 이상이어야 합니다.";
+            return false;
+        }
+        sets << "stock = ?";
+        values << fields.value("stock").toInt();
+    }
     if (fields.contains("image")) {
         const QByteArray image = fields.value("image").toByteArray();
         sets << "image = ?";
         values << (image.isEmpty() ? QVariant(QVariant::ByteArray) : QVariant(image));   // "" = 사진 삭제
     }
     if (sets.isEmpty()) {
-        *err = "변경할 항목(name, price, image)이 없습니다.";
+        *err = "변경할 항목(name, price, stock, image)이 없습니다.";
         return false;
     }
 
@@ -214,14 +229,25 @@ bool Database::pay(int userId, const QString &method, const QVariantList &items,
         const QVariantMap item = v.toMap();
         const int productId = item.value("productId").toInt();
         const int qty = item.value("qty").toInt();
-        q.prepare("SELECT price, name FROM products WHERE id = ?");
+        q.prepare("SELECT price, name, stock FROM products WHERE id = ?");
         q.addBindValue(productId);
         if (qty <= 0 || !q.exec() || !q.next())
             return rollback("잘못된 상품 정보입니다. (삭제된 상품일 수 있습니다)", err);
 
         const int amount = q.value(0).toInt() * qty;
         const QString productName = q.value(1).toString();
+        const int stock = q.value(2).toInt();
         total += amount;
+
+        // 재고가 충분할 때만 차감 (동시에 결제해도 음수가 되지 않음)
+        q.prepare("UPDATE products SET stock = stock - ? WHERE id = ? AND stock >= ?");
+        q.addBindValue(qty);
+        q.addBindValue(productId);
+        q.addBindValue(qty);
+        if (!q.exec())
+            return rollback(q.lastError().text(), err);
+        if (q.numRowsAffected() == 0)
+            return rollback(QString("'%1' 재고가 부족합니다. (남은 수량 %2개)").arg(productName).arg(stock), err);
 
         q.prepare("INSERT INTO sales (user_id, product_id, product_name, qty, amount, method, sold_at)"
                   " VALUES (?, ?, ?, ?, ?, ?, ?)");

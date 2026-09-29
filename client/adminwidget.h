@@ -25,24 +25,32 @@ signals:
 private slots:
     void chooseImage();
     void addProduct();
+    void updateProduct();
     void deleteProduct();
+    void onProductSelected();
+    void clearForm();
     void loadProducts();
     void loadSales();
     void onUnitChanged();
     void prevPeriod();
     void nextPeriod();
+    void goToday();
 
 private:
-    void clearForm();
+    int selectedRow() const;
+    bool readForm(QString *name, int *price, int *stock);
     bool isMonthly() const;
 
     QLabel *m_welcome;
     // 상품 관리
     QLineEdit *m_name;
     QLineEdit *m_price;
+    QLineEdit *m_stock;
     QLabel *m_preview;
     QByteArray m_imageData;   // PNG
+    bool m_imageChanged;      // 수정 시 사진을 새로 골랐는지
     QTableWidget *m_products;
+    QVariantList m_productList;   // 표의 행 순서와 같음
     // 매출 확인
     QComboBox *m_unit;
     QDateEdit *m_date;

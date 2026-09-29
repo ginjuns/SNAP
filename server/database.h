@@ -14,8 +14,8 @@ public:
 
     bool user(int id, QVariant *out, QString *err);
     bool products(QVariant *out, QString *err);
-    bool addProduct(const QString &name, int price, const QByteArray &image, QString *err);
-    // fields: name / price / image 중 바꿀 항목만 담는다.
+    bool addProduct(const QString &name, int price, int stock, const QByteArray &image, QString *err);
+    // fields: name / price / stock / image 중 바꿀 항목만 담는다.
     bool updateProduct(int id, const QVariantMap &fields, QString *err);
     bool deleteProduct(int id, QString *err);
     bool pay(int userId, const QString &method, const QVariantList &items, QVariant *out, QString *err);

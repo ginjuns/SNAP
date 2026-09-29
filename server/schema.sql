@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS products (
     id          INT          NOT NULL AUTO_INCREMENT,
     name        VARCHAR(100) NOT NULL,
     price       INT          NOT NULL,
+    stock       INT          NOT NULL DEFAULT 0,          -- 재고 수량 (결제 시 차감)
     image       MEDIUMBLOB   NULL,
     updated_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
@@ -53,10 +54,10 @@ INSERT IGNORE INTO users (id, name, role, balance) VALUES
     (2, '홍길동', 'member', 50000),
     (3, '김철수', 'member', 30000);
 
-INSERT IGNORE INTO products (name, price) VALUES
-    ('아메리카노', 3000),
-    ('카페라떼',   3500),
-    ('샌드위치',   5000);
+INSERT IGNORE INTO products (name, price, stock) VALUES
+    ('아메리카노', 3000, 20),
+    ('카페라떼',   3500, 20),
+    ('샌드위치',   5000, 10);
 
 -- 서버 접속 계정 (비밀번호는 바꿔서 쓰고 server.ini에도 같게 입력)
 CREATE USER IF NOT EXISTS 'kiosk'@'localhost' IDENTIFIED BY 'kiosk1234';

@@ -60,7 +60,11 @@ void MemberWidget::loadProducts()
         QLabel *name = new QLabel(p.value("name").toString());
         QLabel *price = new QLabel(won(p.value("price").toInt()));
         price->setStyleSheet("font-weight: bold; color: #d32f2f;");
-        QPushButton *buy = new QPushButton("구매");
+        const int stockCount = p.value("stock").toInt();
+        QLabel *stock = new QLabel(stockCount > 0 ? QString("남은 수량 %L1개").arg(stockCount) : QString("품절"));
+        stock->setStyleSheet("font-size: 13px; color: #52514e;");
+        QPushButton *buy = new QPushButton(stockCount > 0 ? "구매" : "품절");
+        buy->setEnabled(stockCount > 0);
         buy->setProperty("index", i);
         connect(buy, SIGNAL(clicked()), SLOT(onBuy()));
 
@@ -70,6 +74,7 @@ void MemberWidget::loadProducts()
         v->addWidget(image, 0, Qt::AlignCenter);
         v->addWidget(name, 0, Qt::AlignCenter);
         v->addWidget(price, 0, Qt::AlignCenter);
+        v->addWidget(stock, 0, Qt::AlignCenter);
         v->addWidget(buy);
 
         gridLayout->addWidget(card, i / kColumns, i % kColumns);
@@ -82,10 +87,17 @@ void MemberWidget::onBuy()
 {
     const QVariantMap p = m_products.value(sender()->property("index").toInt()).toMap();
     const int id = p.value("id").toInt();
+    const int stock = p.value("stock").toInt();
 
     bool found = false;
     for (int i = 0; i < m_cart.size(); ++i) {
         if (m_cart[i].productId == id) {
+            if (m_cart[i].qty >= stock) {   // 최종 확인은 결제 시 서버에서 다시 함
+                QMessageBox::information(this, "재고 부족",
+                                         QString("'%1'은(는) %2개까지만 구매할 수 있습니다.")
+                                             .arg(p.value("name").toString()).arg(stock));
+                return;
+            }
             ++m_cart[i].qty;
             found = true;
         }

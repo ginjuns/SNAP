@@ -25,7 +25,7 @@ static QTableWidgetItem *cell(const QString &text, bool number = false)
 }
 
 AdminWidget::AdminWidget(QWidget *parent)
-    : QWidget(parent)
+    : QWidget(parent), m_imageChanged(false)
 {
     m_welcome = new QLabel;
     m_welcome->setStyleSheet("font-size: 22px; font-weight: bold;");
@@ -47,24 +47,41 @@ AdminWidget::AdminWidget(QWidget *parent)
     m_price->setPlaceholderText("터치하여 입력");
     VirtualKeyboard::attach(m_price, VirtualKeyboard::Number, "가격 입력 (원)");
 
+    m_stock = new QLineEdit;
+    m_stock->setValidator(new QIntValidator(0, 1000000, m_stock));
+    m_stock->setPlaceholderText("터치하여 입력");
+    VirtualKeyboard::attach(m_stock, VirtualKeyboard::Number, "재고 수량 입력 (개)");
+
     m_preview = new QLabel("이미지 없음");
     m_preview->setFixedSize(150, 150);
     m_preview->setAlignment(Qt::AlignCenter);
     m_preview->setFrameShape(QFrame::StyledPanel);
     QPushButton *imageButton = new QPushButton("이미지 선택...");
     QPushButton *addButton = new QPushButton("상품 추가");
+    QPushButton *updateButton = new QPushButton("선택 상품 수정");
+    QPushButton *clearButton = new QPushButton("새로 입력");
     connect(imageButton, SIGNAL(clicked()), SLOT(chooseImage()));
     connect(addButton, SIGNAL(clicked()), SLOT(addProduct()));
+    connect(updateButton, SIGNAL(clicked()), SLOT(updateProduct()));
+    connect(clearButton, SIGNAL(clicked()), SLOT(clearForm()));
+
+    QHBoxLayout *formButtons = new QHBoxLayout;
+    formButtons->addWidget(addButton);
+    formButtons->addWidget(updateButton);
 
     QFormLayout *form = new QFormLayout;
     form->addRow("상품명", m_name);
     form->addRow("가격(원)", m_price);
+    form->addRow("재고(개)", m_stock);
     form->addRow("사진", m_preview);
     form->addRow("", imageButton);
-    form->addRow("", addButton);
+    form->addRow("", formButtons);
+    form->addRow("", clearButton);
 
-    m_products = makeTable(QStringList() << "ID" << "상품명" << "가격");
+    // 목록에서 상품을 누르면 왼쪽 입력칸에 채워지고, [선택 상품 수정]으로 반영
+    m_products = makeTable(QStringList() << "상품명" << "재고" << "가격");
     m_products->setSelectionMode(QAbstractItemView::SingleSelection);
+    connect(m_products, SIGNAL(itemSelectionChanged()), SLOT(onProductSelected()));
     QPushButton *deleteButton = new QPushButton("선택 상품 삭제");
     connect(deleteButton, SIGNAL(clicked()), SLOT(deleteProduct()));
 
@@ -87,19 +104,19 @@ AdminWidget::AdminWidget(QWidget *parent)
     m_date->setMinimumWidth(170);
     QPushButton *prev = new QPushButton("◀ 이전");
     QPushButton *next = new QPushButton("다음 ▶");
-    QPushButton *search = new QPushButton("검색");
+    QPushButton *today = new QPushButton("오늘");
     connect(m_unit, SIGNAL(currentIndexChanged(int)), SLOT(onUnitChanged()));
     connect(m_date, SIGNAL(dateChanged(QDate)), SLOT(loadSales()));
     connect(prev, SIGNAL(clicked()), SLOT(prevPeriod()));
     connect(next, SIGNAL(clicked()), SLOT(nextPeriod()));
-    connect(search, SIGNAL(clicked()), SLOT(loadSales()));
+    connect(today, SIGNAL(clicked()), SLOT(goToday()));
 
     QHBoxLayout *salesBar = new QHBoxLayout;
     salesBar->addWidget(m_unit);
     salesBar->addWidget(prev);
     salesBar->addWidget(m_date);
     salesBar->addWidget(next);
-    salesBar->addWidget(search);
+    salesBar->addWidget(today);
     salesBar->addStretch();
 
     m_summary = new QLabel;
@@ -149,9 +166,12 @@ void AdminWidget::start(const QVariantMap &user)
 
 void AdminWidget::clearForm()
 {
+    m_products->clearSelection();
     m_name->clear();
     m_price->clear();
+    m_stock->clear();
     m_imageData.clear();
+    m_imageChanged = false;
     m_preview->setPixmap(QPixmap());
     m_preview->setText("이미지 없음");
 }
@@ -174,21 +194,39 @@ void AdminWidget::chooseImage()
     QBuffer buffer(&m_imageData);
     buffer.open(QIODevice::WriteOnly);
     image.save(&buffer, "PNG");
+    m_imageChanged = true;
 
     m_preview->setPixmap(QPixmap::fromImage(image).scaled(m_preview->size(), Qt::KeepAspectRatio));
 }
 
+int AdminWidget::selectedRow() const
+{
+    const QList<QTableWidgetItem *> items = m_products->selectedItems();
+    return items.isEmpty() ? -1 : items.first()->row();
+}
+
+// 입력칸 값 확인. 잘못됐으면 안내 후 false
+bool AdminWidget::readForm(QString *name, int *price, int *stock)
+{
+    *name = m_name->text().trimmed();
+    *price = m_price->text().toInt();
+    *stock = m_stock->text().toInt();
+    if (name->isEmpty() || *price <= 0 || m_stock->text().isEmpty()) {
+        QMessageBox::warning(this, "상품", "상품명, 가격, 재고를 모두 입력하세요.");
+        return false;
+    }
+    return true;
+}
+
 void AdminWidget::addProduct()
 {
-    const QString name = m_name->text().trimmed();
-    const int price = m_price->text().toInt();
-    if (name.isEmpty() || price <= 0) {
-        QMessageBox::warning(this, "상품 추가", "상품명과 가격을 입력하세요.");
+    QString name;
+    int price, stock;
+    if (!readForm(&name, &price, &stock))
         return;
-    }
 
     QString err;   // 상품명 중복은 서버에서 확인
-    const QVariantMap args{{"name", name}, {"price", price},
+    const QVariantMap args{{"name", name}, {"price", price}, {"stock", stock},
                            {"image", QString::fromLatin1(m_imageData.toBase64())}};
     if (!ServerClient::call("ADD_PRODUCT", args, 0, &err)) {
         QMessageBox::warning(this, "상품 추가 실패", err);
@@ -199,26 +237,76 @@ void AdminWidget::addProduct()
     loadProducts();
 }
 
+void AdminWidget::updateProduct()
+{
+    const int row = selectedRow();
+    if (row < 0) {
+        QMessageBox::information(this, "상품 수정", "수정할 상품을 목록에서 선택하세요.");
+        return;
+    }
+    QString name;
+    int price, stock;
+    if (!readForm(&name, &price, &stock))
+        return;
+
+    QVariantMap args{{"productId", m_productList.value(row).toMap().value("id").toInt()},
+                     {"name", name}, {"price", price}, {"stock", stock}};
+    if (m_imageChanged)   // 사진을 새로 고른 경우에만 교체
+        args["image"] = QString::fromLatin1(m_imageData.toBase64());
+
+    QString err;
+    if (!ServerClient::call("UPDATE_PRODUCT", args, 0, &err)) {
+        QMessageBox::warning(this, "상품 수정 실패", err);
+        return;
+    }
+    QMessageBox::information(this, "상품 수정", QString("'%1' 상품이 수정되었습니다.").arg(name));
+    clearForm();
+    loadProducts();
+}
+
 void AdminWidget::deleteProduct()
 {
-    const int row = m_products->currentRow();
+    const int row = selectedRow();
     if (row < 0) {
         QMessageBox::information(this, "상품 삭제", "삭제할 상품을 목록에서 선택하세요.");
         return;
     }
-    const int id = m_products->item(row, 0)->text().toInt();
-    const QString name = m_products->item(row, 1)->text();
+    const QVariantMap p = m_productList.value(row).toMap();
     if (QMessageBox::question(this, "상품 삭제",
-                              QString("'%1' 상품을 삭제하시겠습니까?\n(이미 발생한 매출 기록은 유지됩니다)").arg(name),
+                              QString("'%1' 상품을 삭제하시겠습니까?\n(이미 발생한 매출 기록은 유지됩니다)")
+                                  .arg(p.value("name").toString()),
                               QMessageBox::Yes | QMessageBox::No) != QMessageBox::Yes)
         return;
 
     QString err;
-    if (!ServerClient::call("DELETE_PRODUCT", QVariantMap{{"productId", id}}, 0, &err)) {
+    if (!ServerClient::call("DELETE_PRODUCT", QVariantMap{{"productId", p.value("id").toInt()}}, 0, &err)) {
         QMessageBox::warning(this, "상품 삭제 실패", err);
         return;
     }
+    clearForm();
     loadProducts();
+}
+
+// 목록에서 고른 상품을 입력칸에 채운다.
+void AdminWidget::onProductSelected()
+{
+    const int row = selectedRow();
+    if (row < 0)
+        return;
+    const QVariantMap p = m_productList.value(row).toMap();
+    m_name->setText(p.value("name").toString());
+    m_price->setText(QString::number(p.value("price").toInt()));
+    m_stock->setText(QString::number(p.value("stock").toInt()));
+
+    m_imageData = QByteArray::fromBase64(p.value("image").toString().toLatin1());
+    m_imageChanged = false;
+    QPixmap pixmap;
+    if (pixmap.loadFromData(m_imageData)) {
+        m_preview->setPixmap(pixmap.scaled(m_preview->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    } else {
+        m_preview->setPixmap(QPixmap());
+        m_preview->setText("이미지 없음");
+    }
 }
 
 void AdminWidget::loadProducts()
@@ -229,12 +317,14 @@ void AdminWidget::loadProducts()
         QMessageBox::warning(this, "상품 조회 실패", err);
         return;
     }
-    const QVariantList list = data.toList();
-    m_products->setRowCount(list.size());
-    for (int i = 0; i < list.size(); ++i) {
-        const QVariantMap p = list.at(i).toMap();
-        m_products->setItem(i, 0, cell(p.value("id").toString()));
-        m_products->setItem(i, 1, cell(p.value("name").toString()));
+    m_productList = data.toList();
+    m_products->clearSelection();
+    m_products->setRowCount(m_productList.size());
+    for (int i = 0; i < m_productList.size(); ++i) {
+        const QVariantMap p = m_productList.at(i).toMap();
+        const int stock = p.value("stock").toInt();
+        m_products->setItem(i, 0, cell(p.value("name").toString()));
+        m_products->setItem(i, 1, cell(stock > 0 ? QString("%L1개").arg(stock) : QString("품절"), true));
         m_products->setItem(i, 2, cell(won(p.value("price").toInt()), true));
     }
 }
@@ -341,4 +431,12 @@ void AdminWidget::loadSales()
 
     m_summary->setText(QString("합계 %1   |   카드 %2   |   얼굴인식 %3   |   판매수량 %L4개")
                            .arg(won(cardSum + faceSum)).arg(won(cardSum)).arg(won(faceSum)).arg(qtySum));
+}
+
+void AdminWidget::goToday()
+{
+    if (m_date->date() == QDate::currentDate())
+        loadSales();   // 이미 오늘이면 새로 조회만
+    else
+        m_date->setDate(QDate::currentDate());
 }
