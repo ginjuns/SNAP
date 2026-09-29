@@ -111,6 +111,21 @@ bool Database::addProduct(const QString &name, int price, const QByteArray &imag
     return q.exec() || fail(q, err);
 }
 
+// 매출 기록(sales)은 금액을 따로 저장하므로 상품을 지워도 매출 집계는 유지된다.
+bool Database::deleteProduct(int id, QString *err)
+{
+    QSqlQuery q;
+    q.prepare("DELETE FROM products WHERE id = ?");
+    q.addBindValue(id);
+    if (!q.exec())
+        return fail(q, err);
+    if (q.numRowsAffected() == 0) {
+        *err = "이미 삭제되었거나 없는 상품입니다.";
+        return false;
+    }
+    return true;
+}
+
 // 가격은 클라이언트가 보낸 값을 믿지 않고 DB에서 다시 계산한다.
 bool Database::pay(int userId, const QString &method, const QVariantList &items, QVariant *out, QString *err)
 {

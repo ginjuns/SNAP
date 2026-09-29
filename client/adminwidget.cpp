@@ -1,4 +1,5 @@
 #include "adminwidget.h"
+#include "saleschart.h"
 #include "serverclient.h"
 
 #include "qtcompat.h"
@@ -28,10 +29,9 @@ AdminWidget::AdminWidget(QWidget *parent)
 
     // ---- 상품 관리 탭 ----
     m_name = new QLineEdit;
-    m_price = new QSpinBox;
-    m_price->setRange(0, 10000000);
-    m_price->setSingleStep(100);
-    m_price->setSuffix(" 원");
+    m_price = new QLineEdit;
+    m_price->setValidator(new QIntValidator(1, 100000000, m_price));   // 숫자만 입력
+    m_price->setPlaceholderText("숫자만 입력 (예: 3000)");
     m_preview = new QLabel("이미지 없음");
     m_preview->setFixedSize(150, 150);
     m_preview->setAlignment(Qt::AlignCenter);
@@ -43,17 +43,24 @@ AdminWidget::AdminWidget(QWidget *parent)
 
     QFormLayout *form = new QFormLayout;
     form->addRow("상품명", m_name);
-    form->addRow("가격", m_price);
+    form->addRow("가격(원)", m_price);
     form->addRow("사진", m_preview);
     form->addRow("", imageButton);
     form->addRow("", addButton);
 
     m_products = makeTable(QStringList() << "ID" << "상품명" << "가격");
+    m_products->setSelectionMode(QAbstractItemView::SingleSelection);
+    QPushButton *deleteButton = new QPushButton("선택 상품 삭제");
+    connect(deleteButton, SIGNAL(clicked()), SLOT(deleteProduct()));
+
+    QVBoxLayout *listLayout = new QVBoxLayout;
+    listLayout->addWidget(m_products);
+    listLayout->addWidget(deleteButton, 0, Qt::AlignRight);
 
     QWidget *productTab = new QWidget;
     QHBoxLayout *productLayout = new QHBoxLayout(productTab);
     productLayout->addLayout(form);
-    productLayout->addWidget(m_products, 1);
+    productLayout->addLayout(listLayout, 1);
 
     // ---- 매출 확인 탭 ----
     m_unit = new QComboBox;
@@ -63,6 +70,7 @@ AdminWidget::AdminWidget(QWidget *parent)
     connect(m_unit, SIGNAL(currentIndexChanged(int)), SLOT(loadSales()));
     connect(refresh, SIGNAL(clicked()), SLOT(loadSales()));
 
+    m_chart = new SalesChart;
     m_sales = makeTable(QStringList() << "기간" << "판매수량" << "카드" << "얼굴인식" << "매출 합계");
     m_salesTotal = new QLabel;
     m_salesTotal->setAlignment(Qt::AlignRight);
@@ -76,9 +84,16 @@ AdminWidget::AdminWidget(QWidget *parent)
 
     QWidget *salesTab = new QWidget;
     QVBoxLayout *salesLayout = new QVBoxLayout(salesTab);
+    // 위: 그래프, 아래: 상세 표 (경계선을 끌어서 크기 조절)
+    QSplitter *splitter = new QSplitter(Qt::Vertical);
+    splitter->addWidget(m_chart);
+    splitter->addWidget(m_sales);
+    splitter->setStretchFactor(0, 3);
+    splitter->setStretchFactor(1, 2);
+
     salesLayout->addLayout(salesBar);
-    salesLayout->addWidget(m_sales);
     salesLayout->addWidget(m_salesTotal);
+    salesLayout->addWidget(splitter, 1);
 
     QTabWidget *tabs = new QTabWidget;
     tabs->addTab(productTab, "상품 관리");
@@ -100,7 +115,7 @@ void AdminWidget::start(const QVariantMap &user)
 void AdminWidget::clearForm()
 {
     m_name->clear();
-    m_price->setValue(0);
+    m_price->clear();
     m_imageData.clear();
     m_preview->setPixmap(QPixmap());
     m_preview->setText("이미지 없음");
@@ -131,18 +146,41 @@ void AdminWidget::chooseImage()
 void AdminWidget::addProduct()
 {
     const QString name = m_name->text().trimmed();
-    if (name.isEmpty() || m_price->value() <= 0) {
+    const int price = m_price->text().toInt();
+    if (name.isEmpty() || price <= 0) {
         QMessageBox::warning(this, "상품 추가", "상품명과 가격을 입력하세요.");
         return;
     }
 
     QString err;
-    if (!ServerClient::call("ADD_PRODUCT", QVariantList() << name << m_price->value() << m_imageData, 0, &err)) {
+    if (!ServerClient::call("ADD_PRODUCT", QVariantList() << name << price << m_imageData, 0, &err)) {
         QMessageBox::warning(this, "상품 추가 실패", err);
         return;
     }
     QMessageBox::information(this, "상품 추가", QString("'%1' 상품이 추가되었습니다.").arg(name));
     clearForm();
+    loadProducts();
+}
+
+void AdminWidget::deleteProduct()
+{
+    const int row = m_products->currentRow();
+    if (row < 0) {
+        QMessageBox::information(this, "상품 삭제", "삭제할 상품을 목록에서 선택하세요.");
+        return;
+    }
+    const int id = m_products->item(row, 0)->text().toInt();
+    const QString name = m_products->item(row, 1)->text();
+    if (QMessageBox::question(this, "상품 삭제",
+                              QString("'%1' 상품을 삭제하시겠습니까?\n(이미 발생한 매출 기록은 유지됩니다)").arg(name),
+                              QMessageBox::Yes | QMessageBox::No) != QMessageBox::Yes)
+        return;
+
+    QString err;
+    if (!ServerClient::call("DELETE_PRODUCT", QVariantList() << id, 0, &err)) {
+        QMessageBox::warning(this, "상품 삭제 실패", err);
+        return;
+    }
     loadProducts();
 }
 
@@ -187,4 +225,9 @@ void AdminWidget::loadSales()
         sum += s.value("total").toInt();
     }
     m_salesTotal->setText("전체 매출: " + won(sum));
+
+    if (unit == "month")
+        m_chart->setData(list, 12, "월별 매출 (최근 12개월)");
+    else
+        m_chart->setData(list, 14, "일별 매출 (최근 14일)");
 }

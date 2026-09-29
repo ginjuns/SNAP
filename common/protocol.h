@@ -17,6 +17,7 @@ const quint16 KIOSK_PORT = 9000;
 //   LOGIN       (userId)                                   -> {id, name, role, balance}
 //   PRODUCTS    ()                                         -> [{id, name, price, image}, ...]
 //   ADD_PRODUCT (name, price, imagePngBytes)               -> 없음
+//   DELETE_PRODUCT (productId)                             -> 없음
 //   PAY         (userId, "card"|"face", [{productId, qty}]) -> {total, balance}
 //   SALES       ("day"|"month")                            -> [{period, qty, card, face, total}, ...]
 

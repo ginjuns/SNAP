@@ -50,6 +50,8 @@ QVariantList KioskServer::handle(const QVariantList &req)
         ok = m_db->products(&data, &err);
     else if (cmd == "ADD_PRODUCT")
         ok = m_db->addProduct(req.value(1).toString(), req.value(2).toInt(), req.value(3).toByteArray(), &err);
+    else if (cmd == "DELETE_PRODUCT")
+        ok = m_db->deleteProduct(req.value(1).toInt(), &err);
     else if (cmd == "PAY")
         ok = m_db->pay(req.value(1).toInt(), req.value(2).toString(), req.value(3).toList(), &data, &err);
     else if (cmd == "SALES")

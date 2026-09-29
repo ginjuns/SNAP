@@ -13,6 +13,7 @@ public:
     bool user(int id, QVariant *out, QString *err);
     bool products(QVariant *out, QString *err);
     bool addProduct(const QString &name, int price, const QByteArray &image, QString *err);
+    bool deleteProduct(int id, QString *err);
     bool pay(int userId, const QString &method, const QVariantList &items, QVariant *out, QString *err);
     bool sales(const QString &unit, QVariant *out, QString *err);
 };

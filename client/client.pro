@@ -12,14 +12,16 @@ HEADERS += ../common/protocol.h \
            mainwindow.h \
            memberwidget.h \
            cartdialog.h \
-           adminwidget.h
+           adminwidget.h \
+           saleschart.h
 SOURCES += main.cpp \
            serverclient.cpp \
            facedialog.cpp \
            mainwindow.cpp \
            memberwidget.cpp \
            cartdialog.cpp \
-           adminwidget.cpp
+           adminwidget.cpp \
+           saleschart.cpp
 
 # ---------------------------------------------------------------
 # 실제 얼굴인식: OpenCV 3.3 이상 + opencv_contrib(face 모듈) 필요
