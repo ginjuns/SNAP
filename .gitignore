@@ -1,0 +1,19 @@
+# 빌드 결과물
+Makefile*
+*.o
+*.obj
+*.exe
+*.pro.user*
+moc_*
+qrc_*
+ui_*
+debug/
+release/
+build*/
+
+# 실행 시 생성되는 데이터
+kiosk.db
+faces/
+
+# 로컬 설정
+.claude/

@@ -1,0 +1,38 @@
+#ifndef FACEDIALOG_H
+#define FACEDIALOG_H
+
+#include <QDialog>
+
+class QLabel;
+class QLineEdit;
+class QTimer;
+
+// 카메라로 얼굴을 인식해 사용자 ID를 돌려주는 창.
+// 인식 성공 시 accept(), userId()로 결과 확인.
+class FaceDialog : public QDialog
+{
+    Q_OBJECT
+public:
+    explicit FaceDialog(const QString &title, QWidget *parent = 0);
+    ~FaceDialog();
+
+    int userId() const { return m_userId; }
+
+private slots:
+    void processFrame();     // OpenCV 모드: 카메라 프레임 처리
+    void acceptManualId();   // 시뮬레이션 모드: 입력한 ID로 인식 처리
+
+private:
+    struct Camera;
+    Camera *m_camera;
+    QLabel *m_view;
+    QLabel *m_status;
+    QLineEdit *m_idEdit;
+    QTimer *m_timer;
+    int m_userId;
+    int m_lastLabel;
+    int m_hits;
+    int m_ticks;
+};
+
+#endif // FACEDIALOG_H
