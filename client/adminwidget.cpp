@@ -24,6 +24,69 @@ static QTableWidgetItem *cell(const QString &text, bool number = false)
     return item;
 }
 
+static const char *kNoImage = "사진 없음\n\n터치하여 추가";
+
+enum IconType { PlusIcon, PencilIcon, ResetIcon, TrashIcon };
+
+// 버튼 아이콘을 직접 그린다. (이미지 파일/추가 모듈 없이 어느 환경에서나 같은 모양)
+static QIcon drawIcon(IconType type)
+{
+    QPixmap pixmap(64, 64);
+    pixmap.fill(Qt::transparent);
+    QPainter p(&pixmap);
+    p.setRenderHint(QPainter::Antialiasing);
+    const QColor color = (type == TrashIcon) ? QColor("#d32f2f") : (type == ResetIcon) ? QColor("#52514e")
+                                                                                        : QColor("#2a78d6");
+    p.setPen(QPen(color, 5, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+
+    switch (type) {
+    case PlusIcon:
+        p.drawLine(32, 12, 32, 52);
+        p.drawLine(12, 32, 52, 32);
+        break;
+    case PencilIcon: {   // 오른쪽 위 -> 왼쪽 아래로 기울어진 연필
+        p.translate(34, 30);
+        p.rotate(45);
+        p.drawRect(QRectF(-6, -22, 12, 34));
+        p.drawLine(QPointF(-6, -14), QPointF(6, -14));
+        p.setBrush(color);
+        p.drawPolygon(QPolygonF() << QPointF(-6, 12) << QPointF(6, 12) << QPointF(0, 24));
+        break;
+    }
+    case ResetIcon: {   // 시계 방향 회전 화살표: 위에서 시작해 왼쪽에서 끝남
+        const QPointF c(32, 32);
+        const qreal r = 18;
+        p.drawArc(QRectF(c.x() - r, c.y() - r, 2 * r, 2 * r), 90 * 16, -270 * 16);
+        const qreal e = M_PI;   // 끝나는 각도(180도, 왼쪽)
+        const QPointF end(c.x() + r * qCos(e), c.y() - r * qSin(e));
+        const QPointF dir(qSin(e), qCos(e));         // 시계 방향 진행 방향 (화면 좌표)
+        const QPointF out(qCos(e), -qSin(e));        // 바깥쪽
+        p.setBrush(color);
+        p.drawPolygon(QPolygonF() << end + dir * 10 << end + out * 8 << end - out * 8);
+        break;
+    }
+    case TrashIcon:
+        p.drawLine(12, 17, 52, 17);                                             // 뚜껑
+        p.drawPolyline(QPolygonF() << QPointF(25, 17) << QPointF(25, 10) << QPointF(39, 10) << QPointF(39, 17));
+        p.drawPolygon(QPolygonF() << QPointF(17, 23) << QPointF(47, 23) << QPointF(44, 55) << QPointF(20, 55));
+        p.drawLine(28, 30, 28, 48);
+        p.drawLine(36, 30, 36, 48);
+        break;
+    }
+    return QIcon(pixmap);
+}
+
+static QPushButton *iconButton(IconType type, const QString &tip)
+{
+    QPushButton *button = new QPushButton;
+    button->setIcon(drawIcon(type));
+    button->setIconSize(QSize(32, 32));
+    button->setMinimumSize(64, 56);
+    button->setToolTip(tip);
+    button->setAccessibleName(tip);
+    return button;
+}
+
 AdminWidget::AdminWidget(QWidget *parent)
     : QWidget(parent), m_imageChanged(false)
 {
@@ -52,47 +115,46 @@ AdminWidget::AdminWidget(QWidget *parent)
     m_stock->setPlaceholderText("터치하여 입력");
     VirtualKeyboard::attach(m_stock, VirtualKeyboard::Number, "재고 수량 입력 (개)");
 
-    m_preview = new QLabel("이미지 없음");
+    // 사진 영역을 터치하면 사진 추가/변경
+    m_preview = new QLabel(kNoImage);
     m_preview->setFixedSize(150, 150);
     m_preview->setAlignment(Qt::AlignCenter);
     m_preview->setFrameShape(QFrame::StyledPanel);
-    QPushButton *imageButton = new QPushButton("이미지 선택...");
-    QPushButton *addButton = new QPushButton("상품 추가");
-    QPushButton *updateButton = new QPushButton("선택 상품 수정");
-    QPushButton *clearButton = new QPushButton("새로 입력");
-    connect(imageButton, SIGNAL(clicked()), SLOT(chooseImage()));
+    m_preview->setCursor(Qt::PointingHandCursor);
+    m_preview->installEventFilter(this);
+
+    // 아이콘 버튼: 추가 / 수정 / 새로 입력 / 삭제
+    QPushButton *addButton = iconButton(PlusIcon, "상품 추가");
+    QPushButton *updateButton = iconButton(PencilIcon, "선택 상품 수정");
+    QPushButton *clearButton = iconButton(ResetIcon, "새로 입력");
+    QPushButton *deleteButton = iconButton(TrashIcon, "선택 상품 삭제");
     connect(addButton, SIGNAL(clicked()), SLOT(addProduct()));
     connect(updateButton, SIGNAL(clicked()), SLOT(updateProduct()));
     connect(clearButton, SIGNAL(clicked()), SLOT(clearForm()));
+    connect(deleteButton, SIGNAL(clicked()), SLOT(deleteProduct()));
 
     QHBoxLayout *formButtons = new QHBoxLayout;
     formButtons->addWidget(addButton);
     formButtons->addWidget(updateButton);
+    formButtons->addWidget(clearButton);
+    formButtons->addWidget(deleteButton);
 
     QFormLayout *form = new QFormLayout;
     form->addRow("상품명", m_name);
     form->addRow("가격(원)", m_price);
     form->addRow("재고(개)", m_stock);
     form->addRow("사진", m_preview);
-    form->addRow("", imageButton);
     form->addRow("", formButtons);
-    form->addRow("", clearButton);
 
-    // 목록에서 상품을 누르면 왼쪽 입력칸에 채워지고, [선택 상품 수정]으로 반영
+    // 목록에서 상품을 누르면 왼쪽 입력칸에 채워지고, [수정]으로 반영
     m_products = makeTable(QStringList() << "상품명" << "재고" << "가격");
     m_products->setSelectionMode(QAbstractItemView::SingleSelection);
     connect(m_products, SIGNAL(itemSelectionChanged()), SLOT(onProductSelected()));
-    QPushButton *deleteButton = new QPushButton("선택 상품 삭제");
-    connect(deleteButton, SIGNAL(clicked()), SLOT(deleteProduct()));
-
-    QVBoxLayout *listLayout = new QVBoxLayout;
-    listLayout->addWidget(m_products);
-    listLayout->addWidget(deleteButton, 0, Qt::AlignRight);
 
     QWidget *productTab = new QWidget;
     QHBoxLayout *productLayout = new QHBoxLayout(productTab);
     productLayout->addLayout(form);
-    productLayout->addLayout(listLayout, 1);
+    productLayout->addWidget(m_products, 1);
 
     // ---- 매출 확인 탭 ----
     m_unit = new QComboBox;
@@ -173,7 +235,16 @@ void AdminWidget::clearForm()
     m_imageData.clear();
     m_imageChanged = false;
     m_preview->setPixmap(QPixmap());
-    m_preview->setText("이미지 없음");
+    m_preview->setText(kNoImage);
+}
+
+bool AdminWidget::eventFilter(QObject *watched, QEvent *event)
+{
+    if (watched == m_preview && event->type() == QEvent::MouseButtonRelease) {
+        chooseImage();
+        return true;
+    }
+    return QWidget::eventFilter(watched, event);
 }
 
 void AdminWidget::chooseImage()
@@ -305,7 +376,7 @@ void AdminWidget::onProductSelected()
         m_preview->setPixmap(pixmap.scaled(m_preview->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
     } else {
         m_preview->setPixmap(QPixmap());
-        m_preview->setText("이미지 없음");
+        m_preview->setText(kNoImage);
     }
 }
 

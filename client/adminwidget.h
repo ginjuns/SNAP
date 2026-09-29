@@ -22,6 +22,9 @@ public:
 signals:
     void finished();   // 로그아웃 -> 초기 화면으로
 
+protected:
+    bool eventFilter(QObject *watched, QEvent *event);   // 사진 영역 터치 -> chooseImage()
+
 private slots:
     void chooseImage();
     void addProduct();
