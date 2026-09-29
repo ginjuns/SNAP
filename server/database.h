@@ -13,6 +13,8 @@ public:
     bool open(const QSettings &config, QString *err);
 
     bool user(int id, QVariant *out, QString *err);
+    // 아이디/비밀번호가 맞으면 user()와 같은 사용자 정보를 돌려준다.
+    bool userByPassword(const QString &loginId, const QString &password, QVariant *out, QString *err);
     bool products(QVariant *out, QString *err);
     bool addProduct(const QString &name, int price, int stock, const QByteArray &image, QString *err);
     // fields: name / price / stock / image 중 바꿀 항목만 담는다.

@@ -46,7 +46,7 @@ MainWindow::MainWindow(QWidget *parent)
 
 void MainWindow::faceLogin()
 {
-    FaceDialog face("얼굴인식 로그인", this);
+    FaceDialog face("얼굴인식 로그인", this, true);
     if (face.exec() != QDialog::Accepted)
         return;
 

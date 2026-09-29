@@ -16,7 +16,8 @@ HEADERS += ../common/protocol.h \
            cartdialog.h \
            adminwidget.h \
            saleschart.h \
-           virtualkeyboard.h
+           virtualkeyboard.h \
+           passworddialog.h
 SOURCES += main.cpp \
            serverclient.cpp \
            facedialog.cpp \
@@ -25,7 +26,8 @@ SOURCES += main.cpp \
            cartdialog.cpp \
            adminwidget.cpp \
            saleschart.cpp \
-           virtualkeyboard.cpp
+           virtualkeyboard.cpp \
+           passworddialog.cpp
 
 # ---------------------------------------------------------------
 # 실제 얼굴인식: OpenCV 3.3 이상 + opencv_contrib(face 모듈) 필요

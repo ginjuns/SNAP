@@ -27,6 +27,14 @@
 ```
 `role`: `admin` 또는 `member`. `balance`: 충전 잔액(원).
 
+### PASSWORD_LOGIN: 아이디/비밀번호 로그인 (얼굴인식이 안 될 때)
+```json
+{"cmd":"PASSWORD_LOGIN","loginId":"hong","password":"hong1234"}
+→ {"ok":true,"data":{"id":2,"name":"홍길동","role":"member","balance":50000}}
+```
+응답은 LOGIN과 같습니다. 틀리면 `{"ok":false,"error":"아이디 또는 비밀번호가 올바르지 않습니다."}`.
+비밀번호는 DB에 `SHA2(CONCAT(login_id, ':', 비밀번호), 256)`로 저장됩니다.
+
 ### PRODUCTS: 상품 목록
 ```json
 {"cmd":"PRODUCTS"}

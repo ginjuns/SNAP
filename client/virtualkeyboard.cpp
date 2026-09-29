@@ -70,9 +70,7 @@ protected:
     {
         if (event->type() != QEvent::MouseButtonRelease || !m_edit->isEnabled())
             return false;
-        VirtualKeyboard keyboard(m_edit->text(), m_mode, m_title, m_edit->window());
-        if (keyboard.exec() == QDialog::Accepted)
-            m_edit->setText(keyboard.text());
+        VirtualKeyboard::open(m_edit, m_mode, m_title);
         return true;
     }
 
@@ -89,8 +87,18 @@ void VirtualKeyboard::attach(QLineEdit *edit, Mode mode, const QString &title)
     edit->installEventFilter(new KeyboardOpener(edit, mode, title));
 }
 
+bool VirtualKeyboard::open(QLineEdit *edit, Mode mode, const QString &title)
+{
+    VirtualKeyboard keyboard(edit->text(), mode, title, edit->window());
+    keyboard.m_display->setEchoMode(edit->echoMode());
+    if (keyboard.exec() != QDialog::Accepted)
+        return false;
+    edit->setText(keyboard.text());
+    return true;
+}
+
 VirtualKeyboard::VirtualKeyboard(const QString &text, Mode mode, const QString &title, QWidget *parent)
-    : QDialog(parent), m_mode(mode), m_text(text), m_composing(false), m_korean(true), m_shift(false),
+    : QDialog(parent), m_mode(mode), m_text(text), m_composing(false), m_korean(mode != English), m_shift(false),
       m_shiftKey(0), m_langKey(0), m_maxLength(mode == Number ? 9 : 30)
 {
     setWindowTitle(title);
@@ -213,7 +221,7 @@ void VirtualKeyboard::replaceLast(const QChar &c)
 void VirtualKeyboard::onKey()
 {
     const QChar c = qobject_cast<QPushButton *>(sender())->text().at(0);
-    if (m_mode == Text && m_korean && (CHO.contains(c) || JUNG.contains(c)))
+    if (m_mode != Number && m_korean && (CHO.contains(c) || JUNG.contains(c)))
         typeJamo(c);
     else
         append(c, false);

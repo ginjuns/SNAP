@@ -15,8 +15,11 @@ CREATE TABLE IF NOT EXISTS users (
     name        VARCHAR(50)  NOT NULL,
     role        ENUM('admin', 'member') NOT NULL DEFAULT 'member',
     balance     INT          NOT NULL DEFAULT 0,          -- 충전 잔액(원)
+    login_id    VARCHAR(30)  NULL,                        -- 비밀번호 로그인용 아이디 (얼굴인식 실패 시)
+    password_hash CHAR(64)   NULL,                        -- SHA2(CONCAT(login_id, ':', 비밀번호), 256)
     created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (id)
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_users_login_id (login_id)
 ) ENGINE=InnoDB;
 
 -- 상품: 사진은 MEDIUMBLOB(최대 16MB)에 저장. BLOB(64KB)은 사진이 잘리므로 사용 금지
@@ -49,10 +52,11 @@ CREATE TABLE IF NOT EXISTS sales (
 ) ENGINE=InnoDB;
 
 -- 샘플 데이터 (이미 있으면 건너뜀)
-INSERT IGNORE INTO users (id, name, role, balance) VALUES
-    (1, '관리자', 'admin',  0),
-    (2, '홍길동', 'member', 50000),
-    (3, '김철수', 'member', 30000);
+-- 비밀번호: admin / admin1234, hong / hong1234, kim / kim1234
+INSERT IGNORE INTO users (id, name, role, balance, login_id, password_hash) VALUES
+    (1, '관리자', 'admin',  0,     'admin', SHA2('admin:admin1234', 256)),
+    (2, '홍길동', 'member', 50000, 'hong',  SHA2('hong:hong1234', 256)),
+    (3, '김철수', 'member', 30000, 'kim',   SHA2('kim:kim1234', 256));
 
 INSERT IGNORE INTO products (name, price, stock) VALUES
     ('아메리카노', 3000, 20),

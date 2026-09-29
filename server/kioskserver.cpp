@@ -69,6 +69,8 @@ QJsonObject KioskServer::handle(const QJsonObject &req)
 
     if (cmd == "LOGIN") {
         ok = m_db->user(req.value("userId").toInt(), &data, &err);
+    } else if (cmd == "PASSWORD_LOGIN") {
+        ok = m_db->userByPassword(req.value("loginId").toString(), req.value("password").toString(), &data, &err);
     } else if (cmd == "PRODUCTS") {
         ok = m_db->products(&data, &err);
     } else if (cmd == "ADD_PRODUCT") {

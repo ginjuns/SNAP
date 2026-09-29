@@ -14,6 +14,7 @@ sudo mysql < server/schema.sql                       # DB, 테이블, 샘플 데
 cp server/server.ini.example server/server.ini       # 접속 정보 (비밀번호를 바꿨다면 수정)
 ```
 - **이미 DB를 만들어 둔 경우**, 재고 기능을 쓰려면 `sudo mysql < server/migrate_stock.sql`을 한 번 실행하세요. 기존 상품의 재고는 10개로 채워집니다.
+- **이미 DB를 만들어 둔 경우**, 비밀번호 로그인을 쓰려면 `sudo mysql < server/migrate_password.sql`을 한 번 실행하세요. 샘플 사용자에게 아이디/비밀번호가 설정됩니다.
 - 테이블 구성은 `server/schema.sql`에 있습니다. 상품 사진은 `MEDIUMBLOB`(최대 16MB)에 저장합니다.
 - `server.ini`에는 비밀번호가 있으므로 git에 올라가지 않습니다.
 
@@ -30,11 +31,14 @@ cd client && ./KioskClient        # 터미널 2: 서버가 다른 PC면 --host �
 ```
 
 ## 샘플 사용자
-| ID | 이름 | 권한 | 충전 잔액 |
-|----|------|------|-----------|
-| 1 | 관리자 | admin | 0 |
-| 2 | 홍길동 | member | 50,000 |
-| 3 | 김철수 | member | 30,000 |
+| ID | 이름 | 권한 | 충전 잔액 | 아이디 / 비밀번호 |
+|----|------|------|-----------|-------------------|
+| 1 | 관리자 | admin | 0 | admin / admin1234 |
+| 2 | 홍길동 | member | 50,000 | hong / hong1234 |
+| 3 | 김철수 | member | 30,000 | kim / kim1234 |
+
+얼굴인식이 안 되면 로그인 창 카메라 아래의 **[비밀번호로 로그인]**을 눌러 가상 키보드로 아이디/비밀번호를 입력합니다.
+다른 사용자의 비밀번호 설정: `UPDATE users SET login_id = 'lee', password_hash = SHA2('lee:비밀번호', 256) WHERE id = 4;`
 
 ## 얼굴인식
 - 기본 빌드는 **시뮬레이션 모드**입니다. 얼굴인식 창에 사용자 ID를 입력하면 인식된 것으로 처리합니다.

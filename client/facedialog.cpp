@@ -1,4 +1,5 @@
 #include "facedialog.h"
+#include "passworddialog.h"
 
 #include "qtcompat.h"
 
@@ -87,9 +88,9 @@ struct FaceDialog::Camera { cv::VideoCapture cap; };
 struct FaceDialog::Camera {};
 #endif
 
-FaceDialog::FaceDialog(const QString &title, QWidget *parent)
+FaceDialog::FaceDialog(const QString &title, QWidget *parent, bool allowPassword)
     : QDialog(parent), m_camera(0), m_idEdit(0), m_timer(new QTimer(this)),
-      m_userId(-1), m_lastLabel(-1), m_hits(0), m_ticks(0)
+      m_userId(-1), m_lastLabel(-1), m_hits(0), m_ticks(0), m_allowPassword(allowPassword)
 {
     setWindowTitle(title);
 
@@ -103,6 +104,14 @@ FaceDialog::FaceDialog(const QString &title, QWidget *parent)
     QVBoxLayout *layout = new QVBoxLayout(this);
     layout->addWidget(m_view);
     layout->addWidget(m_status);
+
+    if (allowPassword) {
+        QPushButton *password = new QPushButton("비밀번호로 로그인");
+        password->setMinimumHeight(56);
+        password->setStyleSheet("font-size: 18px;");
+        connect(password, SIGNAL(clicked()), SLOT(passwordLogin()));
+        layout->addWidget(password);
+    }
 
 #ifdef USE_OPENCV
     connect(m_timer, SIGNAL(timeout()), SLOT(processFrame()));
@@ -145,6 +154,10 @@ void FaceDialog::processFrame()
 
     if (++m_ticks > kTimeoutTicks) {
         m_timer->stop();
+        if (m_allowPassword) {   // 창을 닫지 않고 비밀번호 로그인을 안내
+            m_status->setText("얼굴을 인식하지 못했습니다. [비밀번호로 로그인]을 눌러 주세요.");
+            return;
+        }
         QMessageBox::warning(this, windowTitle(), "얼굴을 인식하지 못했습니다. 다시 시도해 주세요.");
         reject();
         return;
@@ -188,6 +201,22 @@ void FaceDialog::processFrame()
         accept();
     }
 #endif
+}
+
+void FaceDialog::passwordLogin()
+{
+    // 비밀번호를 입력하는 동안은 얼굴인식(과 20초 제한)을 멈춘다.
+    const bool scanning = m_timer->isActive();
+    m_timer->stop();
+
+    PasswordDialog dialog(this);
+    if (dialog.exec() == QDialog::Accepted) {
+        m_userId = dialog.userId();
+        accept();
+    } else if (scanning) {
+        m_ticks = 0;
+        m_timer->start(50);
+    }
 }
 
 void FaceDialog::acceptManualId()

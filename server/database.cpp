@@ -64,7 +64,27 @@ bool Database::open(const QSettings &config, QString *err)
                "sudo mysql < server/migrate_stock.sql 을 한 번 실행하세요.";
         return false;
     }
+    if (!q.exec("SELECT login_id, password_hash FROM users LIMIT 1")) {
+        *err = "users 테이블에 비밀번호 로그인(login_id, password_hash) 칸이 없습니다.\n"
+               "sudo mysql < server/migrate_password.sql 을 한 번 실행하세요.";
+        return false;
+    }
     return true;
+}
+
+bool Database::userByPassword(const QString &loginId, const QString &password, QVariant *out, QString *err)
+{
+    QSqlQuery q;
+    q.prepare("SELECT id FROM users WHERE login_id = ? AND password_hash = SHA2(CONCAT(login_id, ':', ?), 256)");
+    q.addBindValue(loginId);
+    q.addBindValue(password);
+    if (!q.exec())
+        return fail(q, err);
+    if (!q.next()) {
+        *err = "아이디 또는 비밀번호가 올바르지 않습니다.";
+        return false;
+    }
+    return user(q.value(0).toInt(), out, err);
 }
 
 bool Database::user(int id, QVariant *out, QString *err)
