@@ -1,10 +1,13 @@
 ###user테이블
 
+##create schema test2;
+##use test2;
+
 create table userlist(
 userlist_id int primary key auto_increment, 
-user_type int, 
+user_type int default 0, 
 user_id char(18) unique, 
-user_password char(18) unique,
+user_password char(18),
 phonenumber varchar(13) unique, 
 cash int);
 
@@ -20,7 +23,7 @@ face_id int primary key auto_increment,
 userid int,
 foreign key (userid) REFERENCES userlist(userlist_id),
 
-face_vector varchar(100)
+face_vector varchar(2000)
 );
 
 
@@ -76,8 +79,15 @@ foreign key (userid) REFERENCES userlist(userlist_id),
 
 tradedate datetime, 
 cash_incr int, 
-cash_desc int, 
+cash_decr int, 
 
 total_cash int, 
 foreign key (total_cash) references userlist(cash)
 ); 
+
+
+##face_vector를 벡터값을 받기 좋게 변경
+ALTER TABLE face
+MODIFY face_vector TEXT;
+
+
