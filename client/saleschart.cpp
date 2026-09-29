@@ -43,31 +43,32 @@ QFont pixelFont(const QFont &base, int px, bool bold = false)
 } // namespace
 
 SalesChart::SalesChart(QWidget *parent)
-    : QWidget(parent), m_max(0), m_step(0), m_hover(-1)
+    : QWidget(parent), m_max(0), m_step(0), m_maxTotal(0), m_hover(-1)
 {
     setMouseTracking(true);
     setMinimumHeight(300);
 }
 
-void SalesChart::setData(const QVariantList &rows, int maxBars, const QString &title)
+void SalesChart::setData(const QVariantList &bars, const QString &title)
 {
     m_title = title;
     m_bars.clear();
-    for (int i = qMin(rows.size(), maxBars) - 1; i >= 0; --i) {   // 오래된 순으로
-        const QVariantMap r = rows.at(i).toMap();
-        Bar bar = { r.value("period").toString(), r.value("card").toInt(), r.value("face").toInt() };
+    foreach (const QVariant &v, bars) {
+        const QVariantMap r = v.toMap();
+        Bar bar = { r.value("label").toString(), r.value("period").toString(),
+                    r.value("card").toInt(), r.value("face").toInt() };
         m_bars << bar;
     }
 
     // 최댓값을 1·2·5 단위의 보기 좋은 눈금으로 맞춘다 (눈금 약 4칸)
-    int maxTotal = 0;
+    m_maxTotal = 0;
     foreach (const Bar &b, m_bars)
-        maxTotal = qMax(maxTotal, b.card + b.face);
-    const double raw = qMax(maxTotal, 1000) / 4.0;
+        m_maxTotal = qMax(m_maxTotal, b.card + b.face);
+    const double raw = qMax(m_maxTotal, 1000) / 4.0;
     const double magnitude = std::pow(10.0, std::floor(std::log10(raw)));
     const double n = raw / magnitude;
     m_step = (n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10) * magnitude;
-    m_max = std::ceil(qMax(maxTotal, 1) / m_step) * m_step;
+    m_max = std::ceil(qMax(m_maxTotal, 1) / m_step) * m_step;
 
     m_hover = -1;
     update();
@@ -114,9 +115,9 @@ void SalesChart::paintEvent(QPaintEvent *)
     }
 
     const QRectF plot = plotRect();
-    if (m_bars.isEmpty()) {
+    if (m_maxTotal == 0) {
         p.setPen(kMuted);
-        p.drawText(plot, Qt::AlignCenter, "매출 데이터가 없습니다.");
+        p.drawText(plot, Qt::AlignCenter, "선택한 기간에 매출이 없습니다.");
         return;
     }
 
@@ -179,19 +180,20 @@ void SalesChart::paintEvent(QPaintEvent *)
             p.drawText(QRectF(cx - 60, top - 20, 120, 18), Qt::AlignCenter, won(b.card + b.face));
         }
 
-        // x축 라벨: 일별은 MM-dd, 월별은 yyyy-MM
-        if (i % labelEvery == 0 || i == n - 1) {
+        // x축 라벨 (촘촘하면 일부만 표시)
+        if (i % labelEvery == 0) {
             p.setPen(kMuted);
             p.setFont(pixelFont(font(), 12));
-            const QString label = b.period.length() == 10 ? b.period.mid(5) : b.period;
-            p.drawText(QRectF(cx - 40, plot.bottom() + 6, 80, 20), Qt::AlignHCenter | Qt::AlignTop, label);
+            p.drawText(QRectF(cx - 40, plot.bottom() + 6, 80, 20), Qt::AlignHCenter | Qt::AlignTop, b.label);
         }
     }
 }
 
 void SalesChart::mouseMoveEvent(QMouseEvent *event)
 {
-    const int i = barAt(event->pos());
+    int i = barAt(event->pos());
+    if (i >= 0 && m_bars[i].card + m_bars[i].face == 0)   // 매출 없는 칸은 툴팁 생략
+        i = -1;
     if (i != m_hover) {
         m_hover = i;
         update();

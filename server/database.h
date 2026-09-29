@@ -15,7 +15,7 @@ public:
     bool addProduct(const QString &name, int price, const QByteArray &image, QString *err);
     bool deleteProduct(int id, QString *err);
     bool pay(int userId, const QString &method, const QVariantList &items, QVariant *out, QString *err);
-    bool sales(const QString &unit, QVariant *out, QString *err);
+    bool sales(const QString &unit, const QString &key, QVariant *out, QString *err);
 };
 
 #endif // DATABASE_H

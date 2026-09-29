@@ -12,8 +12,8 @@ class SalesChart : public QWidget
 public:
     explicit SalesChart(QWidget *parent = 0);
 
-    // rows: 서버 SALES 결과(최신순). 앞에서부터 maxBars개를 오래된 순으로 그린다.
-    void setData(const QVariantList &rows, int maxBars, const QString &title);
+    // bars: 왼쪽부터 그릴 순서대로 [{label(x축), period(툴팁 제목), card, face}, ...]
+    void setData(const QVariantList &bars, const QString &title);
 
 protected:
     void paintEvent(QPaintEvent *event);
@@ -23,6 +23,7 @@ protected:
 private:
     struct Bar
     {
+        QString label;
         QString period;
         int card;
         int face;
@@ -35,6 +36,7 @@ private:
     QString m_title;
     double m_max;    // y축 최댓값 (눈금 단위로 올림)
     double m_step;   // y축 눈금 간격
+    int m_maxTotal;
     int m_hover;
 };
 

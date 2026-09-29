@@ -5,12 +5,13 @@
 #include <QVariant>
 
 class QComboBox;
+class QDateEdit;
 class QLabel;
 class QLineEdit;
 class QTableWidget;
 class SalesChart;
 
-// 관리자 화면: 상품 추가 / 일별·월별 매출 확인
+// 관리자 화면: 상품 추가/삭제 / 날짜·월 선택 매출 확인
 class AdminWidget : public QWidget
 {
     Q_OBJECT
@@ -27,9 +28,13 @@ private slots:
     void deleteProduct();
     void loadProducts();
     void loadSales();
+    void onUnitChanged();
+    void prevPeriod();
+    void nextPeriod();
 
 private:
     void clearForm();
+    bool isMonthly() const;
 
     QLabel *m_welcome;
     // 상품 관리
@@ -40,9 +45,11 @@ private:
     QTableWidget *m_products;
     // 매출 확인
     QComboBox *m_unit;
+    QDateEdit *m_date;
+    QLabel *m_summary;
     SalesChart *m_chart;
-    QTableWidget *m_sales;
-    QLabel *m_salesTotal;
+    QTableWidget *m_details;   // 구매 상세 내역
+    QTableWidget *m_byBuyer;   // 구매자·상품별 합계
 };
 
 #endif // ADMINWIDGET_H

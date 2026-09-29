@@ -55,7 +55,7 @@ QVariantList KioskServer::handle(const QVariantList &req)
     else if (cmd == "PAY")
         ok = m_db->pay(req.value(1).toInt(), req.value(2).toString(), req.value(3).toList(), &data, &err);
     else if (cmd == "SALES")
-        ok = m_db->sales(req.value(1).toString(), &data, &err);
+        ok = m_db->sales(req.value(1).toString(), req.value(2).toString(), &data, &err);
     else
         err = "알 수 없는 명령: " + cmd;
 

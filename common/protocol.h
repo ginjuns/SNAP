@@ -19,7 +19,9 @@ const quint16 KIOSK_PORT = 9000;
 //   ADD_PRODUCT (name, price, imagePngBytes)               -> 없음
 //   DELETE_PRODUCT (productId)                             -> 없음
 //   PAY         (userId, "card"|"face", [{productId, qty}]) -> {total, balance}
-//   SALES       ("day"|"month")                            -> [{period, qty, card, face, total}, ...]
+//   SALES       ("day", "yyyy-MM-dd") | ("month", "yyyy-MM")
+//               -> {buckets: [{bucket(시 또는 일), card, face}],
+//                   details: [{soldAt, buyer, product, qty, amount, method}]}
 
 inline QByteArray packMessage(const QVariantList &msg)
 {
