@@ -1,7 +1,7 @@
 #include "memberwidget.h"
 #include "serverclient.h"
 
-#include <QtGui>
+#include "qtcompat.h"
 
 static const int kColumns = 3;
 static const int kImageSize = 200;

@@ -2,7 +2,7 @@
 #include "facedialog.h"
 #include "serverclient.h"
 
-#include <QtGui>
+#include "qtcompat.h"
 
 CartDialog::CartDialog(const QVariantMap &user, QList<CartItem> *cart, QWidget *parent)
     : QDialog(parent), m_user(user), m_cart(cart)
@@ -12,7 +12,7 @@ CartDialog::CartDialog(const QVariantMap &user, QList<CartItem> *cart, QWidget *
 
     m_table = new QTableWidget(0, 4);
     m_table->setHorizontalHeaderLabels(QStringList() << "상품명" << "단가" << "수량" << "금액");
-    m_table->horizontalHeader()->setResizeMode(QHeaderView::Stretch);
+    stretchColumns(m_table->horizontalHeader());
     m_table->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
 

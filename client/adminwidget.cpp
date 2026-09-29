@@ -1,13 +1,13 @@
 #include "adminwidget.h"
 #include "serverclient.h"
 
-#include <QtGui>
+#include "qtcompat.h"
 
 static QTableWidget *makeTable(const QStringList &headers)
 {
     QTableWidget *table = new QTableWidget(0, headers.size());
     table->setHorizontalHeaderLabels(headers);
-    table->horizontalHeader()->setResizeMode(QHeaderView::Stretch);
+    stretchColumns(table->horizontalHeader());
     table->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table->setSelectionBehavior(QAbstractItemView::SelectRows);
     return table;

@@ -8,7 +8,9 @@
 int main(int argc, char *argv[])
 {
     QCoreApplication app(argc, argv);
-    QTextCodec::setCodecForCStrings(QTextCodec::codecForName("UTF-8"));
+#if QT_VERSION < 0x050000
+    QTextCodec::setCodecForCStrings(QTextCodec::codecForName("UTF-8"));   // Qt5는 기본이 UTF-8
+#endif
 
     Database db;
     QString err;

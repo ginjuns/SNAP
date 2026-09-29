@@ -4,7 +4,7 @@
 #include "memberwidget.h"
 #include "serverclient.h"
 
-#include <QtGui>
+#include "qtcompat.h"
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)

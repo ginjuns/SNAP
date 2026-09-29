@@ -1,10 +1,12 @@
 QT       += core gui network
+greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 TARGET    = KioskClient
 TEMPLATE  = app
 
 INCLUDEPATH += ../common
 
 HEADERS += ../common/protocol.h \
+           qtcompat.h \
            serverclient.h \
            facedialog.h \
            mainwindow.h \
@@ -27,9 +29,17 @@ SOURCES += main.cpp \
 # ---------------------------------------------------------------
 opencv {
     DEFINES += USE_OPENCV
-    QMAKE_CXXFLAGS += -std=c++11
-    INCLUDEPATH += C:/opencv/build/include
-    LIBS += -LC:/opencv/build/x64/mingw/lib \
-            -lopencv_core -lopencv_imgproc -lopencv_imgcodecs \
-            -lopencv_videoio -lopencv_objdetect -lopencv_face
+    CONFIG += c++11
+    unix {
+        # Ubuntu: sudo apt install libopencv-dev libopencv-contrib-dev
+        CONFIG += link_pkgconfig
+        packagesExist(opencv4): PKGCONFIG += opencv4
+        else: PKGCONFIG += opencv
+    }
+    win32 {
+        INCLUDEPATH += C:/opencv/build/include
+        LIBS += -LC:/opencv/build/x64/mingw/lib \
+                -lopencv_core -lopencv_imgproc -lopencv_imgcodecs \
+                -lopencv_videoio -lopencv_objdetect -lopencv_face
+    }
 }

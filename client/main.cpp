@@ -11,10 +11,12 @@ int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
 
-    // 소스 코드의 한글 문자열(UTF-8)을 그대로 사용하기 위한 설정 (Qt4 전용)
+#if QT_VERSION < 0x050000
+    // 소스 코드의 한글 문자열(UTF-8)을 그대로 사용하기 위한 설정 (Qt5는 기본이 UTF-8)
     QTextCodec *utf8 = QTextCodec::codecForName("UTF-8");
     QTextCodec::setCodecForCStrings(utf8);
     QTextCodec::setCodecForTr(utf8);
+#endif
     QLocale::setDefault(QLocale(QLocale::Korean, QLocale::SouthKorea));
 
     app.setStyleSheet("QWidget { font-size: 16px; }"

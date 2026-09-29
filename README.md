@@ -5,6 +5,17 @@
 ```
 
 ## 빌드
+Qt 4.8 / Qt 5.x 모두 지원합니다.
+
+Ubuntu (Qt 5.9.5 등):
+```
+sudo apt install build-essential qt5-default libqt5sql5-sqlite
+qmake KioskSystem.pro && make
+./server/KioskServer          # 서버 (먼저 실행)
+./client/KioskClient          # 키오스크 화면
+```
+
+Windows:
 ```
 qmake KioskSystem.pro        # 얼굴인식 시뮬레이션 모드 (OpenCV 불필요)
 qmake "CONFIG+=opencv" KioskSystem.pro   # 실제 카메라 얼굴인식 (client.pro의 OpenCV 경로 수정)

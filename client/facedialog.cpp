@@ -1,6 +1,6 @@
 #include "facedialog.h"
 
-#include <QtGui>
+#include "qtcompat.h"
 
 #ifdef USE_OPENCV
 #include <opencv2/opencv.hpp>
@@ -71,7 +71,11 @@ bool initRecognizer()
         return false;
     }
 
+#if CV_VERSION_MAJOR == 3 && CV_VERSION_MINOR < 3
+    g_model = cv::face::createLBPHFaceRecognizer();   // OpenCV 3.2 이하 (Ubuntu 18.04 기본)
+#else
     g_model = cv::face::LBPHFaceRecognizer::create();
+#endif
     g_model->train(images, labels);
     return true;
 }
