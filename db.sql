@@ -5,7 +5,7 @@
 
 create table userlist(
 userlist_id int primary key auto_increment, 
-user_type int default 0, 
+user_type varchar(10), 
 user_id char(18) unique, 
 user_password char(18),
 phonenumber varchar(13) unique, 
