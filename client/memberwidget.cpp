@@ -39,7 +39,7 @@ void MemberWidget::loadProducts()
 {
     QVariant data;
     QString err;
-    if (!ServerClient::call("PRODUCTS", QVariantList(), &data, &err))
+    if (!ServerClient::call("PRODUCTS", QVariantMap(), &data, &err))
         QMessageBox::warning(this, "상품 조회 실패", err);
     m_products = data.toList();
 
@@ -52,7 +52,7 @@ void MemberWidget::loadProducts()
         image->setFixedSize(kImageSize, kImageSize);
         image->setAlignment(Qt::AlignCenter);
         QPixmap pixmap;
-        if (pixmap.loadFromData(p.value("image").toByteArray()))
+        if (pixmap.loadFromData(QByteArray::fromBase64(p.value("image").toString().toLatin1())))
             image->setPixmap(pixmap.scaled(kImageSize, kImageSize, Qt::KeepAspectRatio, Qt::SmoothTransformation));
         else
             image->setText("이미지 없음");

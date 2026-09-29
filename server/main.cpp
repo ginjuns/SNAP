@@ -1,5 +1,5 @@
 #include <QCoreApplication>
-#include <QTextCodec>
+#include <QSettings>
 
 #include "database.h"
 #include "kioskserver.h"
@@ -8,13 +8,13 @@
 int main(int argc, char *argv[])
 {
     QCoreApplication app(argc, argv);
-#if QT_VERSION < 0x050000
-    QTextCodec::setCodecForCStrings(QTextCodec::codecForName("UTF-8"));   // Qt5는 기본이 UTF-8
-#endif
+
+    // MySQL 접속 정보: 실행 폴더의 server.ini (server.ini.example 참고)
+    QSettings config("server.ini", QSettings::IniFormat);
 
     Database db;
     QString err;
-    if (!db.open("kiosk.db", &err)) {
+    if (!db.open(config, &err)) {
         qCritical("DB 연결 실패: %s", qPrintable(err));
         return 1;
     }
@@ -24,6 +24,8 @@ int main(int argc, char *argv[])
         qCritical("포트 %d 열기 실패: %s", KIOSK_PORT, qPrintable(server.errorString()));
         return 1;
     }
-    qDebug("키오스크 DB 서버 시작 (포트 %d)", KIOSK_PORT);
+    qDebug("키오스크 서버 시작 (포트 %d, MySQL %s@%s)", KIOSK_PORT,
+           qPrintable(config.value("mysql/database", "kiosk").toString()),
+           qPrintable(config.value("mysql/host", "127.0.0.1").toString()));
     return app.exec();
 }

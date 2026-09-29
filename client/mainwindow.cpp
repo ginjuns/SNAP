@@ -52,7 +52,7 @@ void MainWindow::faceLogin()
 
     QVariant data;
     QString err;
-    if (!ServerClient::call("LOGIN", QVariantList() << face.userId(), &data, &err)) {
+    if (!ServerClient::call("LOGIN", QVariantMap{{"userId", face.userId()}}, &data, &err)) {
         QMessageBox::warning(this, "로그인 실패", err);
         return;
     }

@@ -188,7 +188,9 @@ void AdminWidget::addProduct()
     }
 
     QString err;   // 상품명 중복은 서버에서 확인
-    if (!ServerClient::call("ADD_PRODUCT", QVariantList() << name << price << m_imageData, 0, &err)) {
+    const QVariantMap args{{"name", name}, {"price", price},
+                           {"image", QString::fromLatin1(m_imageData.toBase64())}};
+    if (!ServerClient::call("ADD_PRODUCT", args, 0, &err)) {
         QMessageBox::warning(this, "상품 추가 실패", err);
         return;
     }
@@ -212,7 +214,7 @@ void AdminWidget::deleteProduct()
         return;
 
     QString err;
-    if (!ServerClient::call("DELETE_PRODUCT", QVariantList() << id, 0, &err)) {
+    if (!ServerClient::call("DELETE_PRODUCT", QVariantMap{{"productId", id}}, 0, &err)) {
         QMessageBox::warning(this, "상품 삭제 실패", err);
         return;
     }
@@ -223,7 +225,7 @@ void AdminWidget::loadProducts()
 {
     QVariant data;
     QString err;
-    if (!ServerClient::call("PRODUCTS", QVariantList(), &data, &err)) {
+    if (!ServerClient::call("PRODUCTS", QVariantMap(), &data, &err)) {
         QMessageBox::warning(this, "상품 조회 실패", err);
         return;
     }
@@ -266,7 +268,8 @@ void AdminWidget::loadSales()
 
     QVariant data;
     QString err;
-    if (!ServerClient::call("SALES", QVariantList() << (monthly ? "month" : "day") << key, &data, &err)) {
+    const QVariantMap args{{"unit", monthly ? "month" : "day"}, {"date", key}};
+    if (!ServerClient::call("SALES", args, &data, &err)) {
         QMessageBox::warning(this, "매출 조회 실패", err);
         return;
     }

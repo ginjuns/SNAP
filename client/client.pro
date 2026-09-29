@@ -1,5 +1,7 @@
-QT       += core gui network
-greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
+lessThan(QT_MAJOR_VERSION, 5): error("Qt 5 이상이 필요합니다 (JSON 통신 사용)")
+
+QT       += core gui widgets network
+CONFIG   += c++11
 TARGET    = KioskClient
 TEMPLATE  = app
 

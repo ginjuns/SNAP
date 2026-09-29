@@ -3,7 +3,7 @@
 
 #include <QTcpServer>
 #include <QHash>
-#include <QVariant>
+#include <QJsonObject>
 
 class QTcpSocket;
 class Database;
@@ -20,7 +20,7 @@ private slots:
     void onDisconnected();
 
 private:
-    QVariantList handle(const QVariantList &request);
+    QJsonObject handle(const QJsonObject &request);
 
     Database *m_db;
     QHash<QTcpSocket *, QByteArray> m_buffers;   // 소켓별 수신 버퍼

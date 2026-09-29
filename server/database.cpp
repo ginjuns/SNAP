@@ -2,6 +2,7 @@
 
 #include <QtSql>
 #include <QDateTime>
+#include <QSettings>
 
 static bool fail(const QSqlQuery &q, QString *err)
 {
@@ -16,50 +17,47 @@ static bool rollback(const QString &msg, QString *err)
     return false;
 }
 
-bool Database::open(const QString &path, QString *err)
+// 같은 이름의 다른 상품이 있는지 (collation이 _ci라 대소문자 무시)
+static bool nameTaken(const QString &name, int exceptId, bool *taken, QString *err)
 {
-    // MySQL을 쓰려면 QMYSQL로 바꾸고 setHostName/setUserName/setPassword를 지정한다.
-    // (CREATE TABLE 문도 MySQL 문법에 맞게 AUTO_INCREMENT 등을 추가해야 함)
-    QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE");
-    db.setDatabaseName(path);
+    QSqlQuery q;
+    q.prepare("SELECT COUNT(*) FROM products WHERE name = ? AND id <> ?");
+    q.addBindValue(name);
+    q.addBindValue(exceptId);
+    if (!q.exec() || !q.next())
+        return fail(q, err);
+    *taken = q.value(0).toInt() > 0;
+    return true;
+}
+
+bool Database::open(const QSettings &config, QString *err)
+{
+    if (!QSqlDatabase::isDriverAvailable("QMYSQL")) {
+        *err = "Qt MySQL 드라이버(QMYSQL)가 없습니다.\n"
+               "Ubuntu: sudo apt install libqt5sql5-mysql";
+        return false;
+    }
+
+    QSqlDatabase db = QSqlDatabase::addDatabase("QMYSQL");
+    db.setHostName(config.value("mysql/host", "127.0.0.1").toString());
+    db.setPort(config.value("mysql/port", 3306).toInt());
+    db.setDatabaseName(config.value("mysql/database", "kiosk").toString());
+    db.setUserName(config.value("mysql/user", "kiosk").toString());
+    db.setPassword(config.value("mysql/password").toString());
+    db.setConnectOptions("MYSQL_OPT_RECONNECT=1");   // 오래 켜두면 끊기는 연결을 자동 복구
     if (!db.open()) {
         *err = db.lastError().text();
         return false;
     }
 
+    const char *tables[] = { "users", "products", "sales" };
     QSqlQuery q;
-    const char *ddl[] = {
-        "CREATE TABLE IF NOT EXISTS users ("
-        " id INTEGER PRIMARY KEY, name VARCHAR(50) NOT NULL,"
-        " role VARCHAR(10) NOT NULL,"                 // 'admin' | 'member'
-        " balance INTEGER NOT NULL DEFAULT 0)",       // 충전 금액
-        "CREATE TABLE IF NOT EXISTS products ("
-        " id INTEGER PRIMARY KEY, name VARCHAR(100) NOT NULL,"
-        " price INTEGER NOT NULL, image BLOB)",
-        "CREATE TABLE IF NOT EXISTS sales ("
-        " id INTEGER PRIMARY KEY, user_id INTEGER, product_id INTEGER,"
-        " product_name VARCHAR(100),"                 // 상품이 삭제돼도 내역에 이름이 남도록
-        " qty INTEGER, amount INTEGER,"
-        " method VARCHAR(10),"                        // 'card' | 'face'
-        " sold_at VARCHAR(19))"                       // yyyy-MM-dd HH:mm:ss
-    };
-    for (int i = 0; i < 3; ++i)
-        if (!q.exec(ddl[i]))
-            return fail(q, err);
-
-    // 이전 버전 DB 업그레이드 (이미 적용된 경우 실패하므로 결과는 무시)
-    q.exec("ALTER TABLE sales ADD COLUMN product_name VARCHAR(100)");
-    q.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_products_name ON products(name)");
-
-    // 최초 실행 시 샘플 데이터 (users.id = 얼굴 학습 폴더 이름 faces/<id>)
-    q.exec("SELECT COUNT(*) FROM users");
-    if (q.next() && q.value(0).toInt() == 0) {
-        q.exec("INSERT INTO users VALUES (1, '관리자', 'admin', 0)");
-        q.exec("INSERT INTO users VALUES (2, '홍길동', 'member', 50000)");
-        q.exec("INSERT INTO users VALUES (3, '김철수', 'member', 30000)");
-        q.exec("INSERT INTO products (name, price) VALUES ('아메리카노', 3000)");
-        q.exec("INSERT INTO products (name, price) VALUES ('카페라떼', 3500)");
-        q.exec("INSERT INTO products (name, price) VALUES ('샌드위치', 5000)");
+    for (int i = 0; i < 3; ++i) {
+        if (!q.exec(QString("SELECT 1 FROM %1 LIMIT 1").arg(tables[i]))) {
+            *err = QString("'%1' 테이블을 읽을 수 없습니다. server/schema.sql을 먼저 실행하세요.\n%2")
+                       .arg(tables[i]).arg(q.lastError().text());
+            return false;
+        }
     }
     return true;
 }
@@ -76,10 +74,10 @@ bool Database::user(int id, QVariant *out, QString *err)
         return false;
     }
     QVariantMap m;
-    m["id"] = q.value(0);
-    m["name"] = q.value(1);
-    m["role"] = q.value(2);
-    m["balance"] = q.value(3);
+    m["id"] = q.value(0).toInt();
+    m["name"] = q.value(1).toString();
+    m["role"] = q.value(2).toString();
+    m["balance"] = q.value(3).toInt();
     *out = m;
     return true;
 }
@@ -92,41 +90,95 @@ bool Database::products(QVariant *out, QString *err)
     QVariantList list;
     while (q.next()) {
         QVariantMap m;
-        m["id"] = q.value(0);
-        m["name"] = q.value(1);
-        m["price"] = q.value(2);
-        m["image"] = q.value(3).toByteArray();
+        m["id"] = q.value(0).toInt();
+        m["name"] = q.value(1).toString();
+        m["price"] = q.value(2).toInt();
+        m["image"] = QString::fromLatin1(q.value(3).toByteArray().toBase64());   // 사진 없으면 ""
         list << m;
     }
     *out = list;
     return true;
 }
 
-bool Database::addProduct(const QString &name, int price, const QByteArray &image, QString *err)
+bool Database::addProduct(const QString &rawName, int price, const QByteArray &image, QString *err)
 {
-    if (name.trimmed().isEmpty() || price <= 0) {
+    const QString name = rawName.trimmed();
+    if (name.isEmpty() || price <= 0) {
         *err = "상품명과 가격을 올바르게 입력하세요.";
         return false;
     }
-    // 상품명 중복 확인 (대소문자 무시)
-    QSqlQuery q;
-    q.prepare("SELECT COUNT(*) FROM products WHERE LOWER(name) = LOWER(?)");
-    q.addBindValue(name.trimmed());
-    if (!q.exec() || !q.next())
-        return fail(q, err);
-    if (q.value(0).toInt() > 0) {
-        *err = QString("'%1' 상품이 이미 등록되어 있습니다.\n다른 상품명을 입력하세요.").arg(name.trimmed());
+    bool taken = false;
+    if (!nameTaken(name, 0, &taken, err))
+        return false;
+    if (taken) {
+        *err = QString("'%1' 상품이 이미 등록되어 있습니다.\n다른 상품명을 입력하세요.").arg(name);
         return false;
     }
 
+    QSqlQuery q;
     q.prepare("INSERT INTO products (name, price, image) VALUES (?, ?, ?)");
-    q.addBindValue(name.trimmed());
+    q.addBindValue(name);
     q.addBindValue(price);
-    q.addBindValue(image);
+    q.addBindValue(image.isEmpty() ? QVariant(QVariant::ByteArray) : QVariant(image));   // 사진 없으면 NULL
     return q.exec() || fail(q, err);
 }
 
-// 매출 기록(sales)은 금액을 따로 저장하므로 상품을 지워도 매출 집계는 유지된다.
+bool Database::updateProduct(int id, const QVariantMap &fields, QString *err)
+{
+    QSqlQuery q;
+    q.prepare("SELECT COUNT(*) FROM products WHERE id = ?");
+    q.addBindValue(id);
+    if (!q.exec() || !q.next())
+        return fail(q, err);
+    if (q.value(0).toInt() == 0) {
+        *err = "없는 상품입니다.";
+        return false;
+    }
+
+    QStringList sets;
+    QVariantList values;
+    if (fields.contains("name")) {
+        const QString name = fields.value("name").toString().trimmed();
+        bool taken = false;
+        if (name.isEmpty()) {
+            *err = "상품명을 입력하세요.";
+            return false;
+        }
+        if (!nameTaken(name, id, &taken, err))
+            return false;
+        if (taken) {
+            *err = QString("'%1' 상품이 이미 등록되어 있습니다.").arg(name);
+            return false;
+        }
+        sets << "name = ?";
+        values << name;
+    }
+    if (fields.contains("price")) {
+        if (fields.value("price").toInt() <= 0) {
+            *err = "가격을 올바르게 입력하세요.";
+            return false;
+        }
+        sets << "price = ?";
+        values << fields.value("price").toInt();
+    }
+    if (fields.contains("image")) {
+        const QByteArray image = fields.value("image").toByteArray();
+        sets << "image = ?";
+        values << (image.isEmpty() ? QVariant(QVariant::ByteArray) : QVariant(image));   // "" = 사진 삭제
+    }
+    if (sets.isEmpty()) {
+        *err = "변경할 항목(name, price, image)이 없습니다.";
+        return false;
+    }
+
+    q.prepare("UPDATE products SET " + sets.join(", ") + " WHERE id = ?");
+    foreach (const QVariant &v, values)
+        q.addBindValue(v);
+    q.addBindValue(id);
+    return q.exec() || fail(q, err);
+}
+
+// 매출 기록(sales)은 상품명과 금액을 따로 저장하므로 상품을 지워도 매출 집계는 유지된다.
 bool Database::deleteProduct(int id, QString *err)
 {
     QSqlQuery q;
@@ -155,7 +207,7 @@ bool Database::pay(int userId, const QString &method, const QVariantList &items,
 
     QSqlDatabase::database().transaction();
     QSqlQuery q;
-    const QString now = QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss");
+    const QDateTime now = QDateTime::currentDateTime();
     int total = 0;
 
     foreach (const QVariant &v, items) {
@@ -171,7 +223,8 @@ bool Database::pay(int userId, const QString &method, const QVariantList &items,
         const QString productName = q.value(1).toString();
         total += amount;
 
-        q.prepare("INSERT INTO sales (user_id, product_id, product_name, qty, amount, method, sold_at) VALUES (?, ?, ?, ?, ?, ?, ?)");
+        q.prepare("INSERT INTO sales (user_id, product_id, product_name, qty, amount, method, sold_at)"
+                  " VALUES (?, ?, ?, ?, ?, ?, ?)");
         q.addBindValue(userId);
         q.addBindValue(productId);
         q.addBindValue(productName);
@@ -187,21 +240,23 @@ bool Database::pay(int userId, const QString &method, const QVariantList &items,
     result["total"] = total;
 
     if (method == "face") {
+        // 잔액이 충분할 때만 차감 (동시에 결제해도 음수가 되지 않음)
+        q.prepare("UPDATE users SET balance = balance - ? WHERE id = ? AND balance >= ?");
+        q.addBindValue(total);
+        q.addBindValue(userId);
+        q.addBindValue(total);
+        if (!q.exec())
+            return rollback(q.lastError().text(), err);
+        const bool deducted = q.numRowsAffected() > 0;
+
         q.prepare("SELECT balance FROM users WHERE id = ?");
         q.addBindValue(userId);
         if (!q.exec() || !q.next())
             return rollback("등록되지 않은 사용자입니다.", err);
-
         const int balance = q.value(0).toInt();
-        if (balance < total)
+        if (!deducted)
             return rollback(QString("잔액이 부족합니다. (잔액 %1원 / 결제금액 %2원)").arg(balance).arg(total), err);
-
-        q.prepare("UPDATE users SET balance = balance - ? WHERE id = ?");
-        q.addBindValue(total);
-        q.addBindValue(userId);
-        if (!q.exec())
-            return rollback(q.lastError().text(), err);
-        result["balance"] = balance - total;
+        result["balance"] = balance;
     }
 
     if (!QSqlDatabase::database().commit())
@@ -211,50 +266,57 @@ bool Database::pay(int userId, const QString &method, const QVariantList &items,
 }
 
 // 선택한 기간의 매출
-//   unit "day"   + key "yyyy-MM-dd" -> 그날의 시간대별(0~23시) 합계
-//   unit "month" + key "yyyy-MM"    -> 그달의 일자별(1~31일) 합계
+//   unit "day"   + date "yyyy-MM-dd" -> 그날의 시간대별(0~23시) 합계
+//   unit "month" + date "yyyy-MM"    -> 그달의 일자별(1~31일) 합계
 // 결과: { buckets: [{bucket, card, face}], details: [{soldAt, buyer, product, qty, amount, method}] }
-bool Database::sales(const QString &unit, const QString &key, QVariant *out, QString *err)
+bool Database::sales(const QString &unit, const QString &date, QVariant *out, QString *err)
 {
     const bool month = (unit == "month");
-    const QString like = key + "%";
-    QSqlQuery q;
+    const QDate from = QDate::fromString(month ? date + "-01" : date, "yyyy-MM-dd");
+    if (!from.isValid()) {
+        *err = "날짜 형식이 잘못되었습니다. (일별: yyyy-MM-dd, 월별: yyyy-MM)";
+        return false;
+    }
+    const QDateTime begin(from);
+    const QDateTime end(month ? from.addMonths(1) : from.addDays(1));
 
+    QSqlQuery q;
     q.prepare(QString("SELECT %1 AS bucket,"
                       " SUM(CASE WHEN method = 'card' THEN amount ELSE 0 END),"
                       " SUM(CASE WHEN method = 'face' THEN amount ELSE 0 END)"
-                      " FROM sales WHERE sold_at LIKE ? GROUP BY bucket ORDER BY bucket")
-                  .arg(month ? "SUBSTR(sold_at, 9, 2)" : "SUBSTR(sold_at, 12, 2)"));
-    q.addBindValue(like);
+                      " FROM sales WHERE sold_at >= ? AND sold_at < ?"
+                      " GROUP BY bucket ORDER BY bucket")
+                  .arg(month ? "DAY(sold_at)" : "HOUR(sold_at)"));
+    q.addBindValue(begin);
+    q.addBindValue(end);
     if (!q.exec())
         return fail(q, err);
     QVariantList buckets;
     while (q.next()) {
         QVariantMap m;
         m["bucket"] = q.value(0).toInt();
-        m["card"] = q.value(1);
-        m["face"] = q.value(2);
+        m["card"] = q.value(1).toInt();
+        m["face"] = q.value(2).toInt();
         buckets << m;
     }
 
-    q.prepare("SELECT s.sold_at, COALESCE(u.name, '(알 수 없음)'),"
-              " COALESCE(s.product_name, p.name, '(삭제된 상품)'), s.qty, s.amount, s.method"
-              " FROM sales s"
-              " LEFT JOIN users u ON u.id = s.user_id"
-              " LEFT JOIN products p ON p.id = s.product_id"
-              " WHERE s.sold_at LIKE ? ORDER BY s.sold_at DESC, s.id DESC");
-    q.addBindValue(like);
+    q.prepare("SELECT s.sold_at, COALESCE(u.name, '(알 수 없음)'), s.product_name, s.qty, s.amount, s.method"
+              " FROM sales s LEFT JOIN users u ON u.id = s.user_id"
+              " WHERE s.sold_at >= ? AND s.sold_at < ?"
+              " ORDER BY s.sold_at DESC, s.id DESC");
+    q.addBindValue(begin);
+    q.addBindValue(end);
     if (!q.exec())
         return fail(q, err);
     QVariantList details;
     while (q.next()) {
         QVariantMap m;
-        m["soldAt"] = q.value(0);
-        m["buyer"] = q.value(1);
-        m["product"] = q.value(2);
-        m["qty"] = q.value(3);
-        m["amount"] = q.value(4);
-        m["method"] = q.value(5);
+        m["soldAt"] = q.value(0).toDateTime().toString("yyyy-MM-dd HH:mm:ss");
+        m["buyer"] = q.value(1).toString();
+        m["product"] = q.value(2).toString();
+        m["qty"] = q.value(3).toInt();
+        m["amount"] = q.value(4).toInt();
+        m["method"] = q.value(5).toString();
         details << m;
     }
 

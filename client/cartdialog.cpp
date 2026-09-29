@@ -91,7 +91,8 @@ bool CartDialog::pay(int userId, const QString &method, QVariantMap *result)
 
     QVariant data;
     QString err;
-    if (!ServerClient::call("PAY", QVariantList() << userId << method << QVariant(items), &data, &err)) {
+    const QVariantMap args{{"userId", userId}, {"method", method}, {"items", items}};
+    if (!ServerClient::call("PAY", args, &data, &err)) {
         QMessageBox::warning(this, "결제 실패", err);
         return false;
     }
@@ -128,7 +129,7 @@ void CartDialog::payByFace()
     // 인식된 사용자의 충전 잔액 조회
     QVariant data;
     QString err;
-    if (!ServerClient::call("LOGIN", QVariantList() << face.userId(), &data, &err)) {
+    if (!ServerClient::call("LOGIN", QVariantMap{{"userId", face.userId()}}, &data, &err)) {
         QMessageBox::warning(this, "얼굴인식 결제", err);
         return;
     }
