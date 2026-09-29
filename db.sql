@@ -9,7 +9,7 @@ user_type varchar(10),
 user_id char(18) unique, 
 user_password char(18),
 phonenumber varchar(13) unique, 
-cash int);
+cash int default 0);
 
 
 
