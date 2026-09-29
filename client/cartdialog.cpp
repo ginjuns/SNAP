@@ -8,29 +8,37 @@ CartDialog::CartDialog(const QVariantMap &user, QList<CartItem> *cart, QWidget *
     : QDialog(parent), m_user(user), m_cart(cart)
 {
     setWindowTitle("장바구니");
-    resize(640, 480);
+    resize(760, 500);
 
-    m_table = new QTableWidget(0, 4);
-    m_table->setHorizontalHeaderLabels(QStringList() << "상품명" << "단가" << "수량" << "금액");
+    m_table = new QTableWidget(0, 5);
+    m_table->setHorizontalHeaderLabels(QStringList() << "상품명" << "단가" << "수량" << "금액" << "수량 변경");
     stretchColumns(m_table->horizontalHeader());
-    m_table->setSelectionBehavior(QAbstractItemView::SelectRows);
+    m_table->verticalHeader()->hide();
+    m_table->verticalHeader()->setDefaultSectionSize(48);   // [-][+] 버튼이 들어가는 높이
+    m_table->setSelectionMode(QAbstractItemView::NoSelection);
     m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
 
+    // 합계 + 옆에 작은 글씨로 충전 잔액
     m_total = new QLabel;
-    m_total->setAlignment(Qt::AlignRight);
     m_total->setStyleSheet("font-size: 22px; font-weight: bold;");
+    m_balance = new QLabel(QString("(충전 잔액 %1)").arg(won(m_user.value("balance").toInt())));
+    m_balance->setStyleSheet("font-size: 14px; color: #52514e;");
+    QHBoxLayout *totalLine = new QHBoxLayout;
+    totalLine->addStretch();
+    totalLine->addWidget(m_total);
+    totalLine->addWidget(m_balance, 0, Qt::AlignBottom);
 
-    QPushButton *remove = new QPushButton("선택 삭제");
+    QPushButton *clear = new QPushButton("비우기");
     QPushButton *more = new QPushButton("계속 쇼핑");
     QPushButton *card = new QPushButton("카드 결제");
     QPushButton *face = new QPushButton("얼굴인식 결제");
-    connect(remove, SIGNAL(clicked()), SLOT(removeSelected()));
+    connect(clear, SIGNAL(clicked()), SLOT(clearCart()));
     connect(more, SIGNAL(clicked()), SLOT(reject()));
     connect(card, SIGNAL(clicked()), SLOT(payByCard()));
     connect(face, SIGNAL(clicked()), SLOT(payByFace()));
 
     QHBoxLayout *buttons = new QHBoxLayout;
-    buttons->addWidget(remove);
+    buttons->addWidget(clear);
     buttons->addWidget(more);
     buttons->addStretch();
     buttons->addWidget(card);
@@ -38,7 +46,7 @@ CartDialog::CartDialog(const QVariantMap &user, QList<CartItem> *cart, QWidget *
 
     QVBoxLayout *layout = new QVBoxLayout(this);
     layout->addWidget(m_table);
-    layout->addWidget(m_total);
+    layout->addLayout(totalLine);
     layout->addLayout(buttons);
 
     refresh();
@@ -52,25 +60,68 @@ int CartDialog::total() const
     return sum;
 }
 
+static QTableWidgetItem *cell(const QString &text, bool number = false)
+{
+    QTableWidgetItem *item = new QTableWidgetItem(text);
+    item->setTextAlignment((number ? Qt::AlignRight : Qt::AlignLeft) | Qt::AlignVCenter);
+    return item;
+}
+
 void CartDialog::refresh()
 {
     m_table->setRowCount(m_cart->size());
     for (int i = 0; i < m_cart->size(); ++i) {
         const CartItem &item = m_cart->at(i);
-        m_table->setItem(i, 0, new QTableWidgetItem(item.name));
-        m_table->setItem(i, 1, new QTableWidgetItem(won(item.price)));
-        m_table->setItem(i, 2, new QTableWidgetItem(QString::number(item.qty)));
-        m_table->setItem(i, 3, new QTableWidgetItem(won(item.price * item.qty)));
+        m_table->setItem(i, 0, cell(item.name));
+        m_table->setItem(i, 1, cell(won(item.price), true));
+        m_table->setItem(i, 2, cell(QString("%1개").arg(item.qty), true));
+        m_table->setItem(i, 3, cell(won(item.price * item.qty), true));
+
+        // [-] [+] 버튼
+        QWidget *box = new QWidget;
+        QHBoxLayout *h = new QHBoxLayout(box);
+        h->setContentsMargins(4, 2, 4, 2);
+        h->setSpacing(6);
+        const char *labels[2] = { "−", "+" };
+        for (int k = 0; k < 2; ++k) {
+            QPushButton *b = new QPushButton(labels[k]);
+            b->setFixedSize(44, 38);
+            b->setStyleSheet("min-height: 0; padding: 0; font-size: 20px; font-weight: bold;");
+            b->setProperty("row", i);
+            b->setProperty("delta", k == 0 ? -1 : 1);
+            b->setEnabled(k == 0 || item.qty < item.stock);   // 재고만큼만 늘릴 수 있음
+            connect(b, SIGNAL(clicked()), SLOT(changeQty()));
+            h->addWidget(b);
+        }
+        m_table->setCellWidget(i, 4, box);
     }
     m_total->setText("합계: " + won(total()));
 }
 
-void CartDialog::removeSelected()
+void CartDialog::changeQty()
 {
-    const int row = m_table->currentRow();
-    if (row < 0)
+    const int row = sender()->property("row").toInt();
+    if (row < 0 || row >= m_cart->size())
         return;
-    m_cart->removeAt(row);
+    CartItem &item = (*m_cart)[row];
+    item.qty += sender()->property("delta").toInt();
+    if (item.qty > item.stock)
+        item.qty = item.stock;
+    if (item.qty <= 0)
+        m_cart->removeAt(row);   // 0개가 되면 장바구니에서 뺀다
+
+    // 지금 눌린 버튼을 표에서 교체하므로, 클릭 처리가 끝난 뒤에 다시 그린다.
+    QMetaObject::invokeMethod(this, "refresh", Qt::QueuedConnection);
+}
+
+void CartDialog::clearCart()
+{
+    if (m_cart->isEmpty())
+        return;
+    if (QMessageBox::question(this, "장바구니 비우기", "장바구니를 모두 비우시겠습니까?",
+                              QMessageBox::Yes | QMessageBox::No) != QMessageBox::Yes)
+        return;
+    m_cart->clear();
     refresh();
 }
 
