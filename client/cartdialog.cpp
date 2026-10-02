@@ -8,7 +8,7 @@ CartDialog::CartDialog(const QVariantMap &user, QList<CartItem> *cart, QWidget *
     : QDialog(parent), m_user(user), m_cart(cart)
 {
     setWindowTitle("장바구니");
-    resize(760, 500);
+    resize(680, 900);
 
     m_table = new QTableWidget(0, 5);
     m_table->setHorizontalHeaderLabels(QStringList() << "상품명" << "단가" << "수량" << "금액" << "수량 변경");

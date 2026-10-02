@@ -4,7 +4,7 @@
 #include "qtcompat.h"
 
 static const int kColumns = 3;
-static const int kImageSize = 200;
+static const int kImageSize = 180;   // 3열이 세로 화면 너비(720)에 들어가는 크기
 
 MemberWidget::MemberWidget(QWidget *parent)
     : QWidget(parent)

@@ -146,13 +146,13 @@ AdminWidget::AdminWidget(QWidget *parent)
     form->addRow("사진", m_preview);
     form->addRow("", formButtons);
 
-    // 목록에서 상품을 누르면 왼쪽 입력칸에 채워지고, [수정]으로 반영
+    // 목록에서 상품을 누르면 위쪽 입력칸에 채워지고, [수정]으로 반영
     m_products = makeTable(QStringList() << "상품명" << "재고" << "가격");
     m_products->setSelectionMode(QAbstractItemView::SingleSelection);
     connect(m_products, SIGNAL(itemSelectionChanged()), SLOT(onProductSelected()));
 
     QWidget *productTab = new QWidget;
-    QHBoxLayout *productLayout = new QHBoxLayout(productTab);
+    QVBoxLayout *productLayout = new QVBoxLayout(productTab);   // 세로 화면: 위 입력칸, 아래 목록
     productLayout->addLayout(form);
     productLayout->addWidget(m_products, 1);
 
@@ -173,13 +173,18 @@ AdminWidget::AdminWidget(QWidget *parent)
     connect(next, SIGNAL(clicked()), SLOT(nextPeriod()));
     connect(today, SIGNAL(clicked()), SLOT(goToday()));
 
-    QHBoxLayout *salesBar = new QHBoxLayout;
-    salesBar->addWidget(m_unit);
-    salesBar->addWidget(prev);
-    salesBar->addWidget(m_date);
-    salesBar->addWidget(next);
-    salesBar->addWidget(today);
-    salesBar->addStretch();
+    // 세로 화면은 폭이 좁아 두 줄로: [일별/월별 ... 오늘] / [◀ 이전  날짜  다음 ▶]
+    QHBoxLayout *unitBar = new QHBoxLayout;
+    unitBar->addWidget(m_unit);
+    unitBar->addStretch();
+    unitBar->addWidget(today);
+    QHBoxLayout *periodBar = new QHBoxLayout;
+    periodBar->addWidget(prev);
+    periodBar->addWidget(m_date, 1);
+    periodBar->addWidget(next);
+    QVBoxLayout *salesBar = new QVBoxLayout;
+    salesBar->addLayout(unitBar);
+    salesBar->addLayout(periodBar);
 
     m_summary = new QLabel;
     m_summary->setStyleSheet("font-size: 18px; font-weight: bold;");

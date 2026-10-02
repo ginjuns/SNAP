@@ -10,7 +10,7 @@ MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
 {
     setWindowTitle("무인 키오스크");
-    resize(1024, 768);
+    resize(720, 1280);   // 세로 화면 기준 (main.cpp의 배율로 실제 크기가 정해짐)
 
     // 초기 화면
     m_login = new QWidget;
