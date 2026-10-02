@@ -255,10 +255,18 @@ bool AdminWidget::eventFilter(QObject *watched, QEvent *event)
 
 void AdminWidget::chooseImage()
 {
-    const QString path = QFileDialog::getOpenFileName(this, "상품 이미지 선택", QString(),
-                                                      "Images (*.png *.jpg *.jpeg *.bmp)");
-    if (path.isEmpty())
+    // Ubuntu 기본 파일 창은 별도 프로그램 창이라 상단바/독이 보이므로,
+    // Qt가 직접 그리는 파일 창을 키오스크 화면 안에 띄운다. (처음 위치: 사진 폴더)
+    QFileDialog dialog(this, "상품 이미지 선택",
+                       QStandardPaths::writableLocation(QStandardPaths::PicturesLocation),
+                       "이미지 (*.png *.jpg *.jpeg *.bmp)");
+    dialog.setOption(QFileDialog::DontUseNativeDialog);
+    dialog.setFileMode(QFileDialog::ExistingFile);
+    dialog.setViewMode(QFileDialog::List);
+    dialog.resize(px(680), px(900));
+    if (execInWindow(&dialog) != QDialog::Accepted || dialog.selectedFiles().isEmpty())
         return;
+    const QString path = dialog.selectedFiles().first();
     QImage image(path);
     if (image.isNull()) {
         KioskMessage::warning(this, "이미지", "이미지를 열 수 없습니다.");
