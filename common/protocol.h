@@ -14,7 +14,6 @@ const int MAX_MESSAGE_SIZE = 16 * 1024 * 1024;
 // 메시지 형식: UTF-8 JSON 객체 한 줄 + '\n'
 //   요청: {"cmd": "LOGIN", "userId": 2}
 //   응답: {"ok": true, "data": ...}  또는  {"ok": false, "error": "사유"}
-// 명령별 상세는 PROTOCOL.md 참고
 
 inline QByteArray packMessage(const QJsonObject &obj)
 {
