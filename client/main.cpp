@@ -1,12 +1,15 @@
 #include <QApplication>
 #include <QLocale>
+#include <QMessageBox>
 #include <QStringList>
 #include <QTextCodec>
 
+#include "embeddedserver.h"
 #include "mainwindow.h"
 #include "serverclient.h"
 
 // 사용법: KioskClient [--host 서버IP] [--fullscreen]
+// --host 를 주지 않으면 키오스크 안에서 서버(9000번 포트)도 함께 실행한다.
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
@@ -24,8 +27,14 @@ int main(int argc, char *argv[])
 
     const QStringList args = app.arguments();
     const int hostIndex = args.indexOf("--host");
-    if (hostIndex >= 0 && hostIndex + 1 < args.size())
+    EmbeddedServer server;
+    if (hostIndex >= 0 && hostIndex + 1 < args.size()) {
         ServerClient::setHost(args.at(hostIndex + 1));
+    } else {
+        QString err;
+        if (!server.startAndWait(&err))
+            QMessageBox::warning(0, "서버", "내장 서버를 시작하지 못했습니다.\n" + err);
+    }
 
     MainWindow window;
     if (args.contains("--fullscreen"))

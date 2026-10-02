@@ -1,12 +1,13 @@
+#include "embeddedserver.h"
+#include "database.h"
+#include "kioskserver.h"
+#include "protocol.h"
+
 #include <QCoreApplication>
 #include <QDir>
 #include <QFileInfo>
 #include <QSettings>
 #include <QStringList>
-
-#include "database.h"
-#include "kioskserver.h"
-#include "protocol.h"
 
 // server.ini 위치 찾기: 현재 폴더 -> 실행 파일 폴더 -> 소스 폴더(server/)
 // Qt Creator는 빌드 폴더에서 실행하므로 소스 폴더까지 찾아본다.
@@ -26,34 +27,45 @@ static QString findConfig(QStringList *searched)
     return QString();
 }
 
-int main(int argc, char *argv[])
+EmbeddedServer::~EmbeddedServer()
 {
-    QCoreApplication app(argc, argv);
+    quit();
+    wait();
+}
 
+bool EmbeddedServer::startAndWait(QString *err)
+{
+    start();
+    m_ready.acquire();
+    *err = m_err;
+    return m_ok;
+}
+
+void EmbeddedServer::run()
+{
+    m_ok = false;
     QStringList searched;
     const QString configPath = findConfig(&searched);
     if (configPath.isEmpty()) {
-        qCritical("server.ini 를 찾을 수 없습니다. server.ini.example 을 server.ini 로 복사하세요.\n찾아본 위치:\n  %s",
-                  qPrintable(searched.join("\n  ")));
-        return 1;
+        m_err = QString("server.ini 를 찾을 수 없습니다. server.ini.example 을 server.ini 로 복사하세요.\n찾아본 위치:\n  %1")
+                    .arg(searched.join("\n  "));
+        m_ready.release();
+        return;
     }
     QSettings config(configPath, QSettings::IniFormat);
-    qDebug("설정 파일: %s", qPrintable(configPath));
 
     Database db;
-    QString err;
-    if (!db.open(config, &err)) {
-        qCritical("DB 연결 실패: %s", qPrintable(err));
-        return 1;
-    }
-
     KioskServer server(&db);
-    if (!server.listen(QHostAddress::Any, KIOSK_PORT)) {
-        qCritical("포트 %d 열기 실패: %s", KIOSK_PORT, qPrintable(server.errorString()));
-        return 1;
+    QString dbErr;
+    if (!db.open(config, &dbErr)) {
+        m_err = "DB 연결 실패: " + dbErr;
+    } else if (!server.listen(QHostAddress::Any, KIOSK_PORT)) {
+        m_err = QString("포트 %1 열기 실패: %2").arg(KIOSK_PORT).arg(server.errorString());
+    } else {
+        m_ok = true;
+        qDebug("키오스크 서버 시작 (포트 %d, 설정 %s)", KIOSK_PORT, qPrintable(configPath));
     }
-    qDebug("키오스크 서버 시작 (포트 %d, MySQL %s@%s)", KIOSK_PORT,
-           qPrintable(config.value("mysql/database", "kiosk").toString()),
-           qPrintable(config.value("mysql/host", "127.0.0.1").toString()));
-    return app.exec();
+    m_ready.release();
+    if (m_ok)
+        exec();
 }

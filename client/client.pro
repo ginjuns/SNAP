@@ -1,11 +1,15 @@
 lessThan(QT_MAJOR_VERSION, 5): error("Qt 5 이상이 필요합니다 (JSON 통신 사용)")
 
-QT       += core gui widgets network
+QT       += core gui widgets network sql
 CONFIG   += c++11
 TARGET    = KioskClient
 TEMPLATE  = app
 
-INCLUDEPATH += ../common
+INCLUDEPATH += ../common ../server
+
+# 서버는 키오스크 안에서 함께 실행된다 (embeddedserver.cpp)
+# server.ini 를 소스 폴더(server/)에서도 찾기 위해 경로를 넣어 둔다 (Qt Creator 빌드 폴더 실행 대응)
+DEFINES += SERVER_SOURCE_DIR=\\\"$$clean_path($$PWD/../server)\\\"
 
 HEADERS += ../common/protocol.h \
            qtcompat.h \
@@ -17,7 +21,10 @@ HEADERS += ../common/protocol.h \
            adminwidget.h \
            saleschart.h \
            virtualkeyboard.h \
-           passworddialog.h
+           passworddialog.h \
+           embeddedserver.h \
+           ../server/database.h \
+           ../server/kioskserver.h
 SOURCES += main.cpp \
            serverclient.cpp \
            facedialog.cpp \
@@ -27,7 +34,12 @@ SOURCES += main.cpp \
            adminwidget.cpp \
            saleschart.cpp \
            virtualkeyboard.cpp \
-           passworddialog.cpp
+           passworddialog.cpp \
+           embeddedserver.cpp \
+           ../server/database.cpp \
+           ../server/kioskserver.cpp
+
+DISTFILES += ../server/schema.sql ../server/server.ini.example
 
 # ---------------------------------------------------------------
 # 실제 얼굴인식: OpenCV 3.3 이상 + opencv_contrib(face 모듈) 필요
