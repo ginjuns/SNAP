@@ -36,7 +36,7 @@ QPainterPath topRounded(const QRectF &r)
 QFont pixelFont(const QFont &base, int px, bool bold = false)
 {
     QFont f(base);
-    f.setPixelSize(px);
+    f.setPixelSize(::px(px));
     f.setBold(bold);
     return f;
 }
@@ -46,7 +46,7 @@ SalesChart::SalesChart(QWidget *parent)
     : QWidget(parent), m_max(0), m_step(0), m_maxTotal(0), m_hover(-1)
 {
     setMouseTracking(true);
-    setMinimumHeight(300);
+    setMinimumHeight(px(300));
 }
 
 void SalesChart::setData(const QVariantList &bars, const QString &title)

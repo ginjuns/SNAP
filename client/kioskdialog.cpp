@@ -48,7 +48,7 @@ static QMessageBox::StandardButton message(QMessageBox::Icon icon, QWidget *pare
     // 제목 표시줄이 없으므로 제목을 굵은 큰 글씨로, 내용은 그 아래에 보여준다.
     QMessageBox box(icon, title, title, buttons, parent);
     box.setInformativeText(text);
-    box.setStyleSheet("QLabel#qt_msgbox_label { font-size: 20px; font-weight: bold; }");
+    box.setStyleSheet(css("QLabel#qt_msgbox_label { font-size: 20px; font-weight: bold; }"));
     return QMessageBox::StandardButton(execInWindow(&box));
 }
 

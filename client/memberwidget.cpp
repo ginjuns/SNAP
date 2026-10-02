@@ -11,7 +11,7 @@ MemberWidget::MemberWidget(QWidget *parent)
     : QWidget(parent)
 {
     m_welcome = new QLabel;
-    m_welcome->setStyleSheet("font-size: 22px; font-weight: bold;");
+    m_welcome->setStyleSheet(css("font-size: 22px; font-weight: bold;"));
     QPushButton *logout = new QPushButton("처음으로");
     connect(logout, SIGNAL(clicked()), SIGNAL(finished()));
 
@@ -25,25 +25,25 @@ MemberWidget::MemberWidget(QWidget *parent)
 
     // ---- 하단 바: 총 수량 / 총 금액 / [장바구니] ----
     m_notice = new QLabel;
-    m_notice->setStyleSheet("font-size: 14px; color: #52514e;");
+    m_notice->setStyleSheet(css("font-size: 14px; color: #52514e;"));
     m_totalQty = new QLabel;
-    m_totalQty->setStyleSheet("font-size: 18px;");
+    m_totalQty->setStyleSheet(css("font-size: 18px;"));
     m_totalPrice = new QLabel;
-    m_totalPrice->setStyleSheet("font-size: 22px; font-weight: bold;");
+    m_totalPrice->setStyleSheet(css("font-size: 22px; font-weight: bold;"));
     QPushButton *cartButton = new QPushButton("장바구니");
-    cartButton->setMinimumSize(180, 56);
-    cartButton->setStyleSheet("font-size: 20px; font-weight: bold; background: #2a78d6; color: white;");
+    cartButton->setMinimumSize(px(180), px(56));
+    cartButton->setStyleSheet(css("font-size: 20px; font-weight: bold; background: #2a78d6; color: white;"));
     connect(cartButton, SIGNAL(clicked()), SLOT(openCart()));
 
     QFrame *cartBar = new QFrame;
     cartBar->setObjectName("cartBar");
-    cartBar->setStyleSheet("QFrame#cartBar { border-top: 1px solid #c3c2b7; }");
+    cartBar->setStyleSheet(css("QFrame#cartBar { border-top: 1px solid #c3c2b7; }"));
     QHBoxLayout *bar = new QHBoxLayout(cartBar);
     bar->addWidget(m_notice, 1);
     bar->addWidget(m_totalQty);
-    bar->addSpacing(24);
+    bar->addSpacing(px(24));
     bar->addWidget(m_totalPrice);
-    bar->addSpacing(24);
+    bar->addSpacing(px(24));
     bar->addWidget(cartButton);
 
     QVBoxLayout *layout = new QVBoxLayout(this);
@@ -77,25 +77,25 @@ void MemberWidget::loadProducts()
         const bool soldOut = p.value("stock").toInt() <= 0;
 
         QLabel *image = new QLabel;
-        image->setFixedSize(kImageSize, kImageSize);
+        image->setFixedSize(px(kImageSize), px(kImageSize));
         image->setAlignment(Qt::AlignCenter);
         QPixmap pixmap;
         if (pixmap.loadFromData(QByteArray::fromBase64(p.value("image").toString().toLatin1())))
-            image->setPixmap(pixmap.scaled(kImageSize, kImageSize, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+            image->setPixmap(pixmap.scaled(px(kImageSize), px(kImageSize), Qt::KeepAspectRatio, Qt::SmoothTransformation));
         else
             image->setText("이미지 없음");
 
         QLabel *name = new QLabel(p.value("name").toString());
-        name->setStyleSheet("font-size: 17px;");
+        name->setStyleSheet(css("font-size: 17px;"));
         QLabel *price = new QLabel(soldOut ? "품절" : won(p.value("price").toInt()));
-        price->setStyleSheet(soldOut ? "font-size: 18px; font-weight: bold; color: #d32f2f;"
-                                     : "font-size: 18px; font-weight: bold;");
+        price->setStyleSheet(css(soldOut ? "font-size: 18px; font-weight: bold; color: #d32f2f;"
+                                         : "font-size: 18px; font-weight: bold;"));
 
         // 카드 전체가 버튼 역할. 품절이면 빨간 테두리/배경으로 표시하고 터치해도 담기지 않는다.
         QFrame *card = new QFrame;
         card->setObjectName(soldOut ? "soldOut" : "product");
-        card->setStyleSheet("QFrame#product { border: 1px solid #c3c2b7; border-radius: 8px; background: white; }"
-                            "QFrame#soldOut { border: 2px solid #d32f2f; border-radius: 8px; background: #fdecea; }");
+        card->setStyleSheet(css("QFrame#product { border: 1px solid #c3c2b7; border-radius: 8px; background: white; }"
+                                "QFrame#soldOut { border: 2px solid #d32f2f; border-radius: 8px; background: #fdecea; }"));
         QVBoxLayout *v = new QVBoxLayout(card);
         v->addWidget(image, 0, Qt::AlignCenter);
         v->addWidget(name, 0, Qt::AlignCenter);

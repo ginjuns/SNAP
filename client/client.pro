@@ -24,6 +24,7 @@ HEADERS += ../common/protocol.h \
            passworddialog.h \
            embeddedserver.h \
            kioskdialog.h \
+           uiscale.h \
            ../server/database.h \
            ../server/kioskserver.h
 SOURCES += main.cpp \

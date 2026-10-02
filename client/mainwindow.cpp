@@ -11,25 +11,25 @@ MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
 {
     setWindowTitle("무인 키오스크");
-    resize(720, 1280);   // 세로 화면 기준 (main.cpp의 배율로 실제 크기가 정해짐)
+    resize(px(720), px(1280));   // 세로 화면 기준 (main.cpp의 배율로 실제 크기가 정해짐)
 
     // 초기 화면
     m_login = new QWidget;
     QLabel *title = new QLabel("무인 키오스크");
     title->setAlignment(Qt::AlignCenter);
-    title->setStyleSheet("font-size: 40px; font-weight: bold;");
+    title->setStyleSheet(css("font-size: 40px; font-weight: bold;"));
     QLabel *guide = new QLabel("아래 버튼을 누르고 카메라를 바라봐 주세요.");
     guide->setAlignment(Qt::AlignCenter);
     QPushButton *loginButton = new QPushButton("얼굴인식으로 시작하기");
-    loginButton->setMinimumSize(360, 100);
-    loginButton->setStyleSheet("font-size: 24px;");
+    loginButton->setMinimumSize(px(360), px(100));
+    loginButton->setStyleSheet(css("font-size: 24px;"));
     connect(loginButton, SIGNAL(clicked()), SLOT(faceLogin()));
 
     QVBoxLayout *v = new QVBoxLayout(m_login);
     v->addStretch();
     v->addWidget(title);
     v->addWidget(guide);
-    v->addSpacing(40);
+    v->addSpacing(px(40));
     v->addWidget(loginButton, 0, Qt::AlignCenter);
     v->addStretch();
 

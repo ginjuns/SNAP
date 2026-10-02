@@ -118,18 +118,18 @@ VirtualKeyboard::VirtualKeyboard(const QString &text, Mode mode, const QString &
     // 앱 전체 스타일의 버튼 좌우 여백(16px)을 없애야 키가 작아진다.
     // 글자 키보드는 약 500x360px, 숫자 키패드는 조금 더 큰 키를 쓴다.
     const int keySize = (mode == Number) ? 56 : 42;
-    setStyleSheet(QString("QPushButton { font-size: %1px; min-width: %2px; min-height: %2px; padding: 0 6px; }"
-                          "QLineEdit { font-size: 20px; padding: 4px; }")
-                      .arg(mode == Number ? 20 : 16).arg(keySize));
+    setStyleSheet(css(QString("QPushButton { font-size: %1px; min-width: %2px; min-height: %2px; padding: 0 6px; }"
+                              "QLineEdit { font-size: 20px; padding: 4px; }")
+                          .arg(mode == Number ? 20 : 16).arg(keySize)));
 
     m_display = new QLineEdit;
     m_display->setReadOnly(true);
 
     QVBoxLayout *layout = new QVBoxLayout(this);
-    layout->setSpacing(4);
-    layout->setContentsMargins(8, 8, 8, 8);
+    layout->setSpacing(px(4));
+    layout->setContentsMargins(px(8), px(8), px(8), px(8));
     QLabel *caption = new QLabel(title);
-    caption->setStyleSheet("font-size: 15px; font-weight: bold;");
+    caption->setStyleSheet(css("font-size: 15px; font-weight: bold;"));
     layout->addWidget(caption);
     layout->addWidget(m_display);
 

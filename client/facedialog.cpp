@@ -116,17 +116,17 @@ FaceDialog::FaceDialog(const QString &title, QWidget *parent, bool allowPassword
     // execInWindow(dialog, true)로 키오스크 화면 전체를 덮어 띄운다.
     QLabel *caption = new QLabel(title);
     caption->setAlignment(Qt::AlignCenter);
-    caption->setStyleSheet("font-size: 28px; font-weight: bold;");
+    caption->setStyleSheet(css("font-size: 28px; font-weight: bold;"));
     m_view = new QLabel;
-    m_view->setFixedSize(640, 480);
+    m_view->setFixedSize(px(640), px(480));
     m_view->setAlignment(Qt::AlignCenter);
-    m_view->setStyleSheet("background: black; color: white;");
+    m_view->setStyleSheet(css("background: black; color: white;"));
     m_status = new QLabel("카메라를 정면으로 바라봐 주세요.");
     m_status->setAlignment(Qt::AlignCenter);
 
     // 내용은 화면 가운데 카메라 너비만큼의 세로 칸에 모은다.
     QWidget *panel = new QWidget;
-    panel->setFixedWidth(660);
+    panel->setFixedWidth(px(660));
     QHBoxLayout *center = new QHBoxLayout;
     center->addStretch();
     center->addWidget(panel);
@@ -137,16 +137,16 @@ FaceDialog::FaceDialog(const QString &title, QWidget *parent, bool allowPassword
     outer->addStretch();
 
     QVBoxLayout *layout = new QVBoxLayout(panel);
-    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setContentsMargins(px(0), px(0), px(0), px(0));
     layout->addWidget(caption);
-    layout->addSpacing(16);
+    layout->addSpacing(px(16));
     layout->addWidget(m_view);
     layout->addWidget(m_status);
 
     if (allowPassword) {
         QPushButton *password = new QPushButton("비밀번호로 로그인");
-        password->setMinimumHeight(56);
-        password->setStyleSheet("font-size: 18px;");
+        password->setMinimumHeight(px(56));
+        password->setStyleSheet(css("font-size: 18px;"));
         connect(password, SIGNAL(clicked()), SLOT(passwordLogin()));
         layout->addWidget(password);
     }

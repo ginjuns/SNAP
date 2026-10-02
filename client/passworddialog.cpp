@@ -24,7 +24,7 @@ PasswordDialog::PasswordDialog(QWidget *parent)
 
     QPushButton *cancel = new QPushButton("취소");
     QPushButton *ok = new QPushButton("로그인");
-    ok->setStyleSheet("background: #2a78d6; color: white; font-weight: bold;");
+    ok->setStyleSheet(css("background: #2a78d6; color: white; font-weight: bold;"));
     connect(cancel, SIGNAL(clicked()), SLOT(reject()));
     connect(ok, SIGNAL(clicked()), SLOT(login()));
     QHBoxLayout *buttons = new QHBoxLayout;
@@ -34,7 +34,7 @@ PasswordDialog::PasswordDialog(QWidget *parent)
     QVBoxLayout *layout = new QVBoxLayout(this);
     layout->addLayout(form);
     layout->addLayout(buttons);
-    resize(480, sizeHint().height());
+    resize(px(480), sizeHint().height());
 
     QTimer::singleShot(0, this, SLOT(startInput()));
 }

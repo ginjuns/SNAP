@@ -81,8 +81,8 @@ static QPushButton *iconButton(IconType type, const QString &tip)
 {
     QPushButton *button = new QPushButton;
     button->setIcon(drawIcon(type));
-    button->setIconSize(QSize(32, 32));
-    button->setMinimumSize(64, 56);
+    button->setIconSize(QSize(px(32), px(32)));
+    button->setMinimumSize(px(64), px(56));
     button->setToolTip(tip);
     button->setAccessibleName(tip);
     return button;
@@ -92,7 +92,7 @@ AdminWidget::AdminWidget(QWidget *parent)
     : QWidget(parent), m_imageChanged(false)
 {
     m_welcome = new QLabel;
-    m_welcome->setStyleSheet("font-size: 22px; font-weight: bold;");
+    m_welcome->setStyleSheet(css("font-size: 22px; font-weight: bold;"));
     QPushButton *logout = new QPushButton("로그아웃");
     connect(logout, SIGNAL(clicked()), SIGNAL(finished()));
 
@@ -118,7 +118,7 @@ AdminWidget::AdminWidget(QWidget *parent)
 
     // 사진 영역을 터치하면 사진 추가/변경
     m_preview = new QLabel(kNoImage);
-    m_preview->setFixedSize(150, 150);
+    m_preview->setFixedSize(px(150), px(150));
     m_preview->setAlignment(Qt::AlignCenter);
     m_preview->setFrameShape(QFrame::StyledPanel);
     m_preview->setCursor(Qt::PointingHandCursor);
@@ -164,7 +164,7 @@ AdminWidget::AdminWidget(QWidget *parent)
     m_date = new QDateEdit(QDate::currentDate());
     m_date->setCalendarPopup(true);   // 터치로 달력에서 선택
     m_date->setDisplayFormat("yyyy-MM-dd");
-    m_date->setMinimumWidth(170);
+    m_date->setMinimumWidth(px(170));
     QPushButton *prev = new QPushButton("◀ 이전");
     QPushButton *next = new QPushButton("다음 ▶");
     QPushButton *today = new QPushButton("오늘");
@@ -188,7 +188,7 @@ AdminWidget::AdminWidget(QWidget *parent)
     salesBar->addLayout(periodBar);
 
     m_summary = new QLabel;
-    m_summary->setStyleSheet("font-size: 18px; font-weight: bold;");
+    m_summary->setStyleSheet(css("font-size: 18px; font-weight: bold;"));
 
     m_chart = new SalesChart;
     m_details = makeTable(QStringList() << "일시" << "구매자" << "상품" << "수량" << "금액" << "결제수단");

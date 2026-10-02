@@ -9,21 +9,21 @@ CartDialog::CartDialog(const QVariantMap &user, QList<CartItem> *cart, QWidget *
     : QDialog(parent), m_user(user), m_cart(cart)
 {
     setWindowTitle("장바구니");
-    resize(680, 900);
+    resize(px(680), px(900));
 
     m_table = new QTableWidget(0, 5);
     m_table->setHorizontalHeaderLabels(QStringList() << "상품명" << "단가" << "수량" << "금액" << "수량 변경");
     stretchColumns(m_table->horizontalHeader());
     m_table->verticalHeader()->hide();
-    m_table->verticalHeader()->setDefaultSectionSize(48);   // [-][+] 버튼이 들어가는 높이
+    m_table->verticalHeader()->setDefaultSectionSize(px(48));   // [-][+] 버튼이 들어가는 높이
     m_table->setSelectionMode(QAbstractItemView::NoSelection);
     m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
 
     // 합계 + 옆에 작은 글씨로 충전 잔액
     m_total = new QLabel;
-    m_total->setStyleSheet("font-size: 22px; font-weight: bold;");
+    m_total->setStyleSheet(css("font-size: 22px; font-weight: bold;"));
     m_balance = new QLabel(QString("(충전 잔액 %1)").arg(won(m_user.value("balance").toInt())));
-    m_balance->setStyleSheet("font-size: 14px; color: #52514e;");
+    m_balance->setStyleSheet(css("font-size: 14px; color: #52514e;"));
     QHBoxLayout *totalLine = new QHBoxLayout;
     totalLine->addStretch();
     totalLine->addWidget(m_total);
@@ -81,13 +81,13 @@ void CartDialog::refresh()
         // [-] [+] 버튼
         QWidget *box = new QWidget;
         QHBoxLayout *h = new QHBoxLayout(box);
-        h->setContentsMargins(4, 2, 4, 2);
-        h->setSpacing(6);
+        h->setContentsMargins(px(4), px(2), px(4), px(2));
+        h->setSpacing(px(6));
         const char *labels[2] = { "−", "+" };
         for (int k = 0; k < 2; ++k) {
             QPushButton *b = new QPushButton(labels[k]);
-            b->setFixedSize(44, 38);
-            b->setStyleSheet("min-height: 0; padding: 0; font-size: 20px; font-weight: bold;");
+            b->setFixedSize(px(44), px(38));
+            b->setStyleSheet(css("min-height: 0; padding: 0; font-size: 20px; font-weight: bold;"));
             b->setProperty("row", i);
             b->setProperty("delta", k == 0 ? -1 : 1);
             b->setEnabled(k == 0 || item.qty < item.stock);   // 재고만큼만 늘릴 수 있음
