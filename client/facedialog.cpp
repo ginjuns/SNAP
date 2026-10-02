@@ -112,7 +112,13 @@ FaceDialog::FaceDialog(const QString &title, QWidget *parent, bool allowPassword
       m_userId(-1), m_lastLabel(-1), m_hits(0), m_ticks(0), m_allowPassword(allowPassword)
 {
     setWindowTitle(title);
+    // 별도 창으로 보이지 않도록 제목 표시줄 없이 키오스크 화면 전체를 덮는다.
+    setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
+    setWindowState(Qt::WindowFullScreen);
 
+    QLabel *caption = new QLabel(title);
+    caption->setAlignment(Qt::AlignCenter);
+    caption->setStyleSheet("font-size: 28px; font-weight: bold;");
     m_view = new QLabel;
     m_view->setFixedSize(640, 480);
     m_view->setAlignment(Qt::AlignCenter);
@@ -120,7 +126,22 @@ FaceDialog::FaceDialog(const QString &title, QWidget *parent, bool allowPassword
     m_status = new QLabel("카메라를 정면으로 바라봐 주세요.");
     m_status->setAlignment(Qt::AlignCenter);
 
-    QVBoxLayout *layout = new QVBoxLayout(this);
+    // 내용은 화면 가운데 카메라 너비만큼의 세로 칸에 모은다.
+    QWidget *panel = new QWidget;
+    panel->setFixedWidth(660);
+    QHBoxLayout *center = new QHBoxLayout;
+    center->addStretch();
+    center->addWidget(panel);
+    center->addStretch();
+    QVBoxLayout *outer = new QVBoxLayout(this);
+    outer->addStretch();
+    outer->addLayout(center);
+    outer->addStretch();
+
+    QVBoxLayout *layout = new QVBoxLayout(panel);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->addWidget(caption);
+    layout->addSpacing(16);
     layout->addWidget(m_view);
     layout->addWidget(m_status);
 
