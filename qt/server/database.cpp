@@ -54,29 +54,29 @@ bool Database::open(const QSettings &config, QString *err)
     QSqlQuery q;
     for (int i = 0; i < 3; ++i) {
         if (!q.exec(QString("SELECT 1 FROM %1 LIMIT 1").arg(tables[i]))) {
-            *err = QString("'%1' 테이블을 읽을 수 없습니다. server/schema.sql을 먼저 실행하세요.\n%2")
+            *err = QString("'%1' 테이블을 읽을 수 없습니다. sudo mysql < db/kiosk.sql 을 먼저 실행하세요.\n%2")
                        .arg(tables[i]).arg(q.lastError().text());
             return false;
         }
     }
     if (!q.exec("SELECT stock FROM products LIMIT 1")) {
         *err = "products 테이블에 재고(stock) 칸이 없습니다.\n"
-               "sudo mysql < server/migrate_stock.sql 을 한 번 실행하세요.";
+               "DB를 최신으로 맞추려면 sudo mysql < db/kiosk.sql 을 실행하세요.";
         return false;
     }
     if (!q.exec("SELECT login_id FROM users LIMIT 1")) {
         *err = "users 테이블에 비밀번호 로그인(login_id, password) 칸이 없습니다.\n"
-               "sudo mysql < server/migrate_password.sql 을 한 번 실행하세요.";
+               "DB를 최신으로 맞추려면 sudo mysql < db/kiosk.sql 을 실행하세요.";
         return false;
     }
     if (!q.exec("SELECT password FROM users LIMIT 1")) {
         *err = "비밀번호 저장 방식이 바뀌었습니다 (암호화 -> 글자 그대로).\n"
-               "sudo mysql < server/migrate_plain_password.sql 을 한 번 실행하세요.";
+               "DB를 최신으로 맞추려면 sudo mysql < db/kiosk.sql 을 실행하세요.";
         return false;
     }
     if (!q.exec("SELECT 1 FROM face_images LIMIT 1")) {
         *err = "얼굴 사진(face_images) 테이블이 없습니다.\n"
-               "sudo mysql < server/migrate_face.sql 을 한 번 실행하세요.";
+               "DB를 최신으로 맞추려면 sudo mysql < db/kiosk.sql 을 실행하세요.";
         return false;
     }
     return true;

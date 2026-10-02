@@ -42,7 +42,7 @@ SOURCES += main.cpp \
            ../server/database.cpp \
            ../server/kioskserver.cpp
 
-DISTFILES += ../server/schema.sql ../server/server.ini.example
+DISTFILES += ../../db/kiosk.sql ../server/server.ini.example
 
 # ---------------------------------------------------------------
 # 실제 얼굴인식: OpenCV 3.3 이상 + opencv_contrib(face 모듈) 필요

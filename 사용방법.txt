@@ -9,6 +9,14 @@
   [안드로이드 앱] --회원가입(얼굴 사진)--> [키오스크 안의 서버] <--> [MySQL]
   [키오스크 화면] --얼굴인식 로그인/결제--> [키오스크 안의 서버]
 
+폴더 구성
+  qt/        키오스크 프로그램 (Qt Creator 로 qt/KioskSystem.pro 열기)
+    client/    화면 (회원/관리자/얼굴인식/장바구니/키보드)
+    server/    서버, DB 처리, server.ini, 회원가입 테스트 도구
+    common/    앱/키오스크/서버 공통 통신 규격
+  db/        kiosk.sql  (DB 만들기 + 예전 DB 업데이트를 한 파일로)
+  esp32/     ESP32 코드
+
 
 --------------------------------------------------------------
  1. 처음 설치 (Ubuntu, 한 번만)
@@ -23,15 +31,15 @@
    cd Smart_Face_Kiosk
 
 3) DB 만들기
-   sudo mysql < server/schema.sql
+   sudo mysql < db/kiosk.sql
    (root 비밀번호가 아니라 우분투 로그인 비밀번호를 묻습니다)
 
 4) DB 접속 설정 파일 만들기
-   cp server/server.ini.example server/server.ini
+   cp qt/server/server.ini.example qt/server/server.ini
    (MySQL 계정을 바꿨다면 server.ini 의 user / password 를 고칩니다)
 
 5) Qt Creator 로 빌드
-   - KioskSystem.pro 를 엽니다. (Qt 5 이상)
+   - qt/KioskSystem.pro 를 엽니다. (Qt 5 이상)
    - 프로젝트 -> 빌드 -> qmake 단계 -> 추가 인자에  CONFIG+=opencv  입력
    - 빌드 -> qmake 실행 -> 다시 빌드
    (CONFIG+=opencv 없이 빌드하면 카메라 없이 사용자 번호를 직접 입력하는
@@ -42,15 +50,12 @@
  2. 이미 쓰던 DB 를 최신으로 맞추기
 --------------------------------------------------------------
 
-프로그램을 켰을 때 "~.sql 을 한 번 실행하세요" 라는 경고가 나오면
-그 파일을 실행합니다.
+저장소를 새로 받은 뒤(git pull)나 프로그램이 DB 관련 경고를 띄우면
+아래를 한 번 실행합니다. 데이터는 지워지지 않고 빠진 테이블/칸만 추가됩니다.
 
-   sudo mysql < server/migrate_stock.sql           (재고 칸 추가)
-   sudo mysql < server/migrate_password.sql        (아이디/비밀번호 칸 추가)
-   sudo mysql < server/migrate_face.sql            (얼굴 사진 테이블 추가)
-   sudo mysql < server/migrate_plain_password.sql  (비밀번호를 글자 그대로 저장)
+   sudo mysql < db/kiosk.sql
 
-migrate_plain_password.sql 실행 후에는 샘플 계정 외 회원의 비밀번호를
+예전 암호화 비밀번호를 쓰던 DB 라면 실행 후 샘플 계정 외 회원의 비밀번호를
 다시 넣어야 합니다. (예전 암호화 값은 되돌릴 수 없음)
    sudo mysql kiosk -e "UPDATE users SET password='jun1234' WHERE login_id='jun';"
 
@@ -99,8 +104,8 @@ Qt Creator 에서 실행(Ctrl+R) 하거나 터미널에서 실행합니다.
 
    1) cheese 로 정면 사진 5~10장 촬영 (사진 모드)
       -> ~/사진/Webcam/ 또는 ~/Pictures/Webcam/ 에 저장됨
-   2) python3 server/register_test.py 이름 아이디 비밀번호 ~/사진/Webcam/*.jpg
-      예) python3 server/register_test.py 엄준식 jun jun1234 ~/사진/Webcam/*.jpg
+   2) python3 qt/server/register_test.py 이름 아이디 비밀번호 ~/사진/Webcam/*.jpg
+      예) python3 qt/server/register_test.py 엄준식 jun jun1234 ~/사진/Webcam/*.jpg
    3) {'ok': True, 'data': {'userId': 4}} 가 나오면 가입 완료
 
 가입하면 키오스크를 다시 켜지 않아도 다음 얼굴인식부터 바로 인식됩니다.
@@ -196,7 +201,7 @@ QMYSQL driver not loaded
    -> sudo apt install libqt5sql5-mysql
 
 server.ini 를 찾을 수 없습니다
-   -> cp server/server.ini.example server/server.ini
+   -> cp qt/server/server.ini.example qt/server/server.ini
 
 포트 9000 열기 실패
    -> 다른 키오스크 프로그램이 이미 켜져 있는지 확인
