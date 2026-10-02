@@ -4,6 +4,7 @@
 #include "memberwidget.h"
 #include "serverclient.h"
 
+#include "kioskdialog.h"
 #include "qtcompat.h"
 
 MainWindow::MainWindow(QWidget *parent)
@@ -47,13 +48,13 @@ MainWindow::MainWindow(QWidget *parent)
 void MainWindow::faceLogin()
 {
     FaceDialog face("얼굴인식 로그인", this, true);
-    if (face.exec() != QDialog::Accepted)
+    if (execInWindow(&face, true) != QDialog::Accepted)
         return;
 
     QVariant data;
     QString err;
     if (!ServerClient::call("LOGIN", QVariantMap{{"userId", face.userId()}}, &data, &err)) {
-        QMessageBox::warning(this, "로그인 실패", err);
+        KioskMessage::warning(this, "로그인 실패", err);
         return;
     }
 

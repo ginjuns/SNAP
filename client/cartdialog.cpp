@@ -2,6 +2,7 @@
 #include "facedialog.h"
 #include "serverclient.h"
 
+#include "kioskdialog.h"
 #include "qtcompat.h"
 
 CartDialog::CartDialog(const QVariantMap &user, QList<CartItem> *cart, QWidget *parent)
@@ -118,7 +119,7 @@ void CartDialog::clearCart()
 {
     if (m_cart->isEmpty())
         return;
-    if (QMessageBox::question(this, "장바구니 비우기", "장바구니를 모두 비우시겠습니까?",
+    if (KioskMessage::question(this, "장바구니 비우기", "장바구니를 모두 비우시겠습니까?",
                               QMessageBox::Yes | QMessageBox::No) != QMessageBox::Yes)
         return;
     m_cart->clear();
@@ -128,7 +129,7 @@ void CartDialog::clearCart()
 bool CartDialog::pay(int userId, const QString &method, QVariantMap *result)
 {
     if (m_cart->isEmpty()) {
-        QMessageBox::information(this, "결제", "장바구니가 비어 있습니다.");
+        KioskMessage::information(this, "결제", "장바구니가 비어 있습니다.");
         return false;
     }
 
@@ -144,7 +145,7 @@ bool CartDialog::pay(int userId, const QString &method, QVariantMap *result)
     QString err;
     const QVariantMap args{{"userId", userId}, {"method", method}, {"items", items}};
     if (!ServerClient::call("PAY", args, &data, &err)) {
-        QMessageBox::warning(this, "결제 실패", err);
+        KioskMessage::warning(this, "결제 실패", err);
         return false;
     }
     *result = data.toMap();
@@ -155,7 +156,7 @@ void CartDialog::payByCard()
 {
     if (m_cart->isEmpty())
         return;
-    if (QMessageBox::question(this, "카드 결제",
+    if (KioskMessage::question(this, "카드 결제",
                               QString("결제 금액: %1\n\n카드를 단말기에 투입(태그)한 후 [예]를 눌러 주세요.").arg(won(total())),
                               QMessageBox::Yes | QMessageBox::No) != QMessageBox::Yes)
         return;
@@ -163,7 +164,7 @@ void CartDialog::payByCard()
     QVariantMap r;
     if (!pay(m_user.value("id").toInt(), "card", &r))
         return;
-    QMessageBox::information(this, "결제 완료",
+    KioskMessage::information(this, "결제 완료",
                              QString("%1 카드 결제가 완료되었습니다.\n처음 화면으로 돌아갑니다.").arg(won(r.value("total").toInt())));
     accept();
 }
@@ -174,14 +175,14 @@ void CartDialog::payByFace()
         return;
 
     FaceDialog face("얼굴인식 결제", this);
-    if (face.exec() != QDialog::Accepted)
+    if (execInWindow(&face, true) != QDialog::Accepted)
         return;
 
     // 인식된 사용자의 충전 잔액 조회
     QVariant data;
     QString err;
     if (!ServerClient::call("LOGIN", QVariantMap{{"userId", face.userId()}}, &data, &err)) {
-        QMessageBox::warning(this, "얼굴인식 결제", err);
+        KioskMessage::warning(this, "얼굴인식 결제", err);
         return;
     }
     const QVariantMap payer = data.toMap();
@@ -192,17 +193,17 @@ void CartDialog::payByFace()
                              .arg(payer.value("name").toString())
                              .arg(won(balance)).arg(won(amount)).arg(won(balance - amount));
     if (balance < amount) {
-        QMessageBox::warning(this, "잔액 부족", info + "\n\n충전 금액이 부족합니다. 다른 결제수단을 이용해 주세요.");
+        KioskMessage::warning(this, "잔액 부족", info + "\n\n충전 금액이 부족합니다. 다른 결제수단을 이용해 주세요.");
         return;
     }
-    if (QMessageBox::question(this, "얼굴인식 결제", info + "\n\n결제하시겠습니까?",
+    if (KioskMessage::question(this, "얼굴인식 결제", info + "\n\n결제하시겠습니까?",
                               QMessageBox::Yes | QMessageBox::No) != QMessageBox::Yes)
         return;
 
     QVariantMap r;
     if (!pay(face.userId(), "face", &r))
         return;
-    QMessageBox::information(this, "결제 완료",
+    KioskMessage::information(this, "결제 완료",
                              QString("%1이(가) 차감되었습니다.\n남은 잔액: %2\n\n처음 화면으로 돌아갑니다.")
                                  .arg(won(r.value("total").toInt()))
                                  .arg(won(r.value("balance").toInt())));

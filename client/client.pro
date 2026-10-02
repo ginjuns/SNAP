@@ -23,6 +23,7 @@ HEADERS += ../common/protocol.h \
            virtualkeyboard.h \
            passworddialog.h \
            embeddedserver.h \
+           kioskdialog.h \
            ../server/database.h \
            ../server/kioskserver.h
 SOURCES += main.cpp \
@@ -36,6 +37,7 @@ SOURCES += main.cpp \
            virtualkeyboard.cpp \
            passworddialog.cpp \
            embeddedserver.cpp \
+           kioskdialog.cpp \
            ../server/database.cpp \
            ../server/kioskserver.cpp
 

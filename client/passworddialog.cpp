@@ -2,6 +2,7 @@
 #include "serverclient.h"
 #include "virtualkeyboard.h"
 
+#include "kioskdialog.h"
 #include "qtcompat.h"
 
 PasswordDialog::PasswordDialog(QWidget *parent)
@@ -48,7 +49,7 @@ void PasswordDialog::startInput()
 void PasswordDialog::login()
 {
     if (m_loginId->text().isEmpty() || m_password->text().isEmpty()) {
-        QMessageBox::information(this, windowTitle(), "아이디와 비밀번호를 입력해 주세요.");
+        KioskMessage::information(this, windowTitle(), "아이디와 비밀번호를 입력해 주세요.");
         return;
     }
 
@@ -56,7 +57,7 @@ void PasswordDialog::login()
     QString err;
     const QVariantMap args{{"loginId", m_loginId->text()}, {"password", m_password->text()}};
     if (!ServerClient::call("PASSWORD_LOGIN", args, &data, &err)) {
-        QMessageBox::warning(this, "로그인 실패", err);
+        KioskMessage::warning(this, "로그인 실패", err);
         m_password->clear();
         return;
     }

@@ -1,6 +1,7 @@
 #include "memberwidget.h"
 #include "serverclient.h"
 
+#include "kioskdialog.h"
 #include "qtcompat.h"
 
 static const int kColumns = 3;
@@ -66,7 +67,7 @@ void MemberWidget::loadProducts()
     QVariant data;
     QString err;
     if (!ServerClient::call("PRODUCTS", QVariantMap(), &data, &err))
-        QMessageBox::warning(this, "상품 조회 실패", err);
+        KioskMessage::warning(this, "상품 조회 실패", err);
     m_products = data.toList();
 
     QWidget *grid = new QWidget;
@@ -164,7 +165,7 @@ void MemberWidget::updateCartBar()
 void MemberWidget::openCart()
 {
     CartDialog dialog(m_user, &m_cart, this);
-    if (dialog.exec() == QDialog::Accepted) {   // 결제 완료
+    if (execInWindow(&dialog) == QDialog::Accepted) {   // 결제 완료
         emit finished();
         return;
     }

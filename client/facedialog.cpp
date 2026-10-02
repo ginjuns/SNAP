@@ -2,6 +2,7 @@
 #include "passworddialog.h"
 #include "serverclient.h"
 
+#include "kioskdialog.h"
 #include "qtcompat.h"
 
 #ifdef USE_OPENCV
@@ -112,10 +113,7 @@ FaceDialog::FaceDialog(const QString &title, QWidget *parent, bool allowPassword
       m_userId(-1), m_lastLabel(-1), m_hits(0), m_ticks(0), m_allowPassword(allowPassword)
 {
     setWindowTitle(title);
-    // 별도 창으로 보이지 않도록 제목 표시줄 없이 키오스크 화면 전체를 덮는다.
-    setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
-    setWindowState(Qt::WindowFullScreen);
-
+    // execInWindow(dialog, true)로 키오스크 화면 전체를 덮어 띄운다.
     QLabel *caption = new QLabel(title);
     caption->setAlignment(Qt::AlignCenter);
     caption->setStyleSheet("font-size: 28px; font-weight: bold;");
@@ -199,7 +197,7 @@ void FaceDialog::processFrame()
             m_status->setText("얼굴을 인식하지 못했습니다. [비밀번호로 로그인]을 눌러 주세요.");
             return;
         }
-        QMessageBox::warning(this, windowTitle(), "얼굴을 인식하지 못했습니다. 다시 시도해 주세요.");
+        KioskMessage::warning(this, windowTitle(), "얼굴을 인식하지 못했습니다. 다시 시도해 주세요.");
         reject();
         return;
     }
@@ -251,7 +249,7 @@ void FaceDialog::passwordLogin()
     m_timer->stop();
 
     PasswordDialog dialog(this);
-    if (dialog.exec() == QDialog::Accepted) {
+    if (execInWindow(&dialog) == QDialog::Accepted) {
         m_userId = dialog.userId();
         accept();
     } else if (scanning) {

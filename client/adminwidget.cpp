@@ -3,6 +3,7 @@
 #include "serverclient.h"
 #include "virtualkeyboard.h"
 
+#include "kioskdialog.h"
 #include "qtcompat.h"
 
 static QTableWidget *makeTable(const QStringList &headers)
@@ -260,7 +261,7 @@ void AdminWidget::chooseImage()
         return;
     QImage image(path);
     if (image.isNull()) {
-        QMessageBox::warning(this, "이미지", "이미지를 열 수 없습니다.");
+        KioskMessage::warning(this, "이미지", "이미지를 열 수 없습니다.");
         return;
     }
 
@@ -288,7 +289,7 @@ bool AdminWidget::readForm(QString *name, int *price, int *stock)
     *price = m_price->text().toInt();
     *stock = m_stock->text().toInt();
     if (name->isEmpty() || *price <= 0 || m_stock->text().isEmpty()) {
-        QMessageBox::warning(this, "상품", "상품명, 가격, 재고를 모두 입력하세요.");
+        KioskMessage::warning(this, "상품", "상품명, 가격, 재고를 모두 입력하세요.");
         return false;
     }
     return true;
@@ -305,10 +306,10 @@ void AdminWidget::addProduct()
     const QVariantMap args{{"name", name}, {"price", price}, {"stock", stock},
                            {"image", QString::fromLatin1(m_imageData.toBase64())}};
     if (!ServerClient::call("ADD_PRODUCT", args, 0, &err)) {
-        QMessageBox::warning(this, "상품 추가 실패", err);
+        KioskMessage::warning(this, "상품 추가 실패", err);
         return;
     }
-    QMessageBox::information(this, "상품 추가", QString("'%1' 상품이 추가되었습니다.").arg(name));
+    KioskMessage::information(this, "상품 추가", QString("'%1' 상품이 추가되었습니다.").arg(name));
     clearForm();
     loadProducts();
 }
@@ -317,7 +318,7 @@ void AdminWidget::updateProduct()
 {
     const int row = selectedRow();
     if (row < 0) {
-        QMessageBox::information(this, "상품 수정", "수정할 상품을 목록에서 선택하세요.");
+        KioskMessage::information(this, "상품 수정", "수정할 상품을 목록에서 선택하세요.");
         return;
     }
     QString name;
@@ -332,10 +333,10 @@ void AdminWidget::updateProduct()
 
     QString err;
     if (!ServerClient::call("UPDATE_PRODUCT", args, 0, &err)) {
-        QMessageBox::warning(this, "상품 수정 실패", err);
+        KioskMessage::warning(this, "상품 수정 실패", err);
         return;
     }
-    QMessageBox::information(this, "상품 수정", QString("'%1' 상품이 수정되었습니다.").arg(name));
+    KioskMessage::information(this, "상품 수정", QString("'%1' 상품이 수정되었습니다.").arg(name));
     clearForm();
     loadProducts();
 }
@@ -344,11 +345,11 @@ void AdminWidget::deleteProduct()
 {
     const int row = selectedRow();
     if (row < 0) {
-        QMessageBox::information(this, "상품 삭제", "삭제할 상품을 목록에서 선택하세요.");
+        KioskMessage::information(this, "상품 삭제", "삭제할 상품을 목록에서 선택하세요.");
         return;
     }
     const QVariantMap p = m_productList.value(row).toMap();
-    if (QMessageBox::question(this, "상품 삭제",
+    if (KioskMessage::question(this, "상품 삭제",
                               QString("'%1' 상품을 삭제하시겠습니까?\n(이미 발생한 매출 기록은 유지됩니다)")
                                   .arg(p.value("name").toString()),
                               QMessageBox::Yes | QMessageBox::No) != QMessageBox::Yes)
@@ -356,7 +357,7 @@ void AdminWidget::deleteProduct()
 
     QString err;
     if (!ServerClient::call("DELETE_PRODUCT", QVariantMap{{"productId", p.value("id").toInt()}}, 0, &err)) {
-        QMessageBox::warning(this, "상품 삭제 실패", err);
+        KioskMessage::warning(this, "상품 삭제 실패", err);
         return;
     }
     clearForm();
@@ -390,7 +391,7 @@ void AdminWidget::loadProducts()
     QVariant data;
     QString err;
     if (!ServerClient::call("PRODUCTS", QVariantMap(), &data, &err)) {
-        QMessageBox::warning(this, "상품 조회 실패", err);
+        KioskMessage::warning(this, "상품 조회 실패", err);
         return;
     }
     m_productList = data.toList();
@@ -436,7 +437,7 @@ void AdminWidget::loadSales()
     QString err;
     const QVariantMap args{{"unit", monthly ? "month" : "day"}, {"date", key}};
     if (!ServerClient::call("SALES", args, &data, &err)) {
-        QMessageBox::warning(this, "매출 조회 실패", err);
+        KioskMessage::warning(this, "매출 조회 실패", err);
         return;
     }
     const QVariantMap result = data.toMap();
