@@ -91,6 +91,18 @@ bool VirtualKeyboard::open(QLineEdit *edit, Mode mode, const QString &title)
 {
     VirtualKeyboard keyboard(edit->text(), mode, title, edit->window());
     keyboard.m_display->setEchoMode(edit->echoMode());
+
+    // 키보드가 입력칸을 가리지 않도록 입력칸 바로 아래(자리가 없으면 위)에 띄운다.
+    const QRect screen = QApplication::desktop()->availableGeometry(edit);
+    const QRect field(edit->mapToGlobal(QPoint(0, 0)), edit->size());
+    const QSize size = keyboard.sizeHint() + QSize(0, 40);   // 40: 창 제목 표시줄
+    int y = field.bottom() + 8;
+    if (y + size.height() > screen.bottom())
+        y = field.top() - 8 - size.height();
+    y = qBound(screen.top(), y, screen.bottom() - size.height());
+    const int x = qBound(screen.left(), field.center().x() - size.width() / 2, screen.right() - size.width());
+    keyboard.move(x, y);
+
     if (keyboard.exec() != QDialog::Accepted)
         return false;
     edit->setText(keyboard.text());

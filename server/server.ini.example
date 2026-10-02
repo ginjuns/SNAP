@@ -1,6 +1,6 @@
 ; 이 파일을 server.ini 로 복사한 뒤 값을 수정하세요.
 ; server.ini 는 비밀번호가 들어 있으므로 git에 올라가지 않습니다(.gitignore).
-; KioskServer 를 실행하는 폴더에 두어야 합니다.
+; server/ 폴더(또는 KioskClient 실행 폴더)에 두면 됩니다.
 
 [mysql]
 host=127.0.0.1

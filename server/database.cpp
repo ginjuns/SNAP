@@ -64,9 +64,14 @@ bool Database::open(const QSettings &config, QString *err)
                "sudo mysql < server/migrate_stock.sql 을 한 번 실행하세요.";
         return false;
     }
-    if (!q.exec("SELECT login_id, password_hash FROM users LIMIT 1")) {
-        *err = "users 테이블에 비밀번호 로그인(login_id, password_hash) 칸이 없습니다.\n"
+    if (!q.exec("SELECT login_id FROM users LIMIT 1")) {
+        *err = "users 테이블에 비밀번호 로그인(login_id, password) 칸이 없습니다.\n"
                "sudo mysql < server/migrate_password.sql 을 한 번 실행하세요.";
+        return false;
+    }
+    if (!q.exec("SELECT password FROM users LIMIT 1")) {
+        *err = "비밀번호 저장 방식이 바뀌었습니다 (암호화 -> 글자 그대로).\n"
+               "sudo mysql < server/migrate_plain_password.sql 을 한 번 실행하세요.";
         return false;
     }
     if (!q.exec("SELECT 1 FROM face_images LIMIT 1")) {
@@ -102,10 +107,8 @@ bool Database::registerUser(const QString &rawName, const QString &rawLoginId, c
     }
 
     QSqlDatabase::database().transaction();
-    q.prepare("INSERT INTO users (name, role, login_id, password_hash)"
-              " VALUES (?, 'member', ?, SHA2(CONCAT(?, ':', ?), 256))");
+    q.prepare("INSERT INTO users (name, role, login_id, password) VALUES (?, 'member', ?, ?)");
     q.addBindValue(name);
-    q.addBindValue(loginId);
     q.addBindValue(loginId);
     q.addBindValue(password);
     if (!q.exec())
@@ -150,7 +153,7 @@ bool Database::faces(int afterId, QVariant *out, QString *err)
 bool Database::userByPassword(const QString &loginId, const QString &password, QVariant *out, QString *err)
 {
     QSqlQuery q;
-    q.prepare("SELECT id FROM users WHERE login_id = ? AND password_hash = SHA2(CONCAT(login_id, ':', ?), 256)");
+    q.prepare("SELECT id FROM users WHERE login_id = ? AND password = ?");
     q.addBindValue(loginId);
     q.addBindValue(password);
     if (!q.exec())

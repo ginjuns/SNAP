@@ -7,13 +7,13 @@ USE kiosk;
 
 ALTER TABLE users
     ADD COLUMN login_id VARCHAR(30) NULL AFTER balance,
-    ADD COLUMN password_hash CHAR(64) NULL AFTER login_id,
+    ADD COLUMN password VARCHAR(100) COLLATE utf8mb4_bin NULL AFTER login_id,
     ADD UNIQUE KEY uq_users_login_id (login_id);
 
 -- 샘플 사용자 아이디/비밀번호: admin / admin1234, hong / hong1234, kim / kim1234
-UPDATE users SET login_id = 'admin', password_hash = SHA2('admin:admin1234', 256) WHERE id = 1;
-UPDATE users SET login_id = 'hong', password_hash = SHA2('hong:hong1234', 256)   WHERE id = 2;
-UPDATE users SET login_id = 'kim', password_hash = SHA2('kim:kim1234', 256)     WHERE id = 3;
+UPDATE users SET login_id = 'admin', password = 'admin1234' WHERE id = 1;
+UPDATE users SET login_id = 'hong', password = 'hong1234' WHERE id = 2;
+UPDATE users SET login_id = 'kim', password = 'kim1234' WHERE id = 3;
 
 -- 다른 사용자 비밀번호 설정 예:
---   UPDATE users SET login_id = 'lee', password_hash = SHA2('lee:비밀번호', 256) WHERE id = 4;
+--   UPDATE users SET login_id = 'lee', password = '비밀번호' WHERE id = 4;
