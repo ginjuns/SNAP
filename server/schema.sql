@@ -9,7 +9,7 @@ CREATE DATABASE IF NOT EXISTS kiosk
     COLLATE utf8mb4_unicode_ci;     -- _ci: 대소문자 구분 없음 (상품명 중복 판정에도 적용)
 USE kiosk;
 
--- 사용자: id = 얼굴인식 학습 폴더 이름(faces/<id>)
+-- 사용자: id = 얼굴인식 결과(LBPH 라벨)
 CREATE TABLE IF NOT EXISTS users (
     id          INT          NOT NULL AUTO_INCREMENT,
     name        VARCHAR(50)  NOT NULL,
@@ -49,6 +49,17 @@ CREATE TABLE IF NOT EXISTS sales (
     KEY idx_sales_sold_at (sold_at),
     CONSTRAINT fk_sales_user    FOREIGN KEY (user_id)    REFERENCES users (id)    ON DELETE SET NULL,
     CONSTRAINT fk_sales_product FOREIGN KEY (product_id) REFERENCES products (id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+-- 얼굴 사진: 앱 회원가입(REGISTER) 때 저장, 키오스크가 FACES로 받아 학습한다.
+-- 사용자 1명당 여러 장. 사용자를 지우면 사진도 같이 지워진다.
+CREATE TABLE IF NOT EXISTS face_images (
+    id          INT          NOT NULL AUTO_INCREMENT,
+    user_id     INT          NOT NULL,
+    image       MEDIUMBLOB   NOT NULL,                    -- JPEG/PNG 원본
+    created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    CONSTRAINT fk_face_images_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 -- 샘플 데이터 (이미 있으면 건너뜀)

@@ -71,6 +71,22 @@ QJsonObject KioskServer::handle(const QJsonObject &req)
         ok = m_db->user(req.value("userId").toInt(), &data, &err);
     } else if (cmd == "PASSWORD_LOGIN") {
         ok = m_db->userByPassword(req.value("loginId").toString(), req.value("password").toString(), &data, &err);
+    } else if (cmd == "REGISTER") {
+        QList<QByteArray> faces;
+        ok = true;
+        foreach (const QJsonValue &v, req.value("faces").toArray()) {
+            QJsonObject one;
+            one["image"] = v;
+            QByteArray image;
+            if (!(ok = decodeImage(one, &image, &err)))
+                break;
+            if (!image.isEmpty())
+                faces << image;
+        }
+        ok = ok && m_db->registerUser(req.value("name").toString(), req.value("loginId").toString(),
+                                      req.value("password").toString(), faces, &data, &err);
+    } else if (cmd == "FACES") {
+        ok = m_db->faces(req.value("afterId").toInt(), &data, &err);
     } else if (cmd == "PRODUCTS") {
         ok = m_db->products(&data, &err);
     } else if (cmd == "ADD_PRODUCT") {

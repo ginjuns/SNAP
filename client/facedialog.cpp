@@ -1,5 +1,6 @@
 #include "facedialog.h"
 #include "passworddialog.h"
+#include "serverclient.h"
 
 #include "qtcompat.h"
 
@@ -16,8 +17,7 @@ const cv::Size kFaceSize(200, 200);
 
 cv::CascadeClassifier g_cascade;
 cv::Ptr<cv::face::LBPHFaceRecognizer> g_model;
-QString g_initError;
-bool g_initialized = false;
+int g_lastFaceId = 0;                // 마지막으로 학습한 face_images.id
 
 bool largestFace(const cv::Mat &gray, cv::Rect *face)
 {
@@ -32,52 +32,71 @@ bool largestFace(const cv::Mat &gray, cv::Rect *face)
     return true;
 }
 
-// faces/<사용자ID>/*.jpg 사진으로 LBPH 모델을 학습한다. (프로그램 실행 후 최초 1회)
-bool initRecognizer()
+// 실행 폴더에 없으면 Ubuntu 패키지(opencv-data) 위치에서 찾는다.
+bool loadCascade(QString *err)
 {
-    if (g_initialized)
-        return g_initError.isEmpty();
-    g_initialized = true;
+    if (!g_cascade.empty())
+        return true;
+    const char *paths[] = { "haarcascade_frontalface_default.xml",
+                            "/usr/share/opencv4/haarcascades/haarcascade_frontalface_default.xml",
+                            "/usr/share/opencv/haarcascades/haarcascade_frontalface_default.xml" };
+    for (size_t i = 0; i < sizeof(paths) / sizeof(paths[0]); ++i)
+        if (g_cascade.load(paths[i]))
+            return true;
+    *err = "haarcascade_frontalface_default.xml 파일을 찾을 수 없습니다.\n"
+           "Ubuntu: sudo apt install opencv-data";
+    return false;
+}
 
-    if (!g_cascade.load("haarcascade_frontalface_default.xml")) {
-        g_initError = "haarcascade_frontalface_default.xml 파일을 찾을 수 없습니다.";
+// DB(face_images)의 얼굴 사진으로 LBPH 모델을 학습한다.
+// 처음엔 전체를 받고, 이후 창을 열 때마다 새로 가입한 사람의 사진만 받아 모델에 더한다.
+bool refreshRecognizer(QString *err)
+{
+    if (!loadCascade(err))
         return false;
-    }
+
+    QVariant data;
+    if (!ServerClient::call("FACES", QVariantMap{{"afterId", g_lastFaceId}}, &data, err))
+        return false;
 
     std::vector<cv::Mat> images;
     std::vector<int> labels;
-    QDir root("faces");
-    foreach (const QString &dirName, root.entryList(QDir::Dirs | QDir::NoDotAndDotDot)) {
-        bool ok = false;
-        const int id = dirName.toInt(&ok);
-        if (!ok)
+    foreach (const QVariant &v, data.toList()) {
+        const QVariantMap m = v.toMap();
+        g_lastFaceId = m.value("id").toInt();
+        const QByteArray bytes = QByteArray::fromBase64(m.value("image").toString().toLatin1());
+        const std::vector<uchar> buf(bytes.begin(), bytes.end());
+        cv::Mat gray = cv::imdecode(buf, cv::IMREAD_GRAYSCALE);
+        if (gray.empty())
             continue;
-        QDir dir(root.filePath(dirName));
-        const QStringList filters = QStringList() << "*.jpg" << "*.jpeg" << "*.png" << "*.bmp";
-        foreach (const QString &file, dir.entryList(filters, QDir::Files)) {
-            cv::Mat gray = cv::imread(QFile::encodeName(dir.filePath(file)).constData(), cv::IMREAD_GRAYSCALE);
-            if (gray.empty())
-                continue;
-            cv::equalizeHist(gray, gray);
-            cv::Rect r;
-            cv::Mat face = largestFace(gray, &r) ? gray(r) : gray;
-            cv::Mat resized;
-            cv::resize(face, resized, kFaceSize);
-            images.push_back(resized);
-            labels.push_back(id);
-        }
-    }
-    if (images.empty()) {
-        g_initError = "faces/<사용자ID>/ 폴더에 학습용 얼굴 사진이 없습니다.";
-        return false;
+        if (gray.cols > 800)   // 폰 원본 사진은 너무 커서 얼굴 찾기가 느리다
+            cv::resize(gray, gray, cv::Size(800, gray.rows * 800 / gray.cols));
+        cv::equalizeHist(gray, gray);
+        cv::Rect r;
+        if (!largestFace(gray, &r))   // 얼굴이 안 보이는 사진은 학습에서 뺀다
+            continue;
+        cv::Mat resized;
+        cv::resize(gray(r), resized, kFaceSize);
+        images.push_back(resized);
+        labels.push_back(m.value("userId").toInt());
     }
 
+    if (!images.empty()) {
+        if (g_model.empty()) {
 #if CV_VERSION_MAJOR == 3 && CV_VERSION_MINOR < 3
-    g_model = cv::face::createLBPHFaceRecognizer();   // OpenCV 3.2 이하 (Ubuntu 18.04 기본)
+            g_model = cv::face::createLBPHFaceRecognizer();   // OpenCV 3.2 이하 (Ubuntu 18.04 기본)
 #else
-    g_model = cv::face::LBPHFaceRecognizer::create();
+            g_model = cv::face::LBPHFaceRecognizer::create();
 #endif
-    g_model->train(images, labels);
+            g_model->train(images, labels);
+        } else {
+            g_model->update(images, labels);
+        }
+    }
+    if (g_model.empty()) {
+        *err = "등록된 얼굴이 없습니다. 앱에서 얼굴 사진으로 회원가입을 먼저 해 주세요.";
+        return false;
+    }
     return true;
 }
 
@@ -115,8 +134,9 @@ FaceDialog::FaceDialog(const QString &title, QWidget *parent, bool allowPassword
 
 #ifdef USE_OPENCV
     connect(m_timer, SIGNAL(timeout()), SLOT(processFrame()));
-    if (!initRecognizer()) {
-        m_status->setText(g_initError);
+    QString err;
+    if (!refreshRecognizer(&err)) {
+        m_status->setText(err);
     } else {
         m_camera = new Camera;
         if (m_camera->cap.open(0))

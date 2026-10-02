@@ -69,6 +69,81 @@ bool Database::open(const QSettings &config, QString *err)
                "sudo mysql < server/migrate_password.sql 을 한 번 실행하세요.";
         return false;
     }
+    if (!q.exec("SELECT 1 FROM face_images LIMIT 1")) {
+        *err = "얼굴 사진(face_images) 테이블이 없습니다.\n"
+               "sudo mysql < server/migrate_face.sql 을 한 번 실행하세요.";
+        return false;
+    }
+    return true;
+}
+
+bool Database::registerUser(const QString &rawName, const QString &rawLoginId, const QString &password,
+                            const QList<QByteArray> &faces, QVariant *out, QString *err)
+{
+    const QString name = rawName.trimmed();
+    const QString loginId = rawLoginId.trimmed();
+    if (name.isEmpty() || loginId.isEmpty() || password.isEmpty()) {
+        *err = "이름, 아이디, 비밀번호를 모두 입력하세요.";
+        return false;
+    }
+    if (faces.isEmpty()) {
+        *err = "얼굴 사진이 없습니다. (faces에 1장 이상)";
+        return false;
+    }
+
+    QSqlQuery q;
+    q.prepare("SELECT COUNT(*) FROM users WHERE login_id = ?");
+    q.addBindValue(loginId);
+    if (!q.exec() || !q.next())
+        return fail(q, err);
+    if (q.value(0).toInt() > 0) {
+        *err = QString("'%1' 아이디는 이미 사용 중입니다.").arg(loginId);
+        return false;
+    }
+
+    QSqlDatabase::database().transaction();
+    q.prepare("INSERT INTO users (name, role, login_id, password_hash)"
+              " VALUES (?, 'member', ?, SHA2(CONCAT(?, ':', ?), 256))");
+    q.addBindValue(name);
+    q.addBindValue(loginId);
+    q.addBindValue(loginId);
+    q.addBindValue(password);
+    if (!q.exec())
+        return rollback(q.lastError().text(), err);
+    const int userId = q.lastInsertId().toInt();
+
+    foreach (const QByteArray &image, faces) {
+        q.prepare("INSERT INTO face_images (user_id, image) VALUES (?, ?)");
+        q.addBindValue(userId);
+        q.addBindValue(image);
+        if (!q.exec())
+            return rollback(q.lastError().text(), err);
+    }
+
+    if (!QSqlDatabase::database().commit())
+        return rollback(QSqlDatabase::database().lastError().text(), err);
+    QVariantMap m;
+    m["userId"] = userId;
+    *out = m;
+    return true;
+}
+
+bool Database::faces(int afterId, QVariant *out, QString *err)
+{
+    QSqlQuery q;
+    q.prepare("SELECT id, user_id, image FROM face_images WHERE id > ? ORDER BY id");
+    q.addBindValue(afterId);
+    if (!q.exec())
+        return fail(q, err);
+    QVariantList list;
+    while (q.next()) {
+        QVariantMap m;
+        m["id"] = q.value(0).toInt();
+        m["userId"] = q.value(1).toInt();
+        m["image"] = QString::fromLatin1(q.value(2).toByteArray().toBase64());
+        list << m;
+    }
+    *out = list;
     return true;
 }
 
