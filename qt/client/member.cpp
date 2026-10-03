@@ -8,10 +8,11 @@ static const int COLS = 3;
 static const int IMG_SIZE = 180;
 
 Member::Member(QWidget *parent)
-    : QWidget(parent), ui(new Ui::Member)
+    : QWidget(parent), ui(new Ui::Member), m_down(0)
 {
     ui->setupUi(this);
     scaleUi(this);
+    touchScroll(ui->scroll);
     connect(ui->btnHome, SIGNAL(clicked()), SIGNAL(done()));
     connect(ui->btnCart, SIGNAL(clicked()), SLOT(openCart()));
 }
@@ -38,6 +39,7 @@ void Member::load()
     if (!Net::call("PRODUCTS", QVariantMap(), &data, &err))
         Msg::warn(this, "상품 조회 실패", err);
     m_list = data.toList();
+    m_down = 0;
 
     QWidget *grid = new QWidget;
     QGridLayout *g = new QGridLayout(grid);
@@ -63,6 +65,7 @@ void Member::load()
         QFrame *card = new QFrame;
         card->setObjectName(soldOut ? "soldOut" : "product");
         card->setStyleSheet(css("QFrame#product { border: 1px solid #c3c2b7; border-radius: 8px; background: white; }"
+                                "QFrame#product[down=\"true\"] { border: 2px solid #2a78d6; background: #e8f0fb; }"
                                 "QFrame#soldOut { border: 2px solid #d32f2f; border-radius: 8px; background: #fdecea; }"));
         QVBoxLayout *v = new QVBoxLayout(card);
         v->addWidget(img, 0, Qt::AlignCenter);
@@ -80,13 +83,32 @@ void Member::load()
     ui->scroll->setWidget(grid);
 }
 
+static void setDown(QWidget *card, bool down)
+{
+    card->setProperty("down", down);
+    card->style()->unpolish(card);
+    card->style()->polish(card);
+}
+
 bool Member::eventFilter(QObject *obj, QEvent *e)
 {
-    if (e->type() == QEvent::MouseButtonPress)
+    QWidget *card = qobject_cast<QWidget *>(obj);
+    if (!card)
+        return QWidget::eventFilter(obj, e);
+
+    if (e->type() == QEvent::MouseButtonPress) {
+        m_down = card;
+        m_downPos = static_cast<QMouseEvent *>(e)->globalPos();
+        setDown(card, true);
         return true;
+    }
     if (e->type() == QEvent::MouseButtonRelease) {
-        QWidget *card = qobject_cast<QWidget *>(obj);
-        if (card && card->rect().contains(static_cast<QMouseEvent *>(e)->pos()))
+        QMouseEvent *me = static_cast<QMouseEvent *>(e);
+        setDown(card, false);
+        bool tap = m_down == card && card->rect().contains(me->pos())
+                   && (me->globalPos() - m_downPos).manhattanLength() < px(20);
+        m_down = 0;
+        if (tap)
             add(card->property("index").toInt());
         return true;
     }

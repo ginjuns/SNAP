@@ -55,6 +55,22 @@ inline void scaleUi(QWidget *root)
     }
 }
 
+inline void touchScroll(QAbstractScrollArea *area)
+{
+    if (QAbstractItemView *v = qobject_cast<QAbstractItemView *>(area)) {
+        v->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+        v->setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
+    }
+    QScroller::grabGesture(area->viewport(), QScroller::LeftMouseButtonGesture);
+    QScroller *s = QScroller::scroller(area->viewport());
+    QScrollerProperties sp = s->scrollerProperties();
+    sp.setScrollMetric(QScrollerProperties::VerticalOvershootPolicy,
+                       QVariant::fromValue(QScrollerProperties::OvershootAlwaysOff));
+    sp.setScrollMetric(QScrollerProperties::HorizontalOvershootPolicy,
+                       QVariant::fromValue(QScrollerProperties::OvershootAlwaysOff));
+    s->setScrollerProperties(sp);
+}
+
 inline void stretch(QTableWidget *t)
 {
     t->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);

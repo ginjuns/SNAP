@@ -13,6 +13,7 @@ Cart::Cart(const QVariantMap &user, QList<Item> *items, QWidget *parent)
     resize(px(680), px(900));
 
     stretch(ui->table);
+    touchScroll(ui->table);
     ui->table->verticalHeader()->setDefaultSectionSize(px(48));
     ui->lblBalance->setText(QString("(충전 잔액 %1)").arg(won(m_user.value("balance").toInt())));
 

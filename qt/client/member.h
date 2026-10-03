@@ -36,6 +36,8 @@ private:
     QVariantMap m_user;
     QVariantList m_list;
     QList<Item> m_cart;
+    QObject *m_down;
+    QPoint m_downPos;
 };
 
 #endif

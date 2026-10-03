@@ -181,7 +181,17 @@ void Chart::paintEvent(QPaintEvent *)
     }
 }
 
+void Chart::mousePressEvent(QMouseEvent *e)
+{
+    showTip(e);
+}
+
 void Chart::mouseMoveEvent(QMouseEvent *e)
+{
+    showTip(e);
+}
+
+void Chart::showTip(QMouseEvent *e)
 {
     int i = barAt(e->pos());
     if (i >= 0 && m_bars[i].card + m_bars[i].face == 0)

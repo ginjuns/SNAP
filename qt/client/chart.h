@@ -14,6 +14,7 @@ public:
 
 protected:
     void paintEvent(QPaintEvent *e);
+    void mousePressEvent(QMouseEvent *e);
     void mouseMoveEvent(QMouseEvent *e);
     void leaveEvent(QEvent *e);
 
@@ -28,6 +29,7 @@ private:
 
     QRectF area() const;
     int barAt(const QPoint &pos) const;
+    void showTip(QMouseEvent *e);
 
     QList<Bar> m_bars;
     QString m_title;

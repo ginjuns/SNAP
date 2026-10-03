@@ -95,9 +95,13 @@ Admin::Admin(QWidget *parent)
     connect(ui->btnDel, SIGNAL(clicked()), SLOT(del()));
 
     stretch(ui->tableProduct);
+    touchScroll(ui->tableProduct);
     connect(ui->tableProduct, SIGNAL(itemSelectionChanged()), SLOT(onSelect()));
 
     ui->date->setDate(QDate::currentDate());
+    ui->date->calendarWidget()->setMinimumSize(px(420), px(360));
+    ui->comboUnit->setView(new QListView);
+    ui->comboUnit->setStyleSheet(css("QComboBox QAbstractItemView::item { min-height: 48px; }"));
     connect(ui->comboUnit, SIGNAL(currentIndexChanged(int)), SLOT(onUnit()));
     connect(ui->date, SIGNAL(dateChanged(QDate)), SLOT(loadSales()));
     connect(ui->btnPrev, SIGNAL(clicked()), SLOT(prev()));
@@ -106,6 +110,9 @@ Admin::Admin(QWidget *parent)
 
     stretch(ui->tableDetail);
     stretch(ui->tableBuyer);
+    touchScroll(ui->tableDetail);
+    touchScroll(ui->tableBuyer);
+    ui->splitter->setHandleWidth(px(16));
     ui->splitter->setStretchFactor(0, 1);
     ui->splitter->setStretchFactor(1, 1);
 }
@@ -157,6 +164,8 @@ void Admin::pickImage()
     dlg.setFileMode(QFileDialog::ExistingFile);
     dlg.setViewMode(QFileDialog::List);
     dlg.resize(px(680), px(900));
+    foreach (QAbstractItemView *v, dlg.findChildren<QAbstractItemView *>())
+        touchScroll(v);
     if (popup(&dlg) != QDialog::Accepted || dlg.selectedFiles().isEmpty())
         return;
     QImage img(dlg.selectedFiles().first());
