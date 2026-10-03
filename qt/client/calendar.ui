@@ -2,6 +2,14 @@
 <ui version="4.0">
  <class>Calendar</class>
  <widget class="QDialog" name="Calendar">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>618</width>
+    <height>666</height>
+   </rect>
+  </property>
   <property name="windowTitle">
    <string>날짜 선택</string>
   </property>
@@ -20,7 +28,7 @@
         <string notr="true">font-size: 20px;</string>
        </property>
        <property name="text">
-        <string>◀ 작년</string>
+        <string>◀</string>
        </property>
       </widget>
      </item>
@@ -46,7 +54,7 @@
         <string notr="true">font-size: 20px;</string>
        </property>
        <property name="text">
-        <string>내년 ▶</string>
+        <string>▶</string>
        </property>
       </widget>
      </item>
@@ -66,7 +74,7 @@
         <string notr="true">font-size: 20px;</string>
        </property>
        <property name="text">
-        <string>◀ 이전 달</string>
+        <string>◀</string>
        </property>
       </widget>
      </item>
@@ -92,7 +100,7 @@
         <string notr="true">font-size: 20px;</string>
        </property>
        <property name="text">
-        <string>다음 달 ▶</string>
+        <string>▶</string>
        </property>
       </widget>
      </item>
