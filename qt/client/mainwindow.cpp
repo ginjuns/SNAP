@@ -8,6 +8,24 @@
 #include "popup.h"
 #include "util.h"
 
+static bool wayland()
+{
+    return qgetenv("XDG_SESSION_TYPE") == "wayland";
+}
+
+static void screenPower(bool on)
+{
+    if (wayland()) {
+        QProcess::execute("busctl", QStringList() << "--user" << "set-property"
+                                                  << "org.gnome.Mutter.DisplayConfig"
+                                                  << "/org/gnome/Mutter/DisplayConfig"
+                                                  << "org.gnome.Mutter.DisplayConfig"
+                                                  << "PowerSaveMode" << "i" << (on ? "0" : "3"));
+    } else {
+        QProcess::execute("xset", QStringList() << "dpms" << "force" << (on ? "on" : "off"));
+    }
+}
+
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), ui(new Ui::MainWindow), m_sleep(false)
 {
@@ -23,6 +41,11 @@ MainWindow::MainWindow(QWidget *parent)
     ui->stack->addWidget(m_member);
     ui->stack->addWidget(m_admin);
 
+    if (!wayland()) {
+        QProcess::execute("xset", QStringList() << "s" << "off");
+        QProcess::execute("xset", QStringList() << "dpms" << "0" << "0" << "0");
+    }
+
     ui->pageSleep->installEventFilter(this);
     if (Esp::get())
         connect(Esp::get(), SIGNAL(presence(bool)), SLOT(onPresence(bool)));
@@ -31,6 +54,7 @@ MainWindow::MainWindow(QWidget *parent)
 
 MainWindow::~MainWindow()
 {
+    screenPower(true);
     delete ui;
 }
 
@@ -79,6 +103,7 @@ void MainWindow::sleep()
     setBlocked(true);
     closeAll();
     ui->stack->setCurrentWidget(ui->pageSleep);
+    screenPower(false);
 }
 
 void MainWindow::wake()
@@ -88,6 +113,7 @@ void MainWindow::wake()
     m_sleep = false;
     setBlocked(false);
     ui->stack->setCurrentWidget(ui->pageLogin);
+    screenPower(true);
 }
 
 bool MainWindow::eventFilter(QObject *obj, QEvent *e)
