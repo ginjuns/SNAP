@@ -7,6 +7,10 @@
 class QLineEdit;
 class QPushButton;
 
+namespace Ui {
+class VirtualKeyboard;
+}
+
 // 터치스크린용 가상 키보드.
 //   Text   : 한글(두벌식, 자모 조합) / 영문 / 숫자
 //   English: Text와 같지만 영문으로 시작 (아이디, 비밀번호)
@@ -21,6 +25,7 @@ public:
     enum Mode { Text, English, Number };
 
     VirtualKeyboard(const QString &text, Mode mode, const QString &title, QWidget *parent = 0);
+    ~VirtualKeyboard();
     QString text() const { return m_text; }
 
     static void attach(QLineEdit *edit, Mode mode, const QString &title);
@@ -36,22 +41,19 @@ private slots:
     void onToggleLanguage();
 
 private:
-    QPushButton *makeKey(const QString &label, const char *slot);
     void relabel();
     void typeJamo(const QChar &jamo);
     void append(const QChar &c, bool composing);
     void replaceLast(const QChar &c);
     void refresh();
 
+    Ui::VirtualKeyboard *ui;
     Mode m_mode;
     QString m_text;
     bool m_composing;   // 마지막 글자가 조합 중인 한글인지
     bool m_korean;
     bool m_shift;
-    QLineEdit *m_display;
-    QList<QPushButton *> m_letterKeys;
-    QPushButton *m_shiftKey;
-    QPushButton *m_langKey;
+    QList<QPushButton *> m_letterKeys;   // letterKey0 ~ letterKey25 (자판 순서)
     int m_maxLength;
 };
 

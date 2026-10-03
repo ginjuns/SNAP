@@ -1,4 +1,5 @@
 #include "mainwindow.h"
+#include "ui_mainwindow.h"
 #include "adminwidget.h"
 #include "facedialog.h"
 #include "memberwidget.h"
@@ -8,41 +9,25 @@
 #include "qtcompat.h"
 
 MainWindow::MainWindow(QWidget *parent)
-    : QMainWindow(parent)
+    : QMainWindow(parent), ui(new Ui::MainWindow)
 {
-    setWindowTitle("무인 키오스크");
+    ui->setupUi(this);   // 초기 화면: mainwindow.ui
+    scaleUi(this);
     resize(px(720), px(1280));   // 세로 화면 기준 (main.cpp의 배율로 실제 크기가 정해짐)
+    connect(ui->loginButton, SIGNAL(clicked()), SLOT(faceLogin()));
 
-    // 초기 화면
-    m_login = new QWidget;
-    QLabel *title = new QLabel("무인 키오스크");
-    title->setAlignment(Qt::AlignCenter);
-    title->setStyleSheet(css("font-size: 40px; font-weight: bold;"));
-    QLabel *guide = new QLabel("아래 버튼을 누르고 카메라를 바라봐 주세요.");
-    guide->setAlignment(Qt::AlignCenter);
-    QPushButton *loginButton = new QPushButton("얼굴인식으로 시작하기");
-    loginButton->setMinimumSize(px(360), px(100));
-    loginButton->setStyleSheet(css("font-size: 24px;"));
-    connect(loginButton, SIGNAL(clicked()), SLOT(faceLogin()));
-
-    QVBoxLayout *v = new QVBoxLayout(m_login);
-    v->addStretch();
-    v->addWidget(title);
-    v->addWidget(guide);
-    v->addSpacing(px(40));
-    v->addWidget(loginButton, 0, Qt::AlignCenter);
-    v->addStretch();
-
+    // 일반회원 / 관리자 화면은 초기 화면 뒤에 붙인다
     m_member = new MemberWidget;
     m_admin = new AdminWidget;
     connect(m_member, SIGNAL(finished()), SLOT(showLogin()));
     connect(m_admin, SIGNAL(finished()), SLOT(showLogin()));
+    ui->stack->addWidget(m_member);
+    ui->stack->addWidget(m_admin);
+}
 
-    m_stack = new QStackedWidget;
-    m_stack->addWidget(m_login);
-    m_stack->addWidget(m_member);
-    m_stack->addWidget(m_admin);
-    setCentralWidget(m_stack);
+MainWindow::~MainWindow()
+{
+    delete ui;
 }
 
 void MainWindow::faceLogin()
@@ -61,14 +46,14 @@ void MainWindow::faceLogin()
     const QVariantMap user = data.toMap();
     if (user.value("role").toString() == "admin") {
         m_admin->start(user);
-        m_stack->setCurrentWidget(m_admin);
+        ui->stack->setCurrentWidget(m_admin);
     } else {
         m_member->start(user);
-        m_stack->setCurrentWidget(m_member);
+        ui->stack->setCurrentWidget(m_member);
     }
 }
 
 void MainWindow::showLogin()
 {
-    m_stack->setCurrentWidget(m_login);
+    ui->stack->setCurrentWidget(ui->loginPage);
 }

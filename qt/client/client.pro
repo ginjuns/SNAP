@@ -42,7 +42,16 @@ SOURCES += main.cpp \
            ../server/database.cpp \
            ../server/kioskserver.cpp
 
-DISTFILES += ../../db/kiosk.sql ../server/server.ini.example
+# 화면 배치 (Qt Designer). 크기는 720x1280 기준으로 적고 scaleUi()로 배율을 맞춘다 (uiscale.h)
+FORMS += mainwindow.ui \
+         memberwidget.ui \
+         cartdialog.ui \
+         adminwidget.ui \
+         facedialog.ui \
+         passworddialog.ui \
+         virtualkeyboard.ui
+
+DISTFILES +=../../db/kiosk.sql ../server/server.ini.example
 
 # ---------------------------------------------------------------
 # 실제 얼굴인식: OpenCV 3.3 이상 + opencv_contrib(face 모듈) 필요

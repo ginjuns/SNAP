@@ -1,4 +1,5 @@
 #include "virtualkeyboard.h"
+#include "ui_virtualkeyboard.h"
 
 #include "kioskdialog.h"
 #include "qtcompat.h"
@@ -91,7 +92,7 @@ void VirtualKeyboard::attach(QLineEdit *edit, Mode mode, const QString &title)
 bool VirtualKeyboard::open(QLineEdit *edit, Mode mode, const QString &title)
 {
     VirtualKeyboard keyboard(edit->text(), mode, title, edit->window());
-    keyboard.m_display->setEchoMode(edit->echoMode());
+    keyboard.ui->displayEdit->setEchoMode(edit->echoMode());
 
     // 키보드가 입력칸을 가리지 않도록 입력칸 바로 아래(자리가 없으면 위)에 띄운다.
     const QRect screen = QApplication::desktop()->availableGeometry(edit);
@@ -111,91 +112,55 @@ bool VirtualKeyboard::open(QLineEdit *edit, Mode mode, const QString &title)
 }
 
 VirtualKeyboard::VirtualKeyboard(const QString &text, Mode mode, const QString &title, QWidget *parent)
-    : QDialog(parent), m_mode(mode), m_text(text), m_composing(false), m_korean(mode != English), m_shift(false),
-      m_shiftKey(0), m_langKey(0), m_maxLength(mode == Number ? 9 : 30)
+    : QDialog(parent), ui(new Ui::VirtualKeyboard), m_mode(mode), m_text(text), m_composing(false),
+      m_korean(mode != English), m_shift(false), m_maxLength(mode == Number ? 9 : 30)
 {
+    // 화면 배치: virtualkeyboard.ui. 숫자 키패드(numberPad)와 글자 키보드(textPad) 중 하나만 보인다.
+    ui->setupUi(this);
+    scaleUi(this);
     setWindowTitle(title);
+    ui->captionLabel->setText(title);
+
     // 앱 전체 스타일의 버튼 좌우 여백(16px)을 없애야 키가 작아진다.
     // 글자 키보드는 약 500x360px, 숫자 키패드는 조금 더 큰 키를 쓴다.
     const int keySize = (mode == Number) ? 56 : 42;
     setStyleSheet(css(QString("QPushButton { font-size: %1px; min-width: %2px; min-height: %2px; padding: 0 6px; }"
                               "QLineEdit { font-size: 20px; padding: 4px; }")
                           .arg(mode == Number ? 20 : 16).arg(keySize)));
+    foreach (QLayout *l, findChildren<QLayout *>())
+        l->setSpacing(px(4));
+    layout()->setContentsMargins(px(8), px(8), px(8), px(8));
 
-    m_display = new QLineEdit;
-    m_display->setReadOnly(true);
-
-    QVBoxLayout *layout = new QVBoxLayout(this);
-    layout->setSpacing(px(4));
-    layout->setContentsMargins(px(8), px(8), px(8), px(8));
-    QLabel *caption = new QLabel(title);
-    caption->setStyleSheet(css("font-size: 15px; font-weight: bold;"));
-    layout->addWidget(caption);
-    layout->addWidget(m_display);
+    // 누르면 키 글자가 입력되는 키: 숫자 키패드, 숫자 행, 글자 키
+    foreach (QPushButton *key, findChildren<QPushButton *>(QRegularExpression("^(padKey|digitKey|letterKey)\\d+$")))
+        connect(key, SIGNAL(clicked()), SLOT(onKey()));
+    connect(ui->padClear, SIGNAL(clicked()), SLOT(onClear()));
+    connect(ui->padBackspace, SIGNAL(clicked()), SLOT(onBackspace()));
+    connect(ui->shiftKey, SIGNAL(clicked()), SLOT(onShift()));
+    connect(ui->backspaceKey, SIGNAL(clicked()), SLOT(onBackspace()));
+    connect(ui->langKey, SIGNAL(clicked()), SLOT(onToggleLanguage()));
+    connect(ui->spaceKey, SIGNAL(clicked()), SLOT(onSpace()));
+    connect(ui->clearKey, SIGNAL(clicked()), SLOT(onClear()));
+    connect(ui->cancelButton, SIGNAL(clicked()), SLOT(reject()));
+    connect(ui->doneButton, SIGNAL(clicked()), SLOT(accept()));
 
     if (mode == Number) {
-        QGridLayout *pad = new QGridLayout;
-        for (int i = 1; i <= 9; ++i)
-            pad->addWidget(makeKey(QString::number(i), SLOT(onKey())), (i - 1) / 3, (i - 1) % 3);
-        pad->addWidget(makeKey("전체삭제", SLOT(onClear())), 3, 0);
-        pad->addWidget(makeKey("0", SLOT(onKey())), 3, 1);
-        pad->addWidget(makeKey("←", SLOT(onBackspace())), 3, 2);
-        layout->addLayout(pad);
+        ui->textPad->hide();
     } else {
-        // 숫자 행
-        QHBoxLayout *numbers = new QHBoxLayout;
-        for (int i = 1; i <= 10; ++i)
-            numbers->addWidget(makeKey(QString::number(i % 10), SLOT(onKey())));
-        layout->addLayout(numbers);
-
+        ui->numberPad->hide();
         // 글자 3행 (라벨은 relabel()에서 한/영, Shift 상태에 따라 채움)
-        const int counts[3] = { 10, 9, 7 };
-        for (int row = 0; row < 3; ++row) {
-            QHBoxLayout *line = new QHBoxLayout;
-            if (row == 2) {
-                m_shiftKey = makeKey("Shift", SLOT(onShift()));
-                m_shiftKey->setCheckable(true);
-                line->addWidget(m_shiftKey);
-            }
-            for (int i = 0; i < counts[row]; ++i) {
-                QPushButton *key = makeKey(QString(), SLOT(onKey()));
-                m_letterKeys << key;
-                line->addWidget(key);
-            }
-            if (row == 2)
-                line->addWidget(makeKey("←", SLOT(onBackspace())));
-            layout->addLayout(line);
-        }
-
-        QHBoxLayout *bottom = new QHBoxLayout;
-        m_langKey = makeKey("한/영", SLOT(onToggleLanguage()));
-        QPushButton *space = makeKey("띄어쓰기", SLOT(onSpace()));
-        bottom->addWidget(m_langKey);
-        bottom->addWidget(space, 1);
-        bottom->addWidget(makeKey("전체삭제", SLOT(onClear())));
-        layout->addLayout(bottom);
+        for (int i = 0; i < 26; ++i)
+            m_letterKeys << findChild<QPushButton *>(QString("letterKey%1").arg(i));
         relabel();
     }
-
-    QPushButton *cancel = new QPushButton("취소");
-    QPushButton *done = new QPushButton("완료");
-    done->setStyleSheet("background: #2a78d6; color: white; font-weight: bold;");
-    connect(cancel, SIGNAL(clicked()), SLOT(reject()));
-    connect(done, SIGNAL(clicked()), SLOT(accept()));
-    QHBoxLayout *actions = new QHBoxLayout;
-    actions->addWidget(cancel);
-    actions->addWidget(done);
-    layout->addLayout(actions);
+    adjustSize();   // .ui 의 창 크기 대신 보이는 키패드에 맞춘 크기로
 
     refresh();
 }
 
-QPushButton *VirtualKeyboard::makeKey(const QString &label, const char *slot)
+VirtualKeyboard::~VirtualKeyboard()
 {
-    QPushButton *key = new QPushButton(label);
-    key->setFocusPolicy(Qt::NoFocus);
-    connect(key, SIGNAL(clicked()), slot);
-    return key;
+    delete ui;
 }
 
 void VirtualKeyboard::relabel()
@@ -207,14 +172,14 @@ void VirtualKeyboard::relabel()
         for (int i = 0; i < letters.size(); ++i)
             m_letterKeys[k++]->setText(letters.at(i));
     }
-    m_shiftKey->setChecked(m_shift);
-    m_langKey->setText(m_korean ? "한 → 영" : "영 → 한");
+    ui->shiftKey->setChecked(m_shift);
+    ui->langKey->setText(m_korean ? "한 → 영" : "영 → 한");
 }
 
 void VirtualKeyboard::refresh()
 {
-    m_display->setText(m_text);
-    m_display->setCursorPosition(m_text.size());
+    ui->displayEdit->setText(m_text);
+    ui->displayEdit->setCursorPosition(m_text.size());
 }
 
 void VirtualKeyboard::append(const QChar &c, bool composing)

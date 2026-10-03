@@ -3,9 +3,11 @@
 
 #include <QDialog>
 
-class QLabel;
-class QLineEdit;
 class QTimer;
+
+namespace Ui {
+class FaceDialog;
+}
 
 // 카메라로 얼굴을 인식해 사용자 ID를 돌려주는 창.
 // 인식 성공 시 accept(), userId()로 결과 확인.
@@ -26,10 +28,8 @@ private slots:
 
 private:
     struct Camera;
+    Ui::FaceDialog *ui;
     Camera *m_camera;
-    QLabel *m_view;
-    QLabel *m_status;
-    QLineEdit *m_idEdit;
     QTimer *m_timer;
     int m_userId;
     int m_lastLabel;

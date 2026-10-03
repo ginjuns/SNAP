@@ -1,4 +1,5 @@
 #include "facedialog.h"
+#include "ui_facedialog.h"
 #include "passworddialog.h"
 #include "serverclient.h"
 
@@ -109,79 +110,45 @@ struct FaceDialog::Camera {};
 #endif
 
 FaceDialog::FaceDialog(const QString &title, QWidget *parent, bool allowPassword)
-    : QDialog(parent), m_camera(0), m_idEdit(0), m_timer(new QTimer(this)),
+    : QDialog(parent), ui(new Ui::FaceDialog), m_camera(0), m_timer(new QTimer(this)),
       m_userId(-1), m_lastLabel(-1), m_hits(0), m_ticks(0), m_allowPassword(allowPassword)
 {
-    setWindowTitle(title);
+    // 화면 배치: facedialog.ui. 내용은 화면 가운데 카메라 너비만큼의 세로 칸(panel)에 모은다.
     // execInWindow(dialog, true)로 키오스크 화면 전체를 덮어 띄운다.
-    QLabel *caption = new QLabel(title);
-    caption->setAlignment(Qt::AlignCenter);
-    caption->setStyleSheet(css("font-size: 28px; font-weight: bold;"));
-    m_view = new QLabel;
-    m_view->setFixedSize(px(640), px(480));
-    m_view->setAlignment(Qt::AlignCenter);
-    m_view->setStyleSheet(css("background: black; color: white;"));
-    m_status = new QLabel("카메라를 정면으로 바라봐 주세요.");
-    m_status->setAlignment(Qt::AlignCenter);
+    ui->setupUi(this);
+    scaleUi(this);
+    setWindowTitle(title);
+    ui->captionLabel->setText(title);
 
-    // 내용은 화면 가운데 카메라 너비만큼의 세로 칸에 모은다.
-    QWidget *panel = new QWidget;
-    panel->setFixedWidth(px(660));
-    QHBoxLayout *center = new QHBoxLayout;
-    center->addStretch();
-    center->addWidget(panel);
-    center->addStretch();
-    QVBoxLayout *outer = new QVBoxLayout(this);
-    outer->addStretch();
-    outer->addLayout(center);
-    outer->addStretch();
-
-    QVBoxLayout *layout = new QVBoxLayout(panel);
-    layout->setContentsMargins(px(0), px(0), px(0), px(0));
-    layout->addWidget(caption);
-    layout->addSpacing(px(16));
-    layout->addWidget(m_view);
-    layout->addWidget(m_status);
-
-    if (allowPassword) {
-        QPushButton *password = new QPushButton("비밀번호로 로그인");
-        password->setMinimumHeight(px(56));
-        password->setStyleSheet(css("font-size: 18px;"));
-        connect(password, SIGNAL(clicked()), SLOT(passwordLogin()));
-        layout->addWidget(password);
-    }
+    ui->passwordButton->setVisible(allowPassword);
+    connect(ui->passwordButton, SIGNAL(clicked()), SLOT(passwordLogin()));
+    connect(ui->cancelButton, SIGNAL(clicked()), SLOT(reject()));
 
 #ifdef USE_OPENCV
+    ui->idEdit->hide();     // 시뮬레이션 모드 전용
+    ui->okButton->hide();
     connect(m_timer, SIGNAL(timeout()), SLOT(processFrame()));
     QString err;
     if (!refreshRecognizer(&err)) {
-        m_status->setText(err);
+        ui->statusLabel->setText(err);
     } else {
         m_camera = new Camera;
         if (m_camera->cap.open(0))
             m_timer->start(50);
         else
-            m_status->setText("카메라를 열 수 없습니다.");
+            ui->statusLabel->setText("카메라를 열 수 없습니다.");
     }
 #else
-    m_view->setText("OpenCV 없이 빌드됨 (얼굴인식 시뮬레이션 모드)");
-    m_idEdit = new QLineEdit;
-    m_idEdit->setPlaceholderText("인식된 것으로 처리할 사용자 ID (예: 1=관리자, 2=회원)");
-    QPushButton *ok = new QPushButton("인식 완료");
-    connect(ok, SIGNAL(clicked()), SLOT(acceptManualId()));
-    connect(m_idEdit, SIGNAL(returnPressed()), SLOT(acceptManualId()));
-    layout->addWidget(m_idEdit);
-    layout->addWidget(ok);
+    ui->viewLabel->setText("OpenCV 없이 빌드됨 (얼굴인식 시뮬레이션 모드)");
+    connect(ui->okButton, SIGNAL(clicked()), SLOT(acceptManualId()));
+    connect(ui->idEdit, SIGNAL(returnPressed()), SLOT(acceptManualId()));
 #endif
-
-    QPushButton *cancel = new QPushButton("취소");
-    connect(cancel, SIGNAL(clicked()), SLOT(reject()));
-    layout->addWidget(cancel);
 }
 
 FaceDialog::~FaceDialog()
 {
     delete m_camera;   // 카메라 해제
+    delete ui;
 }
 
 void FaceDialog::processFrame()
@@ -194,7 +161,7 @@ void FaceDialog::processFrame()
     if (++m_ticks > kTimeoutTicks) {
         m_timer->stop();
         if (m_allowPassword) {   // 창을 닫지 않고 비밀번호 로그인을 안내
-            m_status->setText("얼굴을 인식하지 못했습니다. [비밀번호로 로그인]을 눌러 주세요.");
+            ui->statusLabel->setText("얼굴을 인식하지 못했습니다. [비밀번호로 로그인]을 눌러 주세요.");
             return;
         }
         KioskMessage::warning(this, windowTitle(), "얼굴을 인식하지 못했습니다. 다시 시도해 주세요.");
@@ -222,17 +189,17 @@ void FaceDialog::processFrame()
             m_lastLabel = known ? label : -1;
             m_hits = known ? 1 : 0;
         }
-        m_status->setText(known ? QString("인식 중... (%1/%2)").arg(m_hits).arg(kRequiredHits)
+        ui->statusLabel->setText(known ? QString("인식 중... (%1/%2)").arg(m_hits).arg(kRequiredHits)
                                 : QString("등록되지 않은 얼굴입니다."));
     } else {
         m_hits = 0;
-        m_status->setText("얼굴이 보이지 않습니다. 카메라를 정면으로 바라봐 주세요.");
+        ui->statusLabel->setText("얼굴이 보이지 않습니다. 카메라를 정면으로 바라봐 주세요.");
     }
 
     cv::Mat rgb;
     cv::cvtColor(frame, rgb, cv::COLOR_BGR2RGB);
     QImage image(rgb.data, rgb.cols, rgb.rows, int(rgb.step), QImage::Format_RGB888);
-    m_view->setPixmap(QPixmap::fromImage(image).scaled(m_view->size(), Qt::KeepAspectRatio));
+    ui->viewLabel->setPixmap(QPixmap::fromImage(image).scaled(ui->viewLabel->size(), Qt::KeepAspectRatio));
 
     if (m_hits >= kRequiredHits) {
         m_timer->stop();
@@ -261,7 +228,7 @@ void FaceDialog::passwordLogin()
 void FaceDialog::acceptManualId()
 {
     bool ok = false;
-    const int id = m_idEdit ? m_idEdit->text().toInt(&ok) : 0;
+    const int id = ui->idEdit->text().toInt(&ok);
     if (!ok)
         return;
     m_userId = id;

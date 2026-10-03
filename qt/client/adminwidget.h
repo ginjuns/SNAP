@@ -4,12 +4,9 @@
 #include <QWidget>
 #include <QVariant>
 
-class QComboBox;
-class QDateEdit;
-class QLabel;
-class QLineEdit;
-class QTableWidget;
-class SalesChart;
+namespace Ui {
+class AdminWidget;
+}
 
 // 관리자 화면: 상품 추가/삭제 / 날짜·월 선택 매출 확인
 class AdminWidget : public QWidget
@@ -17,6 +14,7 @@ class AdminWidget : public QWidget
     Q_OBJECT
 public:
     explicit AdminWidget(QWidget *parent = 0);
+    ~AdminWidget();
     void start(const QVariantMap &user);
 
 signals:
@@ -44,23 +42,11 @@ private:
     bool readForm(QString *name, int *price, int *stock);
     bool isMonthly() const;
 
-    QLabel *m_welcome;
+    Ui::AdminWidget *ui;
     // 상품 관리
-    QLineEdit *m_name;
-    QLineEdit *m_price;
-    QLineEdit *m_stock;
-    QLabel *m_preview;
     QByteArray m_imageData;   // PNG
     bool m_imageChanged;      // 수정 시 사진을 새로 골랐는지
-    QTableWidget *m_products;
-    QVariantList m_productList;   // 표의 행 순서와 같음
-    // 매출 확인
-    QComboBox *m_unit;
-    QDateEdit *m_date;
-    QLabel *m_summary;
-    SalesChart *m_chart;
-    QTableWidget *m_details;   // 구매 상세 내역
-    QTableWidget *m_byBuyer;   // 구매자·상품별 합계
+    QVariantList m_productList;   // 표(productTable)의 행 순서와 같음
 };
 
 #endif // ADMINWIDGET_H

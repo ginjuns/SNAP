@@ -6,8 +6,9 @@
 
 #include "cartdialog.h"
 
-class QLabel;
-class QScrollArea;
+namespace Ui {
+class MemberWidget;
+}
 
 // 일반회원 화면
 //   상품을 한 줄에 3개씩 (사진, 이름, 가격) 표시. 상품 카드를 누르면 장바구니에 담긴다.
@@ -17,6 +18,7 @@ class MemberWidget : public QWidget
     Q_OBJECT
 public:
     explicit MemberWidget(QWidget *parent = 0);
+    ~MemberWidget();
     void start(const QVariantMap &user);
 
 signals:
@@ -33,11 +35,7 @@ private:
     void addToCart(int index);
     void updateCartBar();
 
-    QLabel *m_welcome;
-    QScrollArea *m_scroll;
-    QLabel *m_notice;       // "'아메리카노'를 담았습니다"
-    QLabel *m_totalQty;
-    QLabel *m_totalPrice;
+    Ui::MemberWidget *ui;   // noticeLabel: "'아메리카노'를 담았습니다"
     QVariantMap m_user;
     QVariantList m_products;
     QList<CartItem> m_cart;

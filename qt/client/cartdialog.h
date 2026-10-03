@@ -5,8 +5,9 @@
 #include <QList>
 #include <QVariant>
 
-class QLabel;
-class QTableWidget;
+namespace Ui {
+class CartDialog;
+}
 
 struct CartItem
 {
@@ -23,6 +24,7 @@ class CartDialog : public QDialog
     Q_OBJECT
 public:
     CartDialog(const QVariantMap &user, QList<CartItem> *cart, QWidget *parent = 0);
+    ~CartDialog();
 
 private slots:
     void clearCart();
@@ -35,11 +37,9 @@ private:
     int total() const;
     bool pay(int userId, const QString &method, QVariantMap *result);
 
+    Ui::CartDialog *ui;
     QVariantMap m_user;
     QList<CartItem> *m_cart;
-    QTableWidget *m_table;
-    QLabel *m_total;
-    QLabel *m_balance;
 };
 
 #endif // CARTDIALOG_H

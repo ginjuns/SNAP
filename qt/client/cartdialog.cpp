@@ -1,4 +1,5 @@
 #include "cartdialog.h"
+#include "ui_cartdialog.h"
 #include "facedialog.h"
 #include "serverclient.h"
 
@@ -6,51 +7,29 @@
 #include "qtcompat.h"
 
 CartDialog::CartDialog(const QVariantMap &user, QList<CartItem> *cart, QWidget *parent)
-    : QDialog(parent), m_user(user), m_cart(cart)
+    : QDialog(parent), ui(new Ui::CartDialog), m_user(user), m_cart(cart)
 {
-    setWindowTitle("장바구니");
+    ui->setupUi(this);   // 화면 배치: cartdialog.ui ([-][+] 버튼은 refresh()에서 만든다)
+    scaleUi(this);
     resize(px(680), px(900));
 
-    m_table = new QTableWidget(0, 5);
-    m_table->setHorizontalHeaderLabels(QStringList() << "상품명" << "단가" << "수량" << "금액" << "수량 변경");
-    stretchColumns(m_table->horizontalHeader());
-    m_table->verticalHeader()->hide();
-    m_table->verticalHeader()->setDefaultSectionSize(px(48));   // [-][+] 버튼이 들어가는 높이
-    m_table->setSelectionMode(QAbstractItemView::NoSelection);
-    m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    stretchColumns(ui->table->horizontalHeader());
+    ui->table->verticalHeader()->setDefaultSectionSize(px(48));   // [-][+] 버튼이 들어가는 높이
 
     // 합계 + 옆에 작은 글씨로 충전 잔액
-    m_total = new QLabel;
-    m_total->setStyleSheet(css("font-size: 22px; font-weight: bold;"));
-    m_balance = new QLabel(QString("(충전 잔액 %1)").arg(won(m_user.value("balance").toInt())));
-    m_balance->setStyleSheet(css("font-size: 14px; color: #52514e;"));
-    QHBoxLayout *totalLine = new QHBoxLayout;
-    totalLine->addStretch();
-    totalLine->addWidget(m_total);
-    totalLine->addWidget(m_balance, 0, Qt::AlignBottom);
+    ui->balanceLabel->setText(QString("(충전 잔액 %1)").arg(won(m_user.value("balance").toInt())));
 
-    QPushButton *clear = new QPushButton("비우기");
-    QPushButton *more = new QPushButton("계속 쇼핑");
-    QPushButton *card = new QPushButton("카드 결제");
-    QPushButton *face = new QPushButton("얼굴인식 결제");
-    connect(clear, SIGNAL(clicked()), SLOT(clearCart()));
-    connect(more, SIGNAL(clicked()), SLOT(reject()));
-    connect(card, SIGNAL(clicked()), SLOT(payByCard()));
-    connect(face, SIGNAL(clicked()), SLOT(payByFace()));
-
-    QHBoxLayout *buttons = new QHBoxLayout;
-    buttons->addWidget(clear);
-    buttons->addWidget(more);
-    buttons->addStretch();
-    buttons->addWidget(card);
-    buttons->addWidget(face);
-
-    QVBoxLayout *layout = new QVBoxLayout(this);
-    layout->addWidget(m_table);
-    layout->addLayout(totalLine);
-    layout->addLayout(buttons);
+    connect(ui->clearButton, SIGNAL(clicked()), SLOT(clearCart()));
+    connect(ui->moreButton, SIGNAL(clicked()), SLOT(reject()));
+    connect(ui->cardButton, SIGNAL(clicked()), SLOT(payByCard()));
+    connect(ui->faceButton, SIGNAL(clicked()), SLOT(payByFace()));
 
     refresh();
+}
+
+CartDialog::~CartDialog()
+{
+    delete ui;
 }
 
 int CartDialog::total() const
@@ -70,13 +49,13 @@ static QTableWidgetItem *cell(const QString &text, bool number = false)
 
 void CartDialog::refresh()
 {
-    m_table->setRowCount(m_cart->size());
+    ui->table->setRowCount(m_cart->size());
     for (int i = 0; i < m_cart->size(); ++i) {
         const CartItem &item = m_cart->at(i);
-        m_table->setItem(i, 0, cell(item.name));
-        m_table->setItem(i, 1, cell(won(item.price), true));
-        m_table->setItem(i, 2, cell(QString("%1개").arg(item.qty), true));
-        m_table->setItem(i, 3, cell(won(item.price * item.qty), true));
+        ui->table->setItem(i, 0, cell(item.name));
+        ui->table->setItem(i, 1, cell(won(item.price), true));
+        ui->table->setItem(i, 2, cell(QString("%1개").arg(item.qty), true));
+        ui->table->setItem(i, 3, cell(won(item.price * item.qty), true));
 
         // [-] [+] 버튼
         QWidget *box = new QWidget;
@@ -94,9 +73,9 @@ void CartDialog::refresh()
             connect(b, SIGNAL(clicked()), SLOT(changeQty()));
             h->addWidget(b);
         }
-        m_table->setCellWidget(i, 4, box);
+        ui->table->setCellWidget(i, 4, box);
     }
-    m_total->setText("합계: " + won(total()));
+    ui->totalLabel->setText("합계: " + won(total()));
 }
 
 void CartDialog::changeQty()

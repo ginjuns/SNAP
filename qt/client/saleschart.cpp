@@ -45,8 +45,7 @@ QFont pixelFont(const QFont &base, int px, bool bold = false)
 SalesChart::SalesChart(QWidget *parent)
     : QWidget(parent), m_max(0), m_step(0), m_maxTotal(0), m_hover(-1)
 {
-    setMouseTracking(true);
-    setMinimumHeight(px(300));
+    setMouseTracking(true);   // 최소 높이(300px)는 adminwidget.ui 에서 정한다
 }
 
 void SalesChart::setData(const QVariantList &bars, const QString &title)

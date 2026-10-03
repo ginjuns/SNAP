@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>CartDialog</class>
+ <widget class="QDialog" name="CartDialog">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>680</width>
+    <height>900</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>장바구니</string>
+  </property>
+  <layout class="QVBoxLayout" name="layout">
+   <item>
+    <widget class="QTableWidget" name="table">
+     <property name="editTriggers">
+      <set>QAbstractItemView::NoEditTriggers</set>
+     </property>
+     <property name="selectionMode">
+      <enum>QAbstractItemView::NoSelection</enum>
+     </property>
+     <attribute name="verticalHeaderVisible">
+      <bool>false</bool>
+     </attribute>
+     <column>
+      <property name="text">
+       <string>상품명</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string>단가</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string>수량</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string>금액</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string>수량 변경</string>
+      </property>
+     </column>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="totalLine">
+     <item>
+      <spacer name="totalStretch">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>0</width>
+         <height>0</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+     <item>
+      <widget class="QLabel" name="totalLabel">
+       <property name="styleSheet">
+        <string notr="true">font-size: 22px; font-weight: bold;</string>
+       </property>
+      </widget>
+     </item>
+     <item alignment="Qt::AlignBottom">
+      <widget class="QLabel" name="balanceLabel">
+       <property name="styleSheet">
+        <string notr="true">font-size: 14px; color: #52514e;</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="buttons">
+     <item>
+      <widget class="QPushButton" name="clearButton">
+       <property name="text">
+        <string>비우기</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="moreButton">
+       <property name="text">
+        <string>계속 쇼핑</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <spacer name="buttonStretch">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>0</width>
+         <height>0</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+     <item>
+      <widget class="QPushButton" name="cardButton">
+       <property name="text">
+        <string>카드 결제</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="faceButton">
+       <property name="text">
+        <string>얼굴인식 결제</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

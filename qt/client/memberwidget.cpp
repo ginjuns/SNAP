@@ -1,4 +1,5 @@
 #include "memberwidget.h"
+#include "ui_memberwidget.h"
 #include "serverclient.h"
 
 #include "kioskdialog.h"
@@ -8,56 +9,25 @@ static const int kColumns = 3;
 static const int kImageSize = 180;   // 3열이 세로 화면 너비(720)에 들어가는 크기
 
 MemberWidget::MemberWidget(QWidget *parent)
-    : QWidget(parent)
+    : QWidget(parent), ui(new Ui::MemberWidget)
 {
-    m_welcome = new QLabel;
-    m_welcome->setStyleSheet(css("font-size: 22px; font-weight: bold;"));
-    QPushButton *logout = new QPushButton("처음으로");
-    connect(logout, SIGNAL(clicked()), SIGNAL(finished()));
+    ui->setupUi(this);   // 화면 배치: memberwidget.ui (상품 카드는 loadProducts()에서 만든다)
+    scaleUi(this);
+    connect(ui->logoutButton, SIGNAL(clicked()), SIGNAL(finished()));
+    connect(ui->cartButton, SIGNAL(clicked()), SLOT(openCart()));
+}
 
-    QHBoxLayout *header = new QHBoxLayout;
-    header->addWidget(m_welcome);
-    header->addStretch();
-    header->addWidget(logout);
-
-    m_scroll = new QScrollArea;
-    m_scroll->setWidgetResizable(true);
-
-    // ---- 하단 바: 총 수량 / 총 금액 / [장바구니] ----
-    m_notice = new QLabel;
-    m_notice->setStyleSheet(css("font-size: 14px; color: #52514e;"));
-    m_totalQty = new QLabel;
-    m_totalQty->setStyleSheet(css("font-size: 18px;"));
-    m_totalPrice = new QLabel;
-    m_totalPrice->setStyleSheet(css("font-size: 22px; font-weight: bold;"));
-    QPushButton *cartButton = new QPushButton("장바구니");
-    cartButton->setMinimumSize(px(180), px(56));
-    cartButton->setStyleSheet(css("font-size: 20px; font-weight: bold; background: #2a78d6; color: white;"));
-    connect(cartButton, SIGNAL(clicked()), SLOT(openCart()));
-
-    QFrame *cartBar = new QFrame;
-    cartBar->setObjectName("cartBar");
-    cartBar->setStyleSheet(css("QFrame#cartBar { border-top: 1px solid #c3c2b7; }"));
-    QHBoxLayout *bar = new QHBoxLayout(cartBar);
-    bar->addWidget(m_notice, 1);
-    bar->addWidget(m_totalQty);
-    bar->addSpacing(px(24));
-    bar->addWidget(m_totalPrice);
-    bar->addSpacing(px(24));
-    bar->addWidget(cartButton);
-
-    QVBoxLayout *layout = new QVBoxLayout(this);
-    layout->addLayout(header);
-    layout->addWidget(m_scroll, 1);
-    layout->addWidget(cartBar);
+MemberWidget::~MemberWidget()
+{
+    delete ui;
 }
 
 void MemberWidget::start(const QVariantMap &user)
 {
     m_user = user;
     m_cart.clear();
-    m_welcome->setText(QString("%1님 환영합니다").arg(user.value("name").toString()));
-    m_notice->clear();
+    ui->welcomeLabel->setText(QString("%1님 환영합니다").arg(user.value("name").toString()));
+    ui->noticeLabel->clear();
     loadProducts();
     updateCartBar();
 }
@@ -109,7 +79,7 @@ void MemberWidget::loadProducts()
         gridLayout->addWidget(card, i / kColumns, i % kColumns);
     }
     gridLayout->setRowStretch(gridLayout->rowCount(), 1);
-    m_scroll->setWidget(grid);   // 이전 그리드는 QScrollArea가 삭제
+    ui->scrollArea->setWidget(grid);   // 이전 그리드는 QScrollArea가 삭제
 }
 
 bool MemberWidget::eventFilter(QObject *watched, QEvent *event)
@@ -136,18 +106,18 @@ void MemberWidget::addToCart(int index)
     for (int i = 0; i < m_cart.size(); ++i) {
         if (m_cart[i].productId == id) {
             if (m_cart[i].qty >= stock) {   // 최종 확인은 결제 시 서버에서 다시 함
-                m_notice->setText(QString("'%1'은(는) %2개까지만 담을 수 있습니다.").arg(name).arg(stock));
+                ui->noticeLabel->setText(QString("'%1'은(는) %2개까지만 담을 수 있습니다.").arg(name).arg(stock));
                 return;
             }
             ++m_cart[i].qty;
-            m_notice->setText(QString("'%1'을(를) 담았습니다. (%2개)").arg(name).arg(m_cart[i].qty));
+            ui->noticeLabel->setText(QString("'%1'을(를) 담았습니다. (%2개)").arg(name).arg(m_cart[i].qty));
             updateCartBar();
             return;
         }
     }
     CartItem item = { id, name, p.value("price").toInt(), 1, stock };
     m_cart << item;
-    m_notice->setText(QString("'%1'을(를) 담았습니다.").arg(name));
+    ui->noticeLabel->setText(QString("'%1'을(를) 담았습니다.").arg(name));
     updateCartBar();
 }
 
@@ -158,8 +128,8 @@ void MemberWidget::updateCartBar()
         qty += item.qty;
         sum += item.price * item.qty;
     }
-    m_totalQty->setText(QString("총 수량 %L1개").arg(qty));
-    m_totalPrice->setText("총 금액 " + won(sum));
+    ui->totalQtyLabel->setText(QString("총 수량 %L1개").arg(qty));
+    ui->totalPriceLabel->setText("총 금액 " + won(sum));
 }
 
 void MemberWidget::openCart()
@@ -169,6 +139,6 @@ void MemberWidget::openCart()
         emit finished();
         return;
     }
-    m_notice->clear();
+    ui->noticeLabel->clear();
     updateCartBar();   // 장바구니에서 수량을 바꿨을 수 있음
 }
