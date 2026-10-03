@@ -133,8 +133,14 @@ void Cart::payCard()
 {
     if (m_items->isEmpty())
         return;
-    if (!Msg::ask(this, "카드 결제",
-                  QString("결제 금액: %1\n\n카드를 단말기에 투입(태그)한 후 [예]를 눌러 주세요.").arg(won(total()))))
+    Esp *esp = Esp::get();
+    if (!esp || !esp->connected()) {
+        Msg::warn(this, "카드 결제", "카드 리더기(ESP32)가 연결되어 있지 않습니다.\n얼굴인식 결제를 이용해 주세요.");
+        return;
+    }
+    if (!Msg::wait(this, "카드 결제",
+                   QString("결제 금액: %1\n\n카드를 리더기에 대 주세요.").arg(won(total())),
+                   esp, SIGNAL(card(QString))))
         return;
 
     QVariantMap r;

@@ -1,12 +1,38 @@
 #include "popup.h"
 #include "util.h"
 
+static bool blocked = false;
+static QList<QDialog *> opened;
+
+void setBlocked(bool on)
+{
+    blocked = on;
+}
+
+void closeAll()
+{
+    QList<QDialog *> list = opened;
+    for (int i = list.size() - 1; i >= 0; --i)
+        list.at(i)->reject();
+}
+
+static int run(QDialog *dlg)
+{
+    opened << dlg;
+    int ret = dlg->exec();
+    opened.removeAll(dlg);
+    return ret;
+}
+
 int popup(QDialog *dlg, bool full)
 {
+    if (blocked)
+        return QDialog::Rejected;
+
     QWidget *old = dlg->parentWidget();
     QWidget *top = old ? old->window() : qApp->activeWindow();
     if (!top)
-        return dlg->exec();
+        return run(dlg);
 
     bool moved = dlg->testAttribute(Qt::WA_Moved);
     QPoint pos = dlg->pos();
@@ -34,17 +60,21 @@ int popup(QDialog *dlg, bool full)
     }
     dlg->setFocus();
 
-    int ret = dlg->exec();
+    int ret = run(dlg);
     dlg->setParent(old, Qt::Dialog);
     return ret;
 }
 
 static int msg(QMessageBox::Icon icon, QWidget *parent, const QString &title, const QString &text,
-               QMessageBox::StandardButtons buttons)
+               QMessageBox::StandardButtons buttons, QObject *src = 0, const char *signal = 0)
 {
     QMessageBox box(icon, title, title, buttons, parent);
     box.setInformativeText(text);
     box.setStyleSheet(css("QLabel#qt_msgbox_label { font-size: 20px; font-weight: bold; }"));
+    if (box.button(QMessageBox::Cancel))
+        box.button(QMessageBox::Cancel)->setText("취소");
+    if (src)
+        QObject::connect(src, signal, &box, SLOT(accept()));
     return popup(&box);
 }
 
@@ -63,6 +93,11 @@ void warn(QWidget *parent, const QString &title, const QString &text)
 bool ask(QWidget *parent, const QString &title, const QString &text)
 {
     return msg(QMessageBox::Question, parent, title, text, QMessageBox::Yes | QMessageBox::No) == QMessageBox::Yes;
+}
+
+bool wait(QWidget *parent, const QString &title, const QString &text, QObject *src, const char *signal)
+{
+    return msg(QMessageBox::Information, parent, title, text, QMessageBox::Cancel, src, signal) == QDialog::Accepted;
 }
 
 }

@@ -1,6 +1,7 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 #include "admin.h"
+#include "esp.h"
 #include "face.h"
 #include "member.h"
 #include "net.h"
@@ -8,7 +9,7 @@
 #include "util.h"
 
 MainWindow::MainWindow(QWidget *parent)
-    : QMainWindow(parent), ui(new Ui::MainWindow)
+    : QMainWindow(parent), ui(new Ui::MainWindow), m_sleep(false)
 {
     ui->setupUi(this);
     scaleUi(this);
@@ -21,6 +22,11 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_admin, SIGNAL(done()), SLOT(home()));
     ui->stack->addWidget(m_member);
     ui->stack->addWidget(m_admin);
+
+    ui->pageSleep->installEventFilter(this);
+    if (Esp::get())
+        connect(Esp::get(), SIGNAL(presence(bool)), SLOT(onPresence(bool)));
+    sleep();
 }
 
 MainWindow::~MainWindow()
@@ -40,6 +46,8 @@ void MainWindow::login()
         Msg::warn(this, "로그인 실패", err);
         return;
     }
+    if (m_sleep)
+        return;
 
     QVariantMap user = data.toMap();
     if (user.value("role").toString() == "admin") {
@@ -53,5 +61,40 @@ void MainWindow::login()
 
 void MainWindow::home()
 {
+    if (!m_sleep)
+        ui->stack->setCurrentWidget(ui->pageLogin);
+}
+
+void MainWindow::onPresence(bool on)
+{
+    if (on)
+        wake();
+    else
+        sleep();
+}
+
+void MainWindow::sleep()
+{
+    m_sleep = true;
+    setBlocked(true);
+    closeAll();
+    ui->stack->setCurrentWidget(ui->pageSleep);
+}
+
+void MainWindow::wake()
+{
+    if (!m_sleep)
+        return;
+    m_sleep = false;
+    setBlocked(false);
     ui->stack->setCurrentWidget(ui->pageLogin);
+}
+
+bool MainWindow::eventFilter(QObject *obj, QEvent *e)
+{
+    if (obj == ui->pageSleep && e->type() == QEvent::MouseButtonRelease) {
+        wake();
+        return true;
+    }
+    return QMainWindow::eventFilter(obj, e);
 }

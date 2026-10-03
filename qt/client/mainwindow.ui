@@ -114,6 +114,26 @@
         </item>
        </layout>
       </widget>
+      <widget class="QWidget" name="pageSleep">
+       <property name="styleSheet">
+        <string notr="true">QWidget#pageSleep { background: black; }</string>
+       </property>
+       <layout class="QVBoxLayout" name="verticalLayout_3">
+        <item>
+         <widget class="QLabel" name="lblSleep">
+          <property name="styleSheet">
+           <string notr="true">color: #555555; font-size: 20px;</string>
+          </property>
+          <property name="text">
+           <string>가까이 오시면 화면이 켜집니다</string>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignCenter</set>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </widget>
      </widget>
     </item>
    </layout>
