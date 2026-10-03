@@ -1,7 +1,6 @@
-#include "esp.h"
+#include "server.h"
 #include "mainwindow.h"
 #include "net.h"
-#include "serverthread.h"
 #include "util.h"
 
 int main(int argc, char *argv[])
