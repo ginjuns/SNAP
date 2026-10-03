@@ -1,5 +1,6 @@
 #include "cart.h"
 #include "ui_cart.h"
+#include "esp.h"
 #include "face.h"
 #include "net.h"
 #include "popup.h"
@@ -123,6 +124,8 @@ bool Cart::pay(int userId, const QString &method, QVariantMap *out)
         return false;
     }
     *out = data.toMap();
+    if (Esp::get())
+        Esp::get()->buzzer();
     return true;
 }
 

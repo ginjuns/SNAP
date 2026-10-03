@@ -6,6 +6,7 @@
 #include <QJsonObject>
 
 const quint16 PORT = 9000;
+const quint16 ESP_PORT = 8000;
 const int MAX_SIZE = 16 * 1024 * 1024;
 
 inline QByteArray pack(const QJsonObject &obj)

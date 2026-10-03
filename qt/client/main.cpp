@@ -1,3 +1,4 @@
+#include "esp.h"
 #include "mainwindow.h"
 #include "net.h"
 #include "serverthread.h"
@@ -35,6 +36,11 @@ int main(int argc, char *argv[])
         if (!server.startWait(&err))
             QMessageBox::warning(0, "서버", "내장 서버를 시작하지 못했습니다.\n" + err);
     }
+
+    Esp esp;
+    QString espErr;
+    if (!esp.start(&espErr))
+        QMessageBox::warning(0, "ESP32", espErr);
 
     MainWindow w;
     w.showFullScreen();

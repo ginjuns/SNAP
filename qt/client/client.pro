@@ -24,7 +24,8 @@ HEADERS += ../common/packet.h \
            keyboard.h \
            serverthread.h \
            ../server/db.h \
-           ../server/server.h
+           ../server/server.h \
+           ../server/esp.h
 
 SOURCES += main.cpp \
            net.cpp \
@@ -40,7 +41,8 @@ SOURCES += main.cpp \
            keyboard.cpp \
            serverthread.cpp \
            ../server/db.cpp \
-           ../server/server.cpp
+           ../server/server.cpp \
+           ../server/esp.cpp
 
 FORMS += mainwindow.ui \
          member.ui \
