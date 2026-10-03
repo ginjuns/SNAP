@@ -89,15 +89,22 @@ bool Keyboard::open(QLineEdit *edit, Mode mode, const QString &title)
     Keyboard kb(edit->text(), mode, title, edit->window());
     kb.ui->edit->setEchoMode(edit->echoMode());
 
-    QRect screen = QApplication::desktop()->availableGeometry(edit);
-    QRect field(edit->mapToGlobal(QPoint(0, 0)), edit->size());
-    QSize size = kb.sizeHint();
-    int y = field.bottom() + 8;
-    if (y + size.height() > screen.bottom())
-        y = field.top() - 8 - size.height();
-    y = qBound(screen.top(), y, screen.bottom() - size.height());
-    int x = qBound(screen.left(), field.center().x() - size.width() / 2, screen.right() - size.width());
-    kb.move(x, y);
+    if (mode == Number) {
+        QRect screen = QApplication::desktop()->availableGeometry(edit);
+        QRect field(edit->mapToGlobal(QPoint(0, 0)), edit->size());
+        QSize size = kb.sizeHint();
+        int y = field.bottom() + 8;
+        if (y + size.height() > screen.bottom())
+            y = field.top() - 8 - size.height();
+        y = qBound(screen.top(), y, screen.bottom() - size.height());
+        int x = qBound(screen.left(), field.center().x() - size.width() / 2, screen.right() - size.width());
+        kb.move(x, y);
+    } else {
+        QWidget *top = edit->window();
+        int h = top->height() / 3;
+        kb.resize(top->width(), h);
+        kb.move(top->mapToGlobal(QPoint(0, top->height() - h)));
+    }
 
     if (popup(&kb) != QDialog::Accepted)
         return false;
@@ -140,6 +147,9 @@ Keyboard::Keyboard(const QString &text, Mode mode, const QString &title, QWidget
         ui->numPad->hide();
         for (int i = 0; i < 26; ++i)
             m_keys << findChild<QPushButton *>(QString("k%1").arg(i));
+        foreach (QPushButton *b, ui->textPad->findChildren<QPushButton *>())
+            b->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+        static_cast<QBoxLayout *>(layout())->setStretchFactor(ui->textPad, 1);
         relabel();
     }
     adjustSize();
