@@ -1,5 +1,6 @@
 #include "admin.h"
 #include "ui_admin.h"
+#include "calendar.h"
 #include "chart.h"
 #include "keyboard.h"
 #include "net.h"
@@ -99,7 +100,7 @@ Admin::Admin(QWidget *parent)
     connect(ui->tableProduct, SIGNAL(itemSelectionChanged()), SLOT(onSelect()));
 
     ui->date->setDate(QDate::currentDate());
-    ui->date->calendarWidget()->setMinimumSize(px(420), px(360));
+    ui->date->findChild<QLineEdit *>()->installEventFilter(this);
     ui->comboUnit->setView(new QListView);
     ui->comboUnit->setStyleSheet(css("QComboBox QAbstractItemView::item { min-height: 48px; }"));
     connect(ui->comboUnit, SIGNAL(currentIndexChanged(int)), SLOT(onUnit()));
@@ -152,7 +153,21 @@ bool Admin::eventFilter(QObject *obj, QEvent *e)
         pickImage();
         return true;
     }
+    if (obj->parent() == ui->date) {
+        if (e->type() == QEvent::MouseButtonRelease)
+            pickDate();
+        if (e->type() == QEvent::MouseButtonPress || e->type() == QEvent::MouseButtonRelease
+            || e->type() == QEvent::MouseButtonDblClick)
+            return true;
+    }
     return QWidget::eventFilter(obj, e);
+}
+
+void Admin::pickDate()
+{
+    Calendar dlg(ui->date->date(), monthly(), this);
+    if (popup(&dlg) == QDialog::Accepted)
+        ui->date->setDate(dlg.date());
 }
 
 void Admin::pickImage()

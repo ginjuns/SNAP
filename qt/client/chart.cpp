@@ -45,7 +45,6 @@ QFont pxFont(const QFont &base, int size, bool bold = false)
 Chart::Chart(QWidget *parent)
     : QWidget(parent), m_max(0), m_step(0), m_top(0), m_hover(-1)
 {
-    setMouseTracking(true);
 }
 
 void Chart::setData(const QVariantList &bars, const QString &title)

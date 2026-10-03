@@ -18,7 +18,13 @@ int main(int argc, char *argv[])
     QLocale::setDefault(QLocale(QLocale::Korean, QLocale::SouthKorea));
 
     app.setStyleSheet(css("QWidget { font-size: 16px; }"
-                          "QPushButton { min-height: 40px; padding: 4px 16px; }"));
+                          "QPushButton { min-height: 40px; padding: 4px 16px; }"
+                          "QScrollBar:vertical { width: 32px; background: #f0efea; margin: 0; }"
+                          "QScrollBar:horizontal { height: 32px; background: #f0efea; margin: 0; }"
+                          "QScrollBar::handle:vertical { background: #a8a69e; min-height: 60px; border-radius: 8px; margin: 4px; }"
+                          "QScrollBar::handle:horizontal { background: #a8a69e; min-width: 60px; border-radius: 8px; margin: 4px; }"
+                          "QScrollBar::add-line, QScrollBar::sub-line { width: 0px; height: 0px; }"
+                          "QScrollBar::add-page, QScrollBar::sub-page { background: none; }"));
 
     ServerThread server;
     i = args.indexOf("--host");

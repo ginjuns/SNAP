@@ -18,6 +18,7 @@ HEADERS += ../common/packet.h \
            cart.h \
            admin.h \
            chart.h \
+           calendar.h \
            face.h \
            login.h \
            keyboard.h \
@@ -33,6 +34,7 @@ SOURCES += main.cpp \
            cart.cpp \
            admin.cpp \
            chart.cpp \
+           calendar.cpp \
            face.cpp \
            login.cpp \
            keyboard.cpp \
@@ -44,6 +46,7 @@ FORMS += mainwindow.ui \
          member.ui \
          cart.ui \
          admin.ui \
+         calendar.ui \
          face.ui \
          login.ui \
          keyboard.ui

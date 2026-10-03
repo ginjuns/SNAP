@@ -37,6 +37,7 @@ private slots:
     void today();
 
 private:
+    void pickDate();
     int row() const;
     bool readForm(QString *name, int *price, int *stock);
     bool monthly() const;

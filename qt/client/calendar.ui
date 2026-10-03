@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>Calendar</class>
+ <widget class="QDialog" name="Calendar">
+  <property name="windowTitle">
+   <string>날짜 선택</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <item>
+    <layout class="QHBoxLayout" name="horizontalLayout" stretch="0,1,0">
+     <item>
+      <widget class="QPushButton" name="btnPrevYear">
+       <property name="minimumSize">
+        <size>
+         <width>150</width>
+         <height>64</height>
+        </size>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">font-size: 20px;</string>
+       </property>
+       <property name="text">
+        <string>◀ 작년</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="lblYear">
+       <property name="styleSheet">
+        <string notr="true">font-size: 24px; font-weight: bold;</string>
+       </property>
+       <property name="alignment">
+        <set>Qt::AlignCenter</set>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="btnNextYear">
+       <property name="minimumSize">
+        <size>
+         <width>150</width>
+         <height>64</height>
+        </size>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">font-size: 20px;</string>
+       </property>
+       <property name="text">
+        <string>내년 ▶</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="horizontalLayout_2" stretch="0,1,0">
+     <item>
+      <widget class="QPushButton" name="btnPrevMonth">
+       <property name="minimumSize">
+        <size>
+         <width>150</width>
+         <height>64</height>
+        </size>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">font-size: 20px;</string>
+       </property>
+       <property name="text">
+        <string>◀ 이전 달</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="lblMonth">
+       <property name="styleSheet">
+        <string notr="true">font-size: 24px; font-weight: bold;</string>
+       </property>
+       <property name="alignment">
+        <set>Qt::AlignCenter</set>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="btnNextMonth">
+       <property name="minimumSize">
+        <size>
+         <width>150</width>
+         <height>64</height>
+        </size>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">font-size: 20px;</string>
+       </property>
+       <property name="text">
+        <string>다음 달 ▶</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QCalendarWidget" name="cal">
+     <property name="minimumSize">
+      <size>
+       <width>600</width>
+       <height>440</height>
+      </size>
+     </property>
+     <property name="styleSheet">
+      <string notr="true">QCalendarWidget QAbstractItemView { font-size: 22px; }</string>
+     </property>
+     <property name="verticalHeaderFormat">
+      <enum>QCalendarWidget::NoVerticalHeader</enum>
+     </property>
+     <property name="navigationBarVisible">
+      <bool>false</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="horizontalLayout_3">
+     <item>
+      <widget class="QPushButton" name="btnCancel">
+       <property name="minimumSize">
+        <size>
+         <width>0</width>
+         <height>56</height>
+        </size>
+       </property>
+       <property name="text">
+        <string>취소</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="btnOk">
+       <property name="minimumSize">
+        <size>
+         <width>0</width>
+         <height>56</height>
+        </size>
+       </property>
+       <property name="styleSheet">
+        <string notr="true">background: #2a78d6; color: white; font-weight: bold;</string>
+       </property>
+       <property name="text">
+        <string>확인</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
