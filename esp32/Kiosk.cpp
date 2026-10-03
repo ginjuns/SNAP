@@ -11,16 +11,22 @@
 * [2026-09-29]
 * - 화면 깨우기 상태 머신 기본 구조 설계
 *
+* [2026-10-03]
+* - echoISR(), PresenceTask() 작성
+* - 초음파 센서-웨이크-키오스크 연결
+* - 키오스크/웨이크 조건문 일부 수정
+* - 구조체 추가하고 변수명 일부 수정
+*
 */
 
 
 #include <Arduino.h>
-#include <Wire.h>                // I2C(VL53L0X, PCA9548A)
-#include <SPI.h>                 // SPI(RC522)
-#include <Adafruit_VL53L0X.h>    // VL53L0X ToF
-#include <Adafruit_NeoPixel.h>   // WS2812B
-#include <MFRC522.h>             // RC522
-#include <PubSubClient.h>        // MQTT통신
+#include <Wire.h>                                                // I2C(VL53L0X, PCA9548A)
+#include <SPI.h>                                                 // SPI(RC522)
+#include <Adafruit_VL53L0X.h>                                    // VL53L0X ToF
+#include <Adafruit_NeoPixel.h>                                   // WS2812B
+#include <MFRC522.h>                                             // RC522
+#include <PubSubClient.h>                                        // MQTT통신
 #include <WiFi.h>
 
 // I2C
@@ -41,66 +47,105 @@
 #define PIN_BUZZER
 
 
-// 키오스크 화면 상태
-enum class KioskState { 
-  SLEEP,                       // 비활성화
-  ACTIVE,                      // 활성화
-  PAYMENT_SELECT,              // 결제 수단 선택 화면
-  RFID_PAYMENT,                // 카드 결제 진행 중 (RC522 대기)
-  FACE_PAYMENT,                // 얼굴 인식 결제 진행 중 (카메라 대기)
-  PAYMENT_SUCCESS              // 결제 성공 안내 화면
+/*키오스크 화면 상태*/
+enum class KioskState : uint8_t { 
+  SLEEP,                                                         // 비활성화
+  ACTIVE,                                                        // 활성화
+  PAYMENT_SELECT,                                                // 결제 수단 선택 화면
+  RFID_PAYMENT,                                                  // 카드 결제 진행 중 (RC522 대기)
+  FACE_PAYMENT,                                                  // 얼굴 인식 결제 진행 중 (카메라 대기)
+  PAYMENT_SUCCESS                                                // 결제 성공 안내 화면
 };
 
-// 키오스크 발생 이벤트
-enum class KioskEvent { 
-  PERSON_PRESENT,              // 사람 접근 감지 및 깨우기
-  PERSON_ABSENT,               // 사람 이탈
-  PAY_START,                   // 결제 시작
-  SELECT_CARD,                 // 카드로 결제 선택
-  SELECT_FACE,                 // 얼굴 인식으로 결제 선택
-  PAYMENT_SUCCESS,             // 결제 성공
-  PAYMENT_FAILED,              // 결제 실패
-  CANCEL,                      // 취소 버튼 누름
-  TIMEOUT                      // 시간 초과
+/*키오스크 발생 이벤트*/
+enum class KioskEvent : uint8_t { 
+  PERSON_PRESENT,                                                // 사람 접근 감지 및 깨우기
+  PERSON_ABSENT,                                                 // 사람 이탈
+  PAY_START,                                                     // 결제 시작
+  SELECT_CARD,                                                   // 카드로 결제 선택
+  SELECT_FACE,                                                   // 얼굴 인식으로 결제 선택
+  PAYMENT_SUCCESS,                                               // 결제 성공
+  PAYMENT_FAILED,                                                // 결제 실패
+  CANCEL,                                                        // 취소 버튼 누름
+  TIMEOUT                                                        // 시간 초과
  };
 
- enum class WakeState {
-  IDLE,                        // 대기 상태
-  PRE_WAKE,                    // 사전 깨움
-  ACTIVE,                      // 활성화 상태
-  COOLDOWN                     // 재대기 시간
+/*화면 깨우기 상태*/
+ enum class WakeState : uint8_t {
+  IDLE,                                                          // 대기 상태
+  PRE_WAKE,                                                      // 사전 깨움
+  ACTIVE,                                                        // 활성화 상태
+  COOLDOWN                                                       // 재대기 시간
 };
 
-enum class WakeEvent {
-  MOTION_DETECTED,             // 움직임 감지
-  PRESENCE_CONFIRMED,          // 존재 확인
-  PERSON_ABSENT,               // 사람 없음
-  TIMEOUT                      // 시간 초과
+/*화면 깨우기 이벤트*/
+enum class WakeEvent : uint8_t {
+  MOTION_DETECTED,                                               // 움직임 감지
+  PRESENCE_CONFIRMED,                                            // 존재 확인
+  PERSON_ABSENT,                                                 // 사람 없음
+  TIMEOUT                                                        // 시간 초과
 };
 
 // Output
 enum class OutType : uint8_t {
-  SHELF_LED,                   // LED
-  BUZZER_SOUND                 // BUZZER
+  SHELF_LED,                                                     // LED
+  BUZZER_SOUND                                                   // BUZZER
 };
 
 // OutputTask에게 보내는 명령
 struct OutCmd {
-  OutType type;                // LED 갱신 / 결제 성공음
-  uint8_t shelfMask;           // SHELF_LED일 때만 사용
+  OutType type;                                                  // LED 갱신 / 결제 성공음
+  uint8_t shelfMask;                                             // SHELF_LED일 때만 사용
 };
 
 // MQTTTask가 서버로 보낼 메시지
 struct MqttMsg {
-  char topic[24];              // 보낼 주소
-  char payload[96];            // 보낼 내용
+  char topic[24];                                                // 보낼 주소
+  char payload[96];                                              // 보낼 내용
 };
 
 // RFIDTask 깨우기
-enum : uint32_t {
-  CARD_START = 1,              // 카드로 결제 on
-  CARD_STOP = 2                // 가드로 결제 off
+enum CardCmd : uint8_t {
+  CARD_START = 1,                                                // 카드로 결제 on
+  CARD_STOP = 2                                                  // 카드로 결제 off
 };
+
+/*초음파 설정값*/
+struct SensorConfig {
+  uint16_t detectCm;                                             // 감지 기준 거리
+  uint16_t releaseCm;                                            // 해제 기준 거리
+  uint16_t minDistanceCm;                                        // 최소 거리
+  uint16_t maxDistanceCm;                                        // 최대 거리
+  uint32_t intervalMs;                                           // 측정 주기
+  uint32_t echoTimeoutMs;                                        // ECHO 타임아웃
+  uint32_t preWakeMs;                                            // PRE_WAKE 유지 시간
+  uint8_t leaveCount;                                            // 이탈 확정 횟수
+  uint32_t cooldownDurationMs;                                   // COOLDOWN 유지 기간
+};
+
+const SensorConfig sensorCfg = { 50, 70, 2, 300, 100, 30, 2000, 5, 3000 };
+
+const float FAR_DISTANCE = 999.0;                                // 측정 무효 값
+const uint32_t SUCCESS_SCREEN_TIME = 3000;                       // 결제 성공 화면 유지 시간
+
+/*깨우기 런타임 상태*/
+struct WakeRuntime {
+  WakeState state;                                               // 현재의 WakeState
+  uint8_t detectingCnt;                                          // 접근 카운트
+  uint8_t leavingCnt;                                            // 이탈 카운트
+  float lastDistanceCm;                                          // 마지막 측정 거리
+  uint32_t enteredTimeMs;                                        // 현재 상태에 진입한 시간
+};
+
+static WakeRuntime wake = { WakeState::IDLE, 0, 0, FAR_DISTANCE, 0 };
+
+/*공유 데이터*/
+static volatile struct SensorSharedResources {
+  uint32_t startTimeUs;                                          // 시작 시간
+  uint32_t pulseDurationUs;                                      // 지속 시간
+  bool echoReady;                                                // ECHO를 받을 준비가 되어 있는지
+  bool doneFlag;                                                 // 완료 플래그
+} sharedRes;
 
 // Global Handles
 QueueHandle_t kioskQueue;                                        // 키오스크 관련 데이터 전달 큐
@@ -195,6 +240,20 @@ void initPresenceHardware() {
   Serial.println("Presence Sensor Initialized");
 }
 
+/*초음파 센서 인터럽트*/
+void IRAM_ATTR echoISR() {
+  uint32_t now = micros();
+  if (sharedRes.echoReady != false) {
+    if (digitalRead(PIN_ECHO) == HIGH) {                         // ECHO: LOW --> HIGH
+      sharedRes.startTimeUs = now;
+    } else {                                                     // ECHO: HIGH --> LOW
+      sharedRes.pulseDurationUs = now - sharedRes.startTimeUs;   // 반사되어 돌아온 시간
+      sharedRes.doneFlag = true;                                 // 측정 완료 신호
+      sharedRes.echoReady = false;                               // ECHO 초기화
+    }
+  }
+}
+
 void initPresenceInterrupt() {
   attachInterrupt(digitalPinToInterrupt(PIN_ECHO), echoISR, CHANGE);
   Serial.println("Presence Interrupt Initialized");
@@ -224,23 +283,22 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
 }
 
 
-static KioskState currentState = KioskState::SLEEP;
+static KioskState currKioskState = KioskState::SLEEP;   // 현재 키오스크 상태 (슬립 모드)
+static uint32_t kioskStateStartTime = 0;                // 현재 키오스크 상태에 들어온 시간
 
 void enterState(KioskState next) {
-
-  currentState = next;
+  currKioskState = next;
+  kioskStateStartTime = millis();                       // 상태가 바뀔 때마다 시간 기록
 }
 
 void handleEvent(KioskEvent ev) {
-  switch (currentState) {
-    case KioskState::SLEEP:  // 슬립 모드 -> 사람 감지 -> 활성화 (사람 이탈 시 슬립 모드 전환)
-      if (ev == KioskEvent::PERSON_PRESENT) {
-        enterState(KioskState::ACTIVE);
-      } else if (ev == KioskEvent::PERSON_ABSENT) {
+  switch (currKioskState) {
+    case KioskState::SLEEP:
+      if (ev == KioskEvent::PERSON_ABSENT) {
         enterState(KioskState::SLEEP);
       }
       break;
-    case KioskState::ACTIVE:  // 활성화 -> 결제 시작 -> 결제 수단 선택 (취소 버튼 누름 또는 시간 초과 시 슬립 모드 전환)
+    case KioskState::ACTIVE:                            // 활성화 -> 결제 시작 -> 결제 수단 선택/사람 이탈/취소
       if (ev == KioskEvent::PAY_START) {
         enterState(KioskState::PAYMENT_SELECT);
       } else if (ev == KioskEvent::PERSON_ABSENT) {
@@ -249,16 +307,18 @@ void handleEvent(KioskEvent ev) {
         enterState(KioskState::SLEEP);
       } 
       break;
-    case KioskState::PAYMENT_SELECT: // 결제 수단 선택 -> 카드/얼굴인식
+    case KioskState::PAYMENT_SELECT:                    // 결제 수단 선택 -> 카드/얼굴인식/사람 이탈/취소
       if (ev == KioskEvent::SELECT_CARD) {
         enterState(KioskState::RFID_PAYMENT);
       } else if (ev == KioskEvent::SELECT_FACE) {
         enterState(KioskState::FACE_PAYMENT);
+      } else if (ev == KioskEvent::PERSON_ABSENT) {
+        enterState(KioskState::SLEEP);
       } else if (ev == KioskEvent::CANCEL) {
         enterState(KioskState::SLEEP);
       } 
       break;
-    case KioskState::RFID_PAYMENT:  // 카드 결제 선택 -> 성공/실패 (실패 시 다시 결제)
+    case KioskState::RFID_PAYMENT:                      // 카드 결제 선택 -> 성공/실패/취소 (사람 이탈 넣을지 말지 고민중)
       if (ev == KioskEvent::PAYMENT_SUCCESS) {
         enterState(KioskState::PAYMENT_SUCCESS);
       } else if (ev == KioskEvent::PAYMENT_FAILED) {
@@ -267,7 +327,7 @@ void handleEvent(KioskEvent ev) {
         enterState(KioskState::SLEEP);
       } 
       break;
-    case KioskState::FACE_PAYMENT:  // 얼굴 인식 결제 선택 -> 성공/실패 (실패 시 다시 결제)
+    case KioskState::FACE_PAYMENT:                      // 얼굴 인식 결제 선택 -> 성공/실패/취소 (사람 이탈 넣을지 말지 고민중)
       if (ev == KioskEvent::PAYMENT_SUCCESS) {
         enterState(KioskState::PAYMENT_SUCCESS);
       } else if (ev == KioskEvent::PAYMENT_FAILED) {
@@ -276,7 +336,7 @@ void handleEvent(KioskEvent ev) {
         enterState(KioskState::SLEEP);
       } 
       break;
-    case KioskState::PAYMENT_SUCCESS:  // 결제 성공 -> 타임아웃 -> 슬립 모드
+    case KioskState::PAYMENT_SUCCESS:                   // 결제 성공 -> 타임아웃 -> 슬립 모드
       if (ev == KioskEvent::TIMEOUT) {
         enterState(KioskState::SLEEP);
       }
@@ -295,6 +355,12 @@ void KioskTask(void *pvParameters) {
     if (xQueueReceive(kioskQueue, &ev, pdMS_TO_TICKS(50)) == pdTRUE) {
       handleEvent(ev);
     }
+
+    // 결제 성공 화면에서 일정 시간 지나면 타임아웃
+    if (currKioskState == KioskState::PAYMENT_SUCCESS &&
+      millis() - kioskStateStartTime >= SUCCESS_SCREEN_TIME) {
+      handleEvent(KioskEvent::TIMEOUT);
+    }
   }
 }
 
@@ -307,8 +373,37 @@ void ShelfTask(void *pvParameters) {
 
 void PresenceTask(void *pvParameters) {
   for (;;) {
+    // 측정 준비
+    sharedRes.doneFlag = false;
+    sharedRes.echoReady = true;
 
-    vTaskDelay(pdMS_TO_TICKS(150));
+    // 측정
+    digitalWrite(PIN_TRIG, LOW);
+    delayMicroseconds(2);
+    digitalWrite(PIN_TRIG, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(PIN_TRIG, LOW);
+
+    // 측정 완료
+    uint32_t waitStart = millis();
+    while (!sharedRes.doneFlag && millis() - waitStart < sensorCfg.echoTimeoutMs) {
+      vTaskDelay(pdMS_TO_TICKS(1));
+    }
+
+    // 거리 계산
+    float distance;
+    if (sharedRes.doneFlag) {
+      distance = sharedRes.pulseDurationUs / 58.0;
+    } else {
+      sharedRes.echoReady = false;
+      distance = FAR_DISTANCE;
+    }
+
+    // 웨이크 상태 머신에 거리 전달
+    updatePresence(distance);
+
+    // 다음 측정까지 대기
+    vTaskDelay(pdMS_TO_TICKS(sensorCfg.intervalMs));
   }
 }
 
@@ -344,89 +439,90 @@ void MQTTTask(void *pvParameters) {
   }
 }
 
-
-
-const float ENTER_DISTANCE = 50.0;                    // 진입 거리
-const float EXIT_DISTANCE  = 70.0;                    // 이탈 거리
-
-const uint32_t PRE_WAKE_TIME = 2000;                  // 2초
-const uint32_t COOLDOWN_TIME = 3000;                  // 3초
-
-static WakeState currentState = WakeState::IDLE;
-
+/*KioskQueue로 이벤트 보내기*/
+void sendKioskEvent(KioskEvent ev) {
+  xQueueSend(kioskQueue, &ev, 0);
+}
 
 void enterState(WakeState next) {
-  currentState = next;
+  WakeState prev = wake.state;                                                                    // 이전 상태 기억
+  wake.state = next;
+  wake.enteredTimeMs = millis();                                                                  // 상태가 바뀔 때마다 시간 기록
+
+  if (prev == WakeState::PRE_WAKE && next == WakeState::ACTIVE) {                                 // PRE_WAKE에서 ACTIVE로 전환되면 사람 존재 확정
+    sendKioskEvent(KioskEvent::PERSON_PRESENT);
+  } else if (prev == WakeState::COOLDOWN && next == WakeState::IDLE) {                            // COOLDOWN에서 IDLE로 전환되면 사람 이탈 확정     
+    sendKioskEvent(KioskEvent::PERSON_ABSENT);
+  }
 }
 
 void handleEvent(WakeEvent wakeEvent){
-  switch (currentState) {
+  switch (wake.state) {
     case WakeState::IDLE:
-      if (wakeEvent == WakeEvent::MOTION_DETECTED) {
+      if (wakeEvent == WakeEvent::MOTION_DETECTED) {                                               // 움직임 감지되면 PRE_WAKE
         enterState(WakeState::PRE_WAKE);
       }
       break;
     case WakeState::PRE_WAKE:
-      if (wakeEvent == WakeEvent::PRESENCE_CONFIRMED) {
+      if (wakeEvent == WakeEvent::PRESENCE_CONFIRMED) {                                            // 사람 존재 확인되면 ACTIVE
         enterState(WakeState::ACTIVE);
-      } else if (wakeEvent == WakeEvent::PERSON_ABSENT || wakeEvent == WakeEvent::TIMEOUT) {
+      } else if (wakeEvent == WakeEvent::PERSON_ABSENT || wakeEvent == WakeEvent::TIMEOUT) {       // 이탈 또는 시간 초과 시 다시 IDLE
         enterState(WakeState::IDLE);
       }
       break;
     case WakeState::ACTIVE:
-      if (wakeEvent == WakeEvent::PERSON_ABSENT) {
+      if (wakeEvent == WakeEvent::PERSON_ABSENT) {                                                 // 사람 이탈 확인되면 COOLDOWN
         enterState(WakeState::COOLDOWN);
       }
       break;
     case WakeState::COOLDOWN:
-      if (wakeEvent == WakeEvent::MOTION_DETECTED || wakeEvent == WakeEvent::PRESENCE_CONFIRMED) {
+      if (wakeEvent == WakeEvent::MOTION_DETECTED || wakeEvent == WakeEvent::PRESENCE_CONFIRMED) { // 다시 접근하면 ACTIVE
         enterState(WakeState::ACTIVE);
-      } else if (wakeEvent == WakeEvent::TIMEOUT) {
+      } else if (wakeEvent == WakeEvent::TIMEOUT) {                                                // 시간 초과되면 IDLE
         enterState(WakeState::IDLE);
       }
       break;
     }
 }
 
-
-
 void updatePresence(float distance) {
-  static uint32_t stateStartTime = 0;                            // 타이머 변수(함수가 종료 후에도 이전 시간을 기억함)
-
-  if (distance <= 0.0f) {                                        // 센서 예외 처리(너무 가까운 거리는 측정 범위 밖으로 보정)
-    distance = 999.0f; 
+  if (distance < sensorCfg.minDistanceCm || distance > sensorCfg.maxDistanceCm) {     // 측정 범위를 초과하면 무효
+    distance = FAR_DISTANCE;
   }
 
-  switch (currentState) {
+  switch (wake.state) {
     case WakeState::IDLE:
-      if (distance <= ENTER_DISTANCE) {                          // 일정 거리 이내로 감지되면 '움직임 감지' 발생
-        stateStartTime = millis();
+      if (distance <= sensorCfg.detectCm) {                                           // 일정 거리 이내로 감지되면 '움직임 감지' 발생
         handleEvent(WakeEvent::MOTION_DETECTED);
       }
       break;
 
     case WakeState::PRE_WAKE:
-      if (distance > EXIT_DISTANCE) {                            // 검증 도중 사람이 영역 밖으로 벗어나면 '사람 없음' 발생
+      if (distance > sensorCfg.releaseCm) {                                           // 검증 도중 사람이 영역 밖으로 벗어나면 '사람 없음' 발생
         handleEvent(WakeEvent::PERSON_ABSENT);
-      } else if (millis() - stateStartTime >= PRE_WAKE_TIME) {   // 감지 상태가 일정 시간 이상 지속되면 '존재 확인' 발생
+      } else if (millis() - wake.enteredTimeMs >= sensorCfg.preWakeMs) {                  // 감지 상태가 일정 시간 이상 지속되면 '존재 확인' 발생
         handleEvent(WakeEvent::PRESENCE_CONFIRMED);
       }
       break;
 
     case WakeState::ACTIVE:
-      if (distance > EXIT_DISTANCE) {                            // 사람이 기준 거리 밖으로 벗어나면 '사람 없음' 발생
-        stateStartTime = millis();
-        handleEvent(WakeEvent::PERSON_ABSENT);
+      if (distance > sensorCfg.releaseCm) {                                           // 기준 거리보다 멀어지면 이탈
+        wake.leavingCnt++;
+        if (wake.leavingCnt >= sensorCfg.leaveCount) {                                // 일정 횟수 이상 연속적 이탈 확인되면 '사람 없음' 발생
+          wake.leavingCnt = 0;
+          handleEvent(WakeEvent::PERSON_ABSENT);
+        }
+      } else {                                                                        // 다시 범위 안으로 들어오면 이탈 카운트 초기화
+        wake.leavingCnt = 0;
       }
       break;
 
     case WakeState::COOLDOWN:
-      if (distance <= ENTER_DISTANCE) {                          // 유예 시간 내에 사람이 다시 진입하면 '움직임 감지' 발생
+      if (distance <= sensorCfg.detectCm) {                                           // 유예 시간 내에 사람이 다시 진입하면 '움직임 감지' 발생
         handleEvent(WakeEvent::MOTION_DETECTED); 
-      } else if (millis() - stateStartTime >= COOLDOWN_TIME) {   // 유예 시간 내에 아무도 오지 않으면 '시간 초과' 발생
+      } else if (millis() - wake.enteredTimeMs >= sensorCfg.cooldownDurationMs) {     // 유예 시간 내에 아무도 오지 않으면 '시간 초과' 발생
         handleEvent(WakeEvent::TIMEOUT);
       }
       break;
     }
 }
-
