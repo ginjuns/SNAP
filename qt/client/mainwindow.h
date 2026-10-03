@@ -2,16 +2,14 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
-#include <QVariant>
 
-class MemberWidget;
-class AdminWidget;
+class Member;
+class Admin;
 
 namespace Ui {
 class MainWindow;
 }
 
-// 화면 전환 담당: 초기(로그인) 화면 -> 일반회원 화면 / 관리자 화면
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
@@ -20,13 +18,13 @@ public:
     ~MainWindow();
 
 private slots:
-    void faceLogin();
-    void showLogin();
+    void login();
+    void home();
 
 private:
     Ui::MainWindow *ui;
-    MemberWidget *m_member;
-    AdminWidget *m_admin;
+    Member *m_member;
+    Admin *m_admin;
 };
 
-#endif // MAINWINDOW_H
+#endif

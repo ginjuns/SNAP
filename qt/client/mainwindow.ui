@@ -14,7 +14,7 @@
    <string>무인 키오스크</string>
   </property>
   <widget class="QWidget" name="centralwidget">
-   <layout class="QVBoxLayout" name="centralLayout">
+   <layout class="QVBoxLayout" name="verticalLayout">
     <property name="leftMargin">
      <number>0</number>
     </property>
@@ -29,10 +29,10 @@
     </property>
     <item>
      <widget class="QStackedWidget" name="stack">
-      <widget class="QWidget" name="loginPage">
-       <layout class="QVBoxLayout" name="loginLayout">
+      <widget class="QWidget" name="pageLogin">
+       <layout class="QVBoxLayout" name="verticalLayout_2">
         <item>
-         <spacer name="topStretch">
+         <spacer name="verticalSpacer">
           <property name="orientation">
            <enum>Qt::Vertical</enum>
           </property>
@@ -45,7 +45,7 @@
          </spacer>
         </item>
         <item>
-         <widget class="QLabel" name="titleLabel">
+         <widget class="QLabel" name="lblTitle">
           <property name="styleSheet">
            <string notr="true">font-size: 40px; font-weight: bold;</string>
           </property>
@@ -58,7 +58,7 @@
          </widget>
         </item>
         <item>
-         <widget class="QLabel" name="guideLabel">
+         <widget class="QLabel" name="lblGuide">
           <property name="text">
            <string>아래 버튼을 누르고 카메라를 바라봐 주세요.</string>
           </property>
@@ -68,7 +68,7 @@
          </widget>
         </item>
         <item>
-         <spacer name="buttonSpacing">
+         <spacer name="verticalSpacer_2">
           <property name="orientation">
            <enum>Qt::Vertical</enum>
           </property>
@@ -84,7 +84,7 @@
          </spacer>
         </item>
         <item alignment="Qt::AlignHCenter">
-         <widget class="QPushButton" name="loginButton">
+         <widget class="QPushButton" name="btnLogin">
           <property name="minimumSize">
            <size>
             <width>360</width>
@@ -100,7 +100,7 @@
          </widget>
         </item>
         <item>
-         <spacer name="bottomStretch">
+         <spacer name="verticalSpacer_3">
           <property name="orientation">
            <enum>Qt::Vertical</enum>
           </property>

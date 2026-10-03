@@ -1,0 +1,467 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>Admin</class>
+ <widget class="QWidget" name="Admin">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>720</width>
+    <height>1280</height>
+   </rect>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <item>
+    <layout class="QHBoxLayout" name="horizontalLayout">
+     <item>
+      <widget class="QLabel" name="lblWelcome">
+       <property name="styleSheet">
+        <string notr="true">font-size: 22px; font-weight: bold;</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <spacer name="horizontalSpacer">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>0</width>
+         <height>0</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+     <item>
+      <widget class="QPushButton" name="btnLogout">
+       <property name="text">
+        <string>로그아웃</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QTabWidget" name="tabWidget">
+     <property name="currentIndex">
+      <number>0</number>
+     </property>
+     <widget class="QWidget" name="tabProduct">
+      <attribute name="title">
+       <string>상품 관리</string>
+      </attribute>
+      <layout class="QVBoxLayout" name="verticalLayout_2" stretch="0,1">
+       <item>
+        <layout class="QFormLayout" name="formLayout">
+         <item row="0" column="0">
+          <widget class="QLabel" name="lblName">
+           <property name="text">
+            <string>상품명</string>
+           </property>
+          </widget>
+         </item>
+         <item row="0" column="1">
+          <widget class="QLineEdit" name="editName">
+           <property name="placeholderText">
+            <string>터치하여 입력</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="0">
+          <widget class="QLabel" name="lblPrice">
+           <property name="text">
+            <string>가격(원)</string>
+           </property>
+          </widget>
+         </item>
+         <item row="1" column="1">
+          <widget class="QLineEdit" name="editPrice">
+           <property name="placeholderText">
+            <string>터치하여 입력</string>
+           </property>
+          </widget>
+         </item>
+         <item row="2" column="0">
+          <widget class="QLabel" name="lblStock">
+           <property name="text">
+            <string>재고(개)</string>
+           </property>
+          </widget>
+         </item>
+         <item row="2" column="1">
+          <widget class="QLineEdit" name="editStock">
+           <property name="placeholderText">
+            <string>터치하여 입력</string>
+           </property>
+          </widget>
+         </item>
+         <item row="3" column="0">
+          <widget class="QLabel" name="lblPhoto">
+           <property name="text">
+            <string>사진</string>
+           </property>
+          </widget>
+         </item>
+         <item row="3" column="1">
+          <widget class="QLabel" name="lblImage">
+           <property name="minimumSize">
+            <size>
+             <width>150</width>
+             <height>150</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>150</width>
+             <height>150</height>
+            </size>
+           </property>
+           <property name="cursor">
+            <cursorShape>PointingHandCursor</cursorShape>
+           </property>
+           <property name="frameShape">
+            <enum>QFrame::StyledPanel</enum>
+           </property>
+           <property name="alignment">
+            <set>Qt::AlignCenter</set>
+           </property>
+          </widget>
+         </item>
+         <item row="4" column="1">
+          <layout class="QHBoxLayout" name="horizontalLayout_2">
+           <item>
+            <widget class="QPushButton" name="btnAdd">
+             <property name="minimumSize">
+              <size>
+               <width>64</width>
+               <height>56</height>
+              </size>
+             </property>
+             <property name="toolTip">
+              <string>상품 추가</string>
+             </property>
+             <property name="accessibleName">
+              <string>상품 추가</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="btnEdit">
+             <property name="minimumSize">
+              <size>
+               <width>64</width>
+               <height>56</height>
+              </size>
+             </property>
+             <property name="toolTip">
+              <string>선택 상품 수정</string>
+             </property>
+             <property name="accessibleName">
+              <string>선택 상품 수정</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="btnReset">
+             <property name="minimumSize">
+              <size>
+               <width>64</width>
+               <height>56</height>
+              </size>
+             </property>
+             <property name="toolTip">
+              <string>새로 입력</string>
+             </property>
+             <property name="accessibleName">
+              <string>새로 입력</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="btnDel">
+             <property name="minimumSize">
+              <size>
+               <width>64</width>
+               <height>56</height>
+              </size>
+             </property>
+             <property name="toolTip">
+              <string>선택 상품 삭제</string>
+             </property>
+             <property name="accessibleName">
+              <string>선택 상품 삭제</string>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <widget class="QTableWidget" name="tableProduct">
+         <property name="editTriggers">
+          <set>QAbstractItemView::NoEditTriggers</set>
+         </property>
+         <property name="selectionMode">
+          <enum>QAbstractItemView::SingleSelection</enum>
+         </property>
+         <property name="selectionBehavior">
+          <enum>QAbstractItemView::SelectRows</enum>
+         </property>
+         <attribute name="verticalHeaderVisible">
+          <bool>false</bool>
+         </attribute>
+         <column>
+          <property name="text">
+           <string>상품명</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>재고</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>가격</string>
+          </property>
+         </column>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QWidget" name="tabSales">
+      <attribute name="title">
+       <string>매출 확인</string>
+      </attribute>
+      <layout class="QVBoxLayout" name="verticalLayout_3" stretch="0,0,0,1">
+       <item>
+        <layout class="QHBoxLayout" name="horizontalLayout_3">
+         <item>
+          <widget class="QComboBox" name="comboUnit">
+           <item>
+            <property name="text">
+             <string>일별 (날짜 선택)</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>월별 (월 선택)</string>
+            </property>
+           </item>
+          </widget>
+         </item>
+         <item>
+          <spacer name="horizontalSpacer_2">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>0</width>
+             <height>0</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+         <item>
+          <widget class="QPushButton" name="btnToday">
+           <property name="text">
+            <string>오늘</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="horizontalLayout_4" stretch="0,1,0">
+         <item>
+          <widget class="QPushButton" name="btnPrev">
+           <property name="text">
+            <string>◀ 이전</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QDateEdit" name="date">
+           <property name="minimumSize">
+            <size>
+             <width>170</width>
+             <height>0</height>
+            </size>
+           </property>
+           <property name="displayFormat">
+            <string>yyyy-MM-dd</string>
+           </property>
+           <property name="calendarPopup">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="btnNext">
+           <property name="text">
+            <string>다음 ▶</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <widget class="QLabel" name="lblSum">
+         <property name="styleSheet">
+          <string notr="true">font-size: 18px; font-weight: bold;</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QSplitter" name="splitter">
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
+         </property>
+         <widget class="Chart" name="chart">
+          <property name="minimumSize">
+           <size>
+            <width>0</width>
+            <height>300</height>
+           </size>
+          </property>
+         </widget>
+         <widget class="QTabWidget" name="tabWidget_2">
+          <property name="currentIndex">
+           <number>0</number>
+          </property>
+          <widget class="QWidget" name="tabDetail">
+           <attribute name="title">
+            <string>구매 상세 내역</string>
+           </attribute>
+           <layout class="QVBoxLayout" name="verticalLayout_4">
+            <property name="leftMargin">
+             <number>0</number>
+            </property>
+            <property name="topMargin">
+             <number>0</number>
+            </property>
+            <property name="rightMargin">
+             <number>0</number>
+            </property>
+            <property name="bottomMargin">
+             <number>0</number>
+            </property>
+            <item>
+             <widget class="QTableWidget" name="tableDetail">
+              <property name="editTriggers">
+               <set>QAbstractItemView::NoEditTriggers</set>
+              </property>
+              <property name="selectionBehavior">
+               <enum>QAbstractItemView::SelectRows</enum>
+              </property>
+              <attribute name="verticalHeaderVisible">
+               <bool>false</bool>
+              </attribute>
+              <column>
+               <property name="text">
+                <string>일시</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>구매자</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>상품</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>수량</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>금액</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>결제수단</string>
+               </property>
+              </column>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+          <widget class="QWidget" name="tabBuyer">
+           <attribute name="title">
+            <string>구매자·상품별 합계</string>
+           </attribute>
+           <layout class="QVBoxLayout" name="verticalLayout_5">
+            <property name="leftMargin">
+             <number>0</number>
+            </property>
+            <property name="topMargin">
+             <number>0</number>
+            </property>
+            <property name="rightMargin">
+             <number>0</number>
+            </property>
+            <property name="bottomMargin">
+             <number>0</number>
+            </property>
+            <item>
+             <widget class="QTableWidget" name="tableBuyer">
+              <property name="editTriggers">
+               <set>QAbstractItemView::NoEditTriggers</set>
+              </property>
+              <property name="selectionBehavior">
+               <enum>QAbstractItemView::SelectRows</enum>
+              </property>
+              <attribute name="verticalHeaderVisible">
+               <bool>false</bool>
+              </attribute>
+              <column>
+               <property name="text">
+                <string>구매자</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>상품</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>수량</string>
+               </property>
+              </column>
+              <column>
+               <property name="text">
+                <string>금액</string>
+               </property>
+              </column>
+             </widget>
+            </item>
+           </layout>
+          </widget>
+         </widget>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <customwidgets>
+  <customwidget>
+   <class>Chart</class>
+   <extends>QWidget</extends>
+   <header>chart.h</header>
+  </customwidget>
+ </customwidgets>
+ <resources/>
+ <connections/>
+</ui>
