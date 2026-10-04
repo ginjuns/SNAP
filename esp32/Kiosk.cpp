@@ -17,6 +17,13 @@
 * - 키오스크/웨이크 조건문 일부 수정
 * - 구조체 추가하고 변수명 일부 수정
 *
+* [2026-10-04]
+* - ShelfTask(), RFIDTask() 작성
+* - OutputTask() 일부 작성
+* - 카드 결제 시에만 리더기 활성화
+* - 진열대 
+* - MqttTask -> ServerTask 변경
+* - TCP 서버 통신 구조로......
 */
 
 
@@ -26,7 +33,6 @@
 #include <Adafruit_VL53L0X.h>                                    // VL53L0X ToF
 #include <Adafruit_NeoPixel.h>                                   // WS2812B
 #include <MFRC522.h>                                             // RC522
-#include <PubSubClient.h>                                        // MQTT통신
 #include <WiFi.h>
 
 // I2C
@@ -45,6 +51,11 @@
 #define PIN_ECHO
 // Buzzer
 #define PIN_BUZZER
+
+#define WIFI_SSID ""
+#define WIFI_PASSWORD ""
+#define SERVER_IP "192.168.0.0"
+#define SERVER_PORT 9000
 
 
 /*키오스크 화면 상태*/
@@ -98,10 +109,9 @@ struct OutCmd {
   uint8_t shelfMask;                                             // SHELF_LED일 때만 사용
 };
 
-// MQTTTask가 서버로 보낼 메시지
-struct MqttMsg {
-  char topic[24];                                                // 보낼 주소
-  char payload[96];                                              // 보낼 내용
+// ServerTask가 서버로 보낼 메시지
+struct ServerMsg {
+  char line[96];                                                 // 보낼 JSON
 };
 
 // RFIDTask 깨우기
@@ -131,13 +141,11 @@ const uint32_t SUCCESS_SCREEN_TIME = 3000;                       // 결제 성�
 /*깨우기 런타임 상태*/
 struct WakeRuntime {
   WakeState state;                                               // 현재의 WakeState
-  uint8_t detectingCnt;                                          // 접근 카운트
   uint8_t leavingCnt;                                            // 이탈 카운트
-  float lastDistanceCm;                                          // 마지막 측정 거리
   uint32_t enteredTimeMs;                                        // 현재 상태에 진입한 시간
 };
 
-static WakeRuntime wake = { WakeState::IDLE, 0, 0, FAR_DISTANCE, 0 };
+static WakeRuntime wake = { WakeState::IDLE, 0, 0 };
 
 /*공유 데이터*/
 static volatile struct SensorSharedResources {
@@ -147,17 +155,39 @@ static volatile struct SensorSharedResources {
   bool doneFlag;                                                 // 완료 플래그
 } sharedRes;
 
+constexpr uint8_t numSlot = 6;                                   // 진열대 칸 개수
+constexpr uint16_t outOfRange = 8190;                            // 범위 밖 ("상품 없음"으로 간주)
+
+/* 진열대 공통 설정 */
+struct ShelfConfig {
+  uint8_t pcaAddr;                                               // PCA9548A 주소
+  uint16_t presentMm;                                            // "상품 있음"의 기준 거리
+  uint32_t scanIntervalMs;                                       // 6칸 한 바퀴 측정 주기 (ms)
+  uint8_t confirmCnt;                                            // 상품 유무가 바뀌려면 필요한 연속 확인 횟수
+};
+
+constexpr ShelfConfig shelfCfg = { 0x70, 150, 200, 3 };
+
+/* 슬롯 상태  */
+struct SlotState {
+  uint16_t lastDistanceMm;                                       // 마지막 측정 거리
+  bool hasItem;                                                  // 현재 확정된 상품 유무
+  uint8_t changeCnt;                                             // 현재 판단과 "반대" 결과가 나온 횟수
+};
+
+SlotState slotStates[numSlot];
+
 // Global Handles
-QueueHandle_t kioskQueue;                                        // 키오스크 관련 데이터 전달 큐
+QueueHandle_t kioskQueue;                                        // 키오스크 관련
 QueueHandle_t outQueue;                                          // 출력 데이터 전달 큐
-QueueHandle_t mqttQueue;                                         // MQTT 통신 데이터 전달 큐
+QueueHandle_t serverQueue;                                       // 통신 데이터 전달 큐
 TaskHandle_t  rfidTaskHandle;                                    // RFID 태스크 관리 핸들
 
-Adafruit_VL53L0X lox[6];                                         // VL53L0X 거리 센서 6개
+Adafruit_VL53L0X lox[numSlot];                                   // VL53L0X 거리 센서 6개
 Adafruit_NeoPixel strip(6, PIN_NEO, NEO_GRB + NEO_KHZ800);       // NeoPixel LED 6개
 MFRC522 mfrc522(PIN_RFID_SS, PIN_RFID_RST);                      // RFID 리더 객체
 WiFiClient espClient;                                            // Wi-Fi 통신 객체
-PubSubClient mqttClient(espClient);                              // MQTT 통신 객체
+
 
 void setup() {
   initSerial();
@@ -171,13 +201,12 @@ void setup() {
   // Queue 생성
   kioskQueue = xQueueCreate(12, sizeof(KioskEvent));
   outQueue = xQueueCreate(8, sizeof(OutCmd));
-  mqttQueue = xQueueCreate(12, sizeof(MqttMsg));
+  serverQueue = xQueueCreate(12, sizeof(ServerMsg));
 
   initPresenceInterrupt();
 
   // Network
   initWifi();
-  initMqtt();
   
   // Tasks 생성
   xTaskCreatePinnedToCore(KioskTask, "Kiosk", 4096, NULL, 3, NULL, 1);
@@ -185,7 +214,7 @@ void setup() {
   xTaskCreatePinnedToCore(PresenceTask, "Presence", 3072, NULL, 2, NULL, 1);
   xTaskCreatePinnedToCore(RFIDTask, "RFID", 4096, NULL, 2, &rfidTaskHandle, 1);
   xTaskCreatePinnedToCore(OutputTask, "Output", 3072, NULL, 4, NULL, 1);
-  xTaskCreatePinnedToCore(MQTTTask, "MQTT", 6144, NULL, 3, NULL, 0);
+  xTaskCreatePinnedToCore(ServerTask, "Server", 6144, NULL, 3, NULL, 0);
 }
 
 void loop() {
@@ -203,8 +232,16 @@ void initI2C() {
   Serial.println("I2C Bus Initialized");
 }
 
+void selectTofChannel(uint8_t bus) {
+  if (bus > 5) return;
+
+  Wire.beginTransmission(shelfCfg.pcaAddr);
+  Wire.write(1 << bus);
+  Wire.endTransmission();
+}
+
 void initTof() {
-  for (int i = 0; i < 6; i++) {
+  for (int i = 0; i < numSlot; i++) {
     selectTofChannel(i);
 
     if (!lox[i].begin(0x29, false, &Wire)) {
@@ -244,12 +281,12 @@ void initPresenceHardware() {
 void IRAM_ATTR echoISR() {
   uint32_t now = micros();
   if (sharedRes.echoReady != false) {
-    if (digitalRead(PIN_ECHO) == HIGH) {                         // ECHO: LOW --> HIGH
+    if (digitalRead(PIN_ECHO) == HIGH) {                                    // ECHO: LOW --> HIGH
       sharedRes.startTimeUs = now;
-    } else {                                                     // ECHO: HIGH --> LOW
-      sharedRes.pulseDurationUs = now - sharedRes.startTimeUs;   // 반사되어 돌아온 시간
-      sharedRes.doneFlag = true;                                 // 측정 완료 신호
-      sharedRes.echoReady = false;                               // ECHO 초기화
+    } else {                                                                // ECHO: HIGH --> LOW
+      sharedRes.pulseDurationUs = now - sharedRes.startTimeUs;              // 반사되어 돌아온 시간
+      sharedRes.doneFlag = true;                                            // 측정 완료 신호
+      sharedRes.echoReady = false;                                          // ECHO 초기화
     }
   }
 }
@@ -265,40 +302,25 @@ void initWifi() {
   Serial.println("Wi-Fi Initialized");
 }
 
-void initMqtt() {
-  mqttClient.setServer(MQTT_SERVER, MQTT_PORT);
-  mqttClient.setCallback(mqttCallback);
-  Serial.println("MQTT Initialized");
-}
 
-void mqttCallback(char* topic, byte* payload, unsigned int length) {
-  Serial.print("Topic: ");
-  Serial.println(topic);
-  Serial.print("Message: ");
-
-  for (int i = 0; i < length; i++) {
-    Serial.print((char)payload[i]);
-  }
-  Serial.println();
-}
-
-
-static KioskState currKioskState = KioskState::SLEEP;   // 현재 키오스크 상태 (슬립 모드)
-static uint32_t kioskStateStartTime = 0;                // 현재 키오스크 상태에 들어온 시간
+static KioskState currKioskState = KioskState::SLEEP;                       // 현재 키오스크 상태 (슬립 모드)
+static uint32_t kioskStateStartTime = 0;                                    // 현재 키오스크 상태에 들어온 시간
 
 void enterState(KioskState next) {
   currKioskState = next;
-  kioskStateStartTime = millis();                       // 상태가 바뀔 때마다 시간 기록
+  kioskStateStartTime = millis();                                           // 상태가 바뀔 때마다 시간 기록
 }
 
 void handleEvent(KioskEvent ev) {
   switch (currKioskState) {
     case KioskState::SLEEP:
-      if (ev == KioskEvent::PERSON_ABSENT) {
+      if (ev == KioskEvent::PERSON_PRESENT) {
+        enterState(KioskState::ACTIVE);
+      } else if (ev == KioskEvent::PERSON_ABSENT) {
         enterState(KioskState::SLEEP);
       }
       break;
-    case KioskState::ACTIVE:                            // 활성화 -> 결제 시작 -> 결제 수단 선택/사람 이탈/취소
+    case KioskState::ACTIVE:                                                // 활성화 -> 결제 시작 -> 결제 수단 선택/사람 이탈/취소
       if (ev == KioskEvent::PAY_START) {
         enterState(KioskState::PAYMENT_SELECT);
       } else if (ev == KioskEvent::PERSON_ABSENT) {
@@ -307,8 +329,9 @@ void handleEvent(KioskEvent ev) {
         enterState(KioskState::SLEEP);
       } 
       break;
-    case KioskState::PAYMENT_SELECT:                    // 결제 수단 선택 -> 카드/얼굴인식/사람 이탈/취소
+    case KioskState::PAYMENT_SELECT:                                        // 결제 수단 선택 -> 카드/얼굴인식/사람 이탈/취소
       if (ev == KioskEvent::SELECT_CARD) {
+        xTaskNotify(rfidTaskHandle, CARD_START, eSetValueWithOverwrite);    // 카드 리더기 활성화
         enterState(KioskState::RFID_PAYMENT);
       } else if (ev == KioskEvent::SELECT_FACE) {
         enterState(KioskState::FACE_PAYMENT);
@@ -318,16 +341,18 @@ void handleEvent(KioskEvent ev) {
         enterState(KioskState::SLEEP);
       } 
       break;
-    case KioskState::RFID_PAYMENT:                      // 카드 결제 선택 -> 성공/실패/취소 (사람 이탈 넣을지 말지 고민중)
+    case KioskState::RFID_PAYMENT:                                          // 카드 결제 선택 -> 성공/실패/취소
       if (ev == KioskEvent::PAYMENT_SUCCESS) {
+        xTaskNotify(rfidTaskHandle, CARD_STOP, eSetValueWithOverwrite);     // 결제 성공 -> 카드 리더기 비활성화
         enterState(KioskState::PAYMENT_SUCCESS);
       } else if (ev == KioskEvent::PAYMENT_FAILED) {
         enterState(KioskState::RFID_PAYMENT);
       } else if (ev == KioskEvent::CANCEL) {
+        xTaskNotify(rfidTaskHandle, CARD_STOP, eSetValueWithOverwrite);     // 결제 취소 -> 카드 리더기 비활성화
         enterState(KioskState::SLEEP);
       } 
       break;
-    case KioskState::FACE_PAYMENT:                      // 얼굴 인식 결제 선택 -> 성공/실패/취소 (사람 이탈 넣을지 말지 고민중)
+    case KioskState::FACE_PAYMENT:                                          // 얼굴 인식 결제 선택 -> 성공/실패/취소
       if (ev == KioskEvent::PAYMENT_SUCCESS) {
         enterState(KioskState::PAYMENT_SUCCESS);
       } else if (ev == KioskEvent::PAYMENT_FAILED) {
@@ -336,13 +361,10 @@ void handleEvent(KioskEvent ev) {
         enterState(KioskState::SLEEP);
       } 
       break;
-    case KioskState::PAYMENT_SUCCESS:                   // 결제 성공 -> 타임아웃 -> 슬립 모드
+    case KioskState::PAYMENT_SUCCESS:                                       // 결제 성공 -> 타임아웃 -> 슬립 모드
       if (ev == KioskEvent::TIMEOUT) {
         enterState(KioskState::SLEEP);
       }
-      break;
-
-    default:
       break;
     }
 }
@@ -364,33 +386,98 @@ void KioskTask(void *pvParameters) {
   }
 }
 
+uint8_t updateShelfMask() {
+  uint8_t mask = 0;
+  
+  for (uint8_t ch = 0; ch < numSlot; ch++) {
+    if (slotStates[ch].hasItem) {
+      mask |= (1 << ch);
+    }
+  }
+  
+  return mask;
+}
+
 void ShelfTask(void *pvParameters) {
+  uint8_t prevMask = 0xFF; // 첫 바퀴에 무조건 LED 업데이트
+
   for (;;) {
-    
-    vTaskDelay(pdMS_TO_TICKS(200));
+    for (uint8_t ch = 0; ch < numSlot; ch++) {
+      selectTofChannel(ch);
+
+      /*ToF 센서 거리 측정*/
+      VL53L0X_RangingMeasurementData_t measure;
+      lox[ch].rangingTest(&measure, false);
+
+      /*측정 데이터 검사*/
+      if (measure.RangeStatus != 4) {
+        slotStates[ch].lastDistanceMm = measure.RangeMilliMeter;
+      } else {
+        slotStates[ch].lastDistanceMm = outOfRange;
+      }
+
+      /*기준 거리 이하일 경우 "상품 있음"으로 판단*/
+      bool rawHasItem = (slotStates[ch].lastDistanceMm <= shelfCfg.presentMm);
+
+      if (rawHasItem != slotStates[ch].hasItem) {                           // 현재 확정된 상태와 다른 결과가 연속으로 나오는지 확인
+        slotStates[ch].changeCnt++;
+        if (slotStates[ch].changeCnt >= shelfCfg.confirmCnt) {              // 일정 횟수 이상 연속으로 다른 결과가 나오면 상태 변경
+          slotStates[ch].hasItem = rawHasItem;
+          slotStates[ch].changeCnt = 0;                                     // 기존 상태와 같은 결과가 나오면 변경 카운트 초기화
+        }
+      } else {
+        slotStates[ch].changeCnt = 0;
+      }
+    }
+
+    /*진열대 비트마스크 상태 업데이트*/
+    uint8_t currentMask = updateShelfMask();
+
+    /*이전과 비교하여 진열대 상태가 변경되었는지 확인*/
+    if (currentMask != prevMask) {
+      OutCmd cmd;
+      cmd.type = OutType::SHELF_LED;
+      cmd.shelfMask = currentMask;
+
+      xQueueSend(outQueue, &cmd, 0);
+
+      /*서버 전송 JSON 문자열 생성*/
+      String line = "{\"cmd\":\"SHELF\",\"shelf\":[";
+      for (uint8_t ch = 0; ch < numSlot; ch++) {
+        if (ch > 0) line += ",";
+        line += slotStates[ch].hasItem ? "true" : "false";
+      }
+      line += "]}";
+      sendToServer(line.c_str());
+
+      /*전송한 상태를 이전 상태로 저장*/
+      prevMask = currentMask;
+    }
+
+    /*일정한 주기로 대기*/
+    vTaskDelay(pdMS_TO_TICKS(shelfCfg.scanIntervalMs));
   }
 }
 
 void PresenceTask(void *pvParameters) {
   for (;;) {
-    // 측정 준비
+    /*측정 준비*/
     sharedRes.doneFlag = false;
     sharedRes.echoReady = true;
 
-    // 측정
     digitalWrite(PIN_TRIG, LOW);
     delayMicroseconds(2);
     digitalWrite(PIN_TRIG, HIGH);
     delayMicroseconds(10);
     digitalWrite(PIN_TRIG, LOW);
 
-    // 측정 완료
+    /*측정 완료*/
     uint32_t waitStart = millis();
     while (!sharedRes.doneFlag && millis() - waitStart < sensorCfg.echoTimeoutMs) {
       vTaskDelay(pdMS_TO_TICKS(1));
     }
 
-    // 거리 계산
+    /*거리 계산*/
     float distance;
     if (sharedRes.doneFlag) {
       distance = sharedRes.pulseDurationUs / 58.0;
@@ -399,10 +486,10 @@ void PresenceTask(void *pvParameters) {
       distance = FAR_DISTANCE;
     }
 
-    // 웨이크 상태 머신에 거리 전달
+    /*웨이크 상태 머신에 거리 전달*/
     updatePresence(distance);
 
-    // 다음 측정까지 대기
+    /*다음 측정까지 대기*/
     vTaskDelay(pdMS_TO_TICKS(sensorCfg.intervalMs));
   }
 }
@@ -410,9 +497,35 @@ void PresenceTask(void *pvParameters) {
 void RFIDTask(void *pvParameters) {
   uint32_t cmd;
   for (;;) {
-    xTaskNotifyWait(0, UINT32_MAX, &cmd, portMAX_DELAY);
+    xTaskNotifyWait(0, UINT32_MAX, &cmd, portMAX_DELAY);                            // CARD_START 대기
     if (cmd != CARD_START) continue;
-    
+
+    for (;;) {
+      if (xTaskNotifyWait(0, UINT32_MAX, &cmd, 0) == pdTRUE && cmd == CARD_STOP) {  // CARD_STOP 확인
+        break;
+      }
+      if (!mfrc522.PICC_IsNewCardPresent()) {                                       // 새 카드 있어?
+        vTaskDelay(pdMS_TO_TICKS(50));
+        continue;
+      }
+      if (!mfrc522.PICC_ReadCardSerial()) {                                         // 카드 읽었어?
+        vTaskDelay(pdMS_TO_TICKS(50));
+        continue;
+      }
+      
+      String uid = "";
+      for (byte i = 0; i < mfrc522.uid.size; i++) {
+        uid.concat(String(mfrc522.uid.uidByte[i] < 0x10 ? "0" : " "));
+        uid.concat(String(mfrc522.uid.uidByte[i], HEX));
+      }
+      uid.toUpperCase();
+
+      String line = "{\"cmd\":\"CARD\",\"uid\":\"" + uid + "\"}";
+      // Serial.println(line); 
+      sendToServer(line.c_str());
+
+      mfrc522.PICC_HaltA();                                                         // 카드 리더기 통신 종료
+    }
   }
 }
 
@@ -421,21 +534,25 @@ void OutputTask(void *pvParameters) {
   for (;;) {
     xQueueReceive(outQueue, &m, portMAX_DELAY);
     switch (m.type) {
-      case OutType::SHELF_LED:      // LED 갱신
+      case OutType::SHELF_LED:                                                      // LED 갱신
         break;
-      case OutType::BUZZER_SOUND:   // 결제 성공 알림음
+      case OutType::BUZZER_SOUND:                                                   // 결제 성공 알림음
+        digitalWrite(PIN_BUZZER, HIGH);
+        vTaskDelay(pdMS_TO_TICKS(70));
+        digitalWrite(PIN_BUZZER, LOW);
+        vTaskDelay(pdMS_TO_TICKS(40));
+        digitalWrite(PIN_BUZZER, HIGH);
+        vTaskDelay(pdMS_TO_TICKS(100));
+        digitalWrite(PIN_BUZZER, LOW);
         break;
       }
   }
 }
 
-void MQTTTask(void *pvParameters) {
-  MqttMsg m;
+void ServerTask(void *pvParameters) {
+  ServerMsg m;
   for (;;) {
-    mqttClient.loop();
-    if (xQueueReceive(mqttQueue, &m, pdMS_TO_TICKS(50)) == pdTRUE) {
-      mqttClient.publish(m.topic, m.payload);
-    }
+    
   }
 }
 
@@ -445,40 +562,35 @@ void sendKioskEvent(KioskEvent ev) {
 }
 
 void enterState(WakeState next) {
-  WakeState prev = wake.state;                                                                    // 이전 상태 기억
   wake.state = next;
-  wake.enteredTimeMs = millis();                                                                  // 상태가 바뀔 때마다 시간 기록
-
-  if (prev == WakeState::PRE_WAKE && next == WakeState::ACTIVE) {                                 // PRE_WAKE에서 ACTIVE로 전환되면 사람 존재 확정
-    sendKioskEvent(KioskEvent::PERSON_PRESENT);
-  } else if (prev == WakeState::COOLDOWN && next == WakeState::IDLE) {                            // COOLDOWN에서 IDLE로 전환되면 사람 이탈 확정     
-    sendKioskEvent(KioskEvent::PERSON_ABSENT);
-  }
+  wake.enteredTimeMs = millis();                                                      // 상태가 바뀔 때마다 시간 기록
 }
 
 void handleEvent(WakeEvent wakeEvent){
   switch (wake.state) {
     case WakeState::IDLE:
-      if (wakeEvent == WakeEvent::MOTION_DETECTED) {                                               // 움직임 감지되면 PRE_WAKE
+      if (wakeEvent == WakeEvent::MOTION_DETECTED) {                                  // 움직임 감지되면 PRE_WAKE
         enterState(WakeState::PRE_WAKE);
       }
       break;
     case WakeState::PRE_WAKE:
-      if (wakeEvent == WakeEvent::PRESENCE_CONFIRMED) {                                            // 사람 존재 확인되면 ACTIVE
+      if (wakeEvent == WakeEvent::PRESENCE_CONFIRMED) {                               // 사람 존재 확인되면 ACTIVE
+        sendKioskEvent(KioskEvent::PERSON_PRESENT);
         enterState(WakeState::ACTIVE);
-      } else if (wakeEvent == WakeEvent::PERSON_ABSENT || wakeEvent == WakeEvent::TIMEOUT) {       // 이탈 또는 시간 초과 시 다시 IDLE
+      } else if (wakeEvent == WakeEvent::PERSON_ABSENT) {                             // 이탈 또는 시간 초과 시 다시 IDLE
         enterState(WakeState::IDLE);
       }
       break;
     case WakeState::ACTIVE:
-      if (wakeEvent == WakeEvent::PERSON_ABSENT) {                                                 // 사람 이탈 확인되면 COOLDOWN
+      if (wakeEvent == WakeEvent::PERSON_ABSENT) {                                    // 사람 이탈 확인되면 COOLDOWN
         enterState(WakeState::COOLDOWN);
       }
       break;
     case WakeState::COOLDOWN:
-      if (wakeEvent == WakeEvent::MOTION_DETECTED || wakeEvent == WakeEvent::PRESENCE_CONFIRMED) { // 다시 접근하면 ACTIVE
+      if (wakeEvent == WakeEvent::MOTION_DETECTED) {                                  // 다시 접근하면 ACTIVE
         enterState(WakeState::ACTIVE);
-      } else if (wakeEvent == WakeEvent::TIMEOUT) {                                                // 시간 초과되면 IDLE
+      } else if (wakeEvent == WakeEvent::TIMEOUT) {                                   // 시간 초과되면 IDLE
+        sendKioskEvent(KioskEvent::PERSON_ABSENT);
         enterState(WakeState::IDLE);
       }
       break;
@@ -500,7 +612,7 @@ void updatePresence(float distance) {
     case WakeState::PRE_WAKE:
       if (distance > sensorCfg.releaseCm) {                                           // 검증 도중 사람이 영역 밖으로 벗어나면 '사람 없음' 발생
         handleEvent(WakeEvent::PERSON_ABSENT);
-      } else if (millis() - wake.enteredTimeMs >= sensorCfg.preWakeMs) {                  // 감지 상태가 일정 시간 이상 지속되면 '존재 확인' 발생
+      } else if (millis() - wake.enteredTimeMs >= sensorCfg.preWakeMs) {              // 감지 상태가 일정 시간 이상 지속되면 '존재 확인' 발생
         handleEvent(WakeEvent::PRESENCE_CONFIRMED);
       }
       break;
@@ -526,3 +638,4 @@ void updatePresence(float distance) {
       break;
     }
 }
+
