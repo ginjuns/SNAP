@@ -22,6 +22,8 @@ Cart::Cart(const QVariantMap &user, QList<Item> *items, QWidget *parent)
     connect(ui->btnBack, SIGNAL(clicked()), SLOT(reject()));
     connect(ui->btnCard, SIGNAL(clicked()), SLOT(payCard()));
     connect(ui->btnFace, SIGNAL(clicked()), SLOT(payFace()));
+    // 아이디/비밀번호로 로그인한 손님은 카드 결제만 가능
+    ui->btnFace->setVisible(!m_user.value("pwLogin").toBool());
     if (Esp::get())
         connect(Esp::get(), SIGNAL(shelfChanged(QVariantList)), SLOT(refresh()));
 
@@ -178,6 +180,8 @@ void Cart::payCard()
 
 void Cart::payFace()
 {
+    if (m_user.value("pwLogin").toBool())
+        return;
     if (m_items->isEmpty() || !checkSoldOut())
         return;
 

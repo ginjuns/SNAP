@@ -107,7 +107,7 @@ struct Face::Cam {};
 
 Face::Face(const QString &title, QWidget *parent, bool pw)
     : QDialog(parent), ui(new Ui::Face), m_cam(0), m_timer(new QTimer(this)),
-      m_id(-1), m_last(-1), m_hits(0), m_ticks(0), m_pw(pw)
+      m_id(-1), m_last(-1), m_hits(0), m_ticks(0), m_pw(pw), m_byPw(false)
 {
     ui->setupUi(this);
     scaleUi(this);
@@ -207,6 +207,7 @@ void Face::pwLogin()
     Login dlg(this);
     if (popup(&dlg) == QDialog::Accepted) {
         m_id = dlg.id();
+        m_byPw = true;
         accept();
     } else if (running) {
         m_ticks = 0;

@@ -74,6 +74,7 @@ void MainWindow::login()
         return;
 
     QVariantMap user = data.toMap();
+    user["pwLogin"] = face.byPassword();
     if (user.value("role").toString() == "admin") {
         m_admin->start(user);
         ui->stack->setCurrentWidget(m_admin);

@@ -17,6 +17,7 @@ public:
     ~Face();
 
     int id() const { return m_id; }
+    bool byPassword() const { return m_byPw; }
 
 private slots:
     void tick();
@@ -32,6 +33,7 @@ private:
     int m_hits;
     int m_ticks;
     bool m_pw;
+    bool m_byPw;
 };
 
 #endif
