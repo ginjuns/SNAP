@@ -71,8 +71,8 @@ private slots:
     void onClose();
 
 private:
-    void handle(const QJsonObject &req);
-    void send(const QJsonObject &obj);
+    void handle(const QString &line);
+    void send(const QString &cmd);
 
     QTcpSocket *m_sock;
     QByteArray m_buf;

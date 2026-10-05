@@ -5,11 +5,11 @@ CONFIG   += c++11
 TARGET    = KioskClient
 TEMPLATE  = app
 
-INCLUDEPATH += ../common ../server
+INCLUDEPATH += ../server
 
 DEFINES += SERVER_SOURCE_DIR=\\\"$$clean_path($$PWD/../server)\\\"
 
-HEADERS += ../common/packet.h \
+HEADERS += ../server/packet.h \
            util.h \
            net.h \
            popup.h \

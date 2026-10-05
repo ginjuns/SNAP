@@ -248,9 +248,13 @@ void Esp::onRead()
     }
     m_buf += sock->readAll();
 
-    QJsonObject req;
-    while (unpack(m_buf, &req))
-        handle(req);
+    int n;
+    while ((n = m_buf.indexOf('\n')) >= 0) {
+        QString line = QString::fromUtf8(m_buf.left(n)).trimmed();
+        m_buf.remove(0, n + 1);
+        if (!line.isEmpty())
+            handle(line);
+    }
 
     if (m_buf.size() > MAX_SIZE) {
         m_buf.clear();
@@ -269,37 +273,38 @@ void Esp::onClose()
     sock->deleteLater();
 }
 
-void Esp::handle(const QJsonObject &req)
+// 단어 명령 한 줄: "명령" 또는 "명령:값"
+void Esp::handle(const QString &line)
 {
-    QString cmd = req.value("cmd").toString();
+    QString cmd = line.section(':', 0, 0).trimmed();
+    QString val = line.section(':', 1).trimmed();
     if (cmd == "PRESENCE") {
-        m_present = req.value("present").toBool();
+        m_present = val == "1";
         emit presence(m_present);
     } else if (cmd == "CARD") {
-        emit card(req.value("uid").toString());
+        emit card(val);
     } else if (cmd == "SHELF") {
-        m_shelf = req.value("shelf").toArray().toVariantList();
+        m_shelf.clear();
+        foreach (const QString &s, val.split(',', QString::SkipEmptyParts))
+            m_shelf << s.trimmed().toInt();
         emit shelfChanged(m_shelf);
     } else {
-        qDebug("[ESP32] 알 수 없는 명령: %s", qPrintable(cmd));
+        qDebug("[ESP32] 알 수 없는 명령: %s", qPrintable(line));
         return;
     }
-    qDebug("[ESP32] %s", QJsonDocument(req).toJson(QJsonDocument::Compact).constData());
+    qDebug("[ESP32] %s", qPrintable(line));
 }
 
-void Esp::send(const QJsonObject &obj)
+void Esp::send(const QString &cmd)
 {
     if (!connected()) {
-        qDebug("[ESP32] 연결 안 됨, 보내지 못함: %s", qPrintable(obj.value("cmd").toString()));
+        qDebug("[ESP32] 연결 안 됨, 보내지 못함: %s", qPrintable(cmd));
         return;
     }
-    m_sock->write(pack(obj));
+    m_sock->write(cmd.toUtf8() + '\n');
 }
 
 void Esp::buzzer()
 {
-    QJsonObject obj;
-    obj["cmd"] = "BUZZER";
-    obj["sound"] = "success";
-    send(obj);
+    send("BUZZER");
 }
