@@ -140,7 +140,7 @@ void Cart::payCard()
     }
     if (!Msg::wait(this, "카드 결제",
                    QString("결제 금액: %1\n\n카드를 리더기에 대 주세요.").arg(won(total())),
-                   esp, SIGNAL(card(QString))))
+                   esp, SIGNAL(card())))
         return;
 
     QVariantMap r;

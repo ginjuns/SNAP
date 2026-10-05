@@ -201,6 +201,8 @@ Esp::Esp(QObject *parent)
     : QTcpServer(parent), m_sock(0), m_present(false)
 {
     instance = this;
+    for (int i = 0; i < SHELF_COUNT; ++i)
+        m_shelf << 1;   // 아직 소식이 없는 진열대는 차 있다고 본다
     connect(this, SIGNAL(newConnection()), SLOT(onConnect()));
 }
 
@@ -215,7 +217,7 @@ Esp *Esp::get()
     return instance;
 }
 
-// 진열대가 비었는지. 지정 안 한 상품(0)이나 ESP32 정보가 아직 없으면 false
+// 진열대가 비었는지. 지정 안 한 상품(0)이면 false
 bool Esp::shelfEmpty(int shelf)
 {
     if (!instance || shelf < 1 || shelf > instance->m_shelf.size())
@@ -283,20 +285,19 @@ void Esp::onClose()
     sock->deleteLater();
 }
 
-// 단어 명령 한 줄: "명령" 또는 "명령:값"
+// 단어 명령 한 줄: "person:1", "card:ok", "stand 1:1" (대소문자 무시)
 void Esp::handle(const QString &line)
 {
-    QString cmd = line.section(':', 0, 0).trimmed();
-    QString val = line.section(':', 1).trimmed();
-    if (cmd == "PRESENCE") {
+    QString cmd = line.section(':', 0, 0).trimmed().toLower();
+    QString val = line.section(':', 1).trimmed().toLower();
+    int n = cmd.startsWith("stand") ? cmd.mid(5).trimmed().toInt() : 0;
+    if (cmd == "person") {
         m_present = val == "1";
         emit presence(m_present);
-    } else if (cmd == "CARD") {
-        emit card(val);
-    } else if (cmd == "SHELF") {
-        m_shelf.clear();
-        foreach (const QString &s, val.split(',', QString::SkipEmptyParts))
-            m_shelf << s.trimmed().toInt();
+    } else if (cmd == "card" && val == "ok") {
+        emit card();
+    } else if (n >= 1 && n <= SHELF_COUNT) {
+        m_shelf[n - 1] = val == "1" ? 1 : 0;
         emit shelfChanged(m_shelf);
     } else {
         qDebug("[ESP32] 알 수 없는 명령: %s", qPrintable(line));

@@ -63,7 +63,7 @@ public:
 
 signals:
     void presence(bool on);
-    void card(const QString &uid);
+    void card();
     void shelfChanged(const QVariantList &shelf);
 
 private slots:

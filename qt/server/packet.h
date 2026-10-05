@@ -8,7 +8,7 @@
 const quint16 PORT = 9000;
 const quint16 ESP_PORT = 8000;
 const int MAX_SIZE = 16 * 1024 * 1024;
-const int SHELF_COUNT = 6;   // 진열대 수 (ESP32 SHELF:1,0,... 칸 수)
+const int SHELF_COUNT = 6;   // 진열대 수 (ESP32 "stand N:1" 의 N 최대값)
 
 inline QByteArray pack(const QJsonObject &obj)
 {
