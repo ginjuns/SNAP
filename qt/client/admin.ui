@@ -472,6 +472,12 @@
        </item>
       </layout>
      </widget>
+     <widget class="QWidget" name="tabAi">
+      <attribute name="title">
+       <string>AI 판매 분석</string>
+      </attribute>
+      <layout class="QVBoxLayout" name="layoutAi"/>
+     </widget>
     </widget>
    </item>
   </layout>
