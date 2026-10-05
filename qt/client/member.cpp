@@ -143,7 +143,7 @@ void Member::add(int i)
             return;
         }
     }
-    Item it = { id, name, p.value("price").toInt(), 1, stock };
+    Item it = { id, name, p.value("price").toInt(), 1, stock, p.value("shelf").toInt() };
     m_cart << it;
     ui->lblMsg->setText(QString("'%1'을(를) 담았습니다.").arg(name));
     updateBar();

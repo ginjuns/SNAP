@@ -22,6 +22,8 @@ Cart::Cart(const QVariantMap &user, QList<Item> *items, QWidget *parent)
     connect(ui->btnBack, SIGNAL(clicked()), SLOT(reject()));
     connect(ui->btnCard, SIGNAL(clicked()), SLOT(payCard()));
     connect(ui->btnFace, SIGNAL(clicked()), SLOT(payFace()));
+    if (Esp::get())
+        connect(Esp::get(), SIGNAL(shelfChanged(QVariantList)), SLOT(refresh()));
 
     refresh();
 }
@@ -51,7 +53,11 @@ void Cart::refresh()
     ui->table->setRowCount(m_items->size());
     for (int i = 0; i < m_items->size(); ++i) {
         const Item &it = m_items->at(i);
-        ui->table->setItem(i, 0, cell(it.name));
+        bool soldOut = Esp::shelfEmpty(it.shelf);
+        QTableWidgetItem *name = cell(soldOut ? it.name + " (품절)" : it.name);
+        if (soldOut)
+            name->setForeground(QColor("#d32f2f"));
+        ui->table->setItem(i, 0, name);
         ui->table->setItem(i, 1, cell(won(it.price), true));
         ui->table->setItem(i, 2, cell(QString("%1개").arg(it.qty), true));
         ui->table->setItem(i, 3, cell(won(it.price * it.qty), true));
@@ -67,7 +73,7 @@ void Cart::refresh()
             b->setStyleSheet(css("min-height: 0; padding: 0; font-size: 20px; font-weight: bold;"));
             b->setProperty("row", i);
             b->setProperty("delta", k == 0 ? -1 : 1);
-            b->setEnabled(k == 0 || it.qty < it.stock);
+            b->setEnabled(k == 0 || (!soldOut && it.qty < it.stock));
             connect(b, SIGNAL(clicked()), SLOT(change()));
             h->addWidget(b);
         }
@@ -82,7 +88,10 @@ void Cart::change()
     if (row < 0 || row >= m_items->size())
         return;
     Item &it = (*m_items)[row];
-    it.qty += sender()->property("delta").toInt();
+    int delta = sender()->property("delta").toInt();
+    if (delta > 0 && Esp::shelfEmpty(it.shelf))
+        return;
+    it.qty += delta;
     if (it.qty > it.stock)
         it.qty = it.stock;
     if (it.qty <= 0)
@@ -101,12 +110,28 @@ void Cart::clearAll()
     refresh();
 }
 
+// 담은 뒤 진열대가 빈 상품이 있으면 결제 막기
+bool Cart::checkSoldOut()
+{
+    QStringList names;
+    foreach (const Item &it, *m_items)
+        if (Esp::shelfEmpty(it.shelf))
+            names << it.name;
+    if (names.isEmpty())
+        return true;
+    Msg::warn(this, "품절 상품",
+              QString("%1 상품이 품절되었습니다.\n장바구니에서 빼고 결제해 주세요.").arg(names.join(", ")));
+    return false;
+}
+
 bool Cart::pay(int userId, const QString &method, QVariantMap *out)
 {
     if (m_items->isEmpty()) {
         Msg::info(this, "결제", "장바구니가 비어 있습니다.");
         return false;
     }
+    if (!checkSoldOut())
+        return false;
 
     QVariantList list;
     foreach (const Item &it, *m_items) {
@@ -131,7 +156,7 @@ bool Cart::pay(int userId, const QString &method, QVariantMap *out)
 
 void Cart::payCard()
 {
-    if (m_items->isEmpty())
+    if (m_items->isEmpty() || !checkSoldOut())
         return;
     Esp *esp = Esp::get();
     if (!esp || !esp->connected()) {
@@ -153,7 +178,7 @@ void Cart::payCard()
 
 void Cart::payFace()
 {
-    if (m_items->isEmpty())
+    if (m_items->isEmpty() || !checkSoldOut())
         return;
 
     Face face("얼굴인식 결제", this);

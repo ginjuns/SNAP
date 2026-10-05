@@ -12,6 +12,7 @@ struct Item
     int price;
     int qty;
     int stock;
+    int shelf;   // 진열대 번호 (0 = 지정 안 함)
 };
 
 namespace Ui {
@@ -34,6 +35,7 @@ private slots:
 
 private:
     int total() const;
+    bool checkSoldOut();
     bool pay(int userId, const QString &method, QVariantMap *out);
 
     Ui::Cart *ui;
