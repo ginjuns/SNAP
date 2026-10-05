@@ -1,6 +1,7 @@
 #include "member.h"
 #include "ui_member.h"
 #include "net.h"
+#include "server.h"
 #include "popup.h"
 #include "util.h"
 
@@ -15,6 +16,8 @@ Member::Member(QWidget *parent)
     touchScroll(ui->scroll);
     connect(ui->btnHome, SIGNAL(clicked()), SIGNAL(done()));
     connect(ui->btnCart, SIGNAL(clicked()), SLOT(openCart()));
+    if (Esp::get())
+        connect(Esp::get(), SIGNAL(shelfChanged(QVariantList)), SLOT(build()));
 }
 
 Member::~Member()
@@ -39,13 +42,19 @@ void Member::load()
     if (!Net::call("PRODUCTS", QVariantMap(), &data, &err))
         Msg::warn(this, "상품 조회 실패", err);
     m_list = data.toList();
+    build();
+}
+
+// 상품 카드 다시 그리기 (재고 0 또는 지정한 진열대가 비면 품절)
+void Member::build()
+{
     m_down = 0;
 
     QWidget *grid = new QWidget;
     QGridLayout *g = new QGridLayout(grid);
     for (int i = 0; i < m_list.size(); ++i) {
         QVariantMap p = m_list.at(i).toMap();
-        bool soldOut = p.value("stock").toInt() <= 0;
+        bool soldOut = p.value("stock").toInt() <= 0 || Esp::shelfEmpty(p.value("shelf").toInt());
 
         QLabel *img = new QLabel;
         img->setFixedSize(px(IMG_SIZE), px(IMG_SIZE));

@@ -57,6 +57,7 @@ public:
     bool connected() const;
     bool present() const { return m_present; }
     QVariantList shelf() const { return m_shelf; }
+    static bool shelfEmpty(int shelf);
 
     void buzzer();
 

@@ -4,6 +4,8 @@
 #include "chart.h"
 #include "keyboard.h"
 #include "net.h"
+#include "packet.h"
+#include "server.h"
 #include "popup.h"
 #include "util.h"
 
@@ -83,6 +85,12 @@ Admin::Admin(QWidget *parent)
     ui->editStock->setValidator(new QIntValidator(0, 1000000, ui->editStock));
     Keyboard::attach(ui->editStock, Keyboard::Number, "재고 수량 입력 (개)");
 
+    ui->comboShelf->addItem("선택 안 함");
+    for (int i = 1; i <= SHELF_COUNT; ++i)
+        ui->comboShelf->addItem(QString("%1번").arg(i));
+    ui->comboShelf->setView(new QListView);
+    ui->comboShelf->setStyleSheet(css("QComboBox QAbstractItemView::item { min-height: 48px; }"));
+
     ui->lblImage->setText(NO_IMAGE);
     ui->lblImage->installEventFilter(this);
 
@@ -141,6 +149,7 @@ void Admin::reset()
     ui->editName->clear();
     ui->editPrice->clear();
     ui->editStock->clear();
+    ui->comboShelf->setCurrentIndex(0);
     m_img.clear();
     m_imgChanged = false;
     ui->lblImage->setPixmap(QPixmap());
@@ -226,6 +235,7 @@ void Admin::add()
 
     QString err;
     QVariantMap args{{"name", name}, {"price", price}, {"stock", stock},
+                     {"shelf", ui->comboShelf->currentIndex()},
                      {"image", QString::fromLatin1(m_img.toBase64())}};
     if (!Net::call("ADD_PRODUCT", args, 0, &err)) {
         Msg::warn(this, "상품 추가 실패", err);
@@ -249,7 +259,8 @@ void Admin::edit()
         return;
 
     QVariantMap args{{"productId", m_list.value(r).toMap().value("id").toInt()},
-                     {"name", name}, {"price", price}, {"stock", stock}};
+                     {"name", name}, {"price", price}, {"stock", stock},
+                     {"shelf", ui->comboShelf->currentIndex()}};
     if (m_imgChanged)
         args["image"] = QString::fromLatin1(m_img.toBase64());
 
@@ -294,6 +305,7 @@ void Admin::onSelect()
     ui->editName->setText(p.value("name").toString());
     ui->editPrice->setText(QString::number(p.value("price").toInt()));
     ui->editStock->setText(QString::number(p.value("stock").toInt()));
+    ui->comboShelf->setCurrentIndex(p.value("shelf").toInt());
 
     m_img = QByteArray::fromBase64(p.value("image").toString().toLatin1());
     m_imgChanged = false;
@@ -323,6 +335,11 @@ void Admin::loadProducts()
         ui->tableProduct->setItem(i, 0, cell(p.value("name").toString()));
         ui->tableProduct->setItem(i, 1, cell(stock > 0 ? QString("%L1개").arg(stock) : QString("품절"), true));
         ui->tableProduct->setItem(i, 2, cell(won(p.value("price").toInt()), true));
+        int shelf = p.value("shelf").toInt();
+        QString s = shelf ? QString("%1번").arg(shelf) : QString("-");
+        if (Esp::shelfEmpty(shelf))
+            s += " (비어 있음)";
+        ui->tableProduct->setItem(i, 3, cell(s));
     }
 }
 

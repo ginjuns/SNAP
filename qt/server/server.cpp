@@ -97,7 +97,7 @@ QJsonObject Server::handle(const QJsonObject &req)
         QByteArray img;
         ok = readImage(req, &img, &err)
              && m_db->addProduct(req.value("name").toString(), req.value("price").toInt(),
-                                 req.value("stock").toInt(), img, &err);
+                                 req.value("stock").toInt(), req.value("shelf").toInt(), img, &err);
     } else if (cmd == "UPDATE_PRODUCT") {
         QVariantMap f;
         if (req.contains("name"))
@@ -106,6 +106,8 @@ QJsonObject Server::handle(const QJsonObject &req)
             f["price"] = req.value("price").toInt();
         if (req.contains("stock"))
             f["stock"] = req.value("stock").toInt();
+        if (req.contains("shelf"))
+            f["shelf"] = req.value("shelf").toInt();
         QByteArray img;
         ok = readImage(req, &img, &err);
         if (ok) {
@@ -211,6 +213,14 @@ Esp::~Esp()
 Esp *Esp::get()
 {
     return instance;
+}
+
+// 진열대가 비었는지. 지정 안 한 상품(0)이나 ESP32 정보가 아직 없으면 false
+bool Esp::shelfEmpty(int shelf)
+{
+    if (!instance || shelf < 1 || shelf > instance->m_shelf.size())
+        return false;
+    return instance->m_shelf.at(shelf - 1).toInt() == 0;
 }
 
 bool Esp::start(QString *err)

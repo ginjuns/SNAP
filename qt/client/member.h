@@ -26,6 +26,7 @@ protected:
 
 private slots:
     void openCart();
+    void build();
 
 private:
     void load();

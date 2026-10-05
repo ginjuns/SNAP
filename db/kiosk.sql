@@ -34,7 +34,8 @@ CREATE TABLE IF NOT EXISTS products (
     name        VARCHAR(100) NOT NULL,
     price       INT          NOT NULL,
     stock       INT          NOT NULL DEFAULT 0,          -- 재고 수량 (결제 시 차감)
-    image       MEDIUMBLOB   NULL,
+    shelf       INT          NULL,                        -- 진열대 번호 (1~6, NULL = 지정 안 함)
+    image      MEDIUMBLOB   NULL,
     updated_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
     UNIQUE KEY uq_products_name (name)                    -- 상품명 중복 금지
@@ -80,6 +81,13 @@ SET @sql = IF((SELECT COUNT(*) FROM information_schema.columns
               'DO 0');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 ALTER TABLE products ALTER COLUMN stock SET DEFAULT 0;
+
+-- 진열대 번호(shelf) 칸 추가. 기존 상품은 지정 안 함(NULL)
+SET @sql = IF((SELECT COUNT(*) FROM information_schema.columns
+               WHERE table_schema = 'kiosk' AND table_name = 'products' AND column_name = 'shelf') = 0,
+              'ALTER TABLE products ADD COLUMN shelf INT NULL AFTER stock',
+              'DO 0');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 -- 비밀번호 로그인용 아이디(login_id) 칸 추가
 SET @sql = IF((SELECT COUNT(*) FROM information_schema.columns

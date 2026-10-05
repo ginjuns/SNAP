@@ -1,4 +1,5 @@
 #include "db.h"
+#include "packet.h"
 
 #include <QtSql>
 #include <QDateTime>
@@ -26,6 +27,17 @@ static bool exists(const QString &name, int except, bool *found, QString *err)
     if (!q.exec() || !q.next())
         return fail(q, err);
     *found = q.value(0).toInt() > 0;
+    return true;
+}
+
+// 진열대 번호: 0 = 지정 안 함(NULL), 1~SHELF_COUNT
+static bool shelfValue(int shelf, QVariant *v, QString *err)
+{
+    if (shelf < 0 || shelf > SHELF_COUNT) {
+        *err = QString("진열대 번호는 1~%1 이어야 합니다.").arg(SHELF_COUNT);
+        return false;
+    }
+    *v = shelf ? QVariant(shelf) : QVariant(QVariant::Int);
     return true;
 }
 
@@ -60,6 +72,11 @@ bool DB::open(const QSettings &ini, QString *err)
     }
     if (!q.exec("SELECT stock FROM products LIMIT 1")) {
         *err = "products 테이블에 재고(stock) 칸이 없습니다.\n"
+               "DB를 최신으로 맞추려면 sudo mysql < db/kiosk.sql 을 실행하세요.";
+        return false;
+    }
+    if (!q.exec("SELECT shelf FROM products LIMIT 1")) {
+        *err = "products 테이블에 진열대(shelf) 칸이 없습니다.\n"
                "DB를 최신으로 맞추려면 sudo mysql < db/kiosk.sql 을 실행하세요.";
         return false;
     }
@@ -187,7 +204,7 @@ bool DB::user(int id, QVariant *out, QString *err)
 bool DB::products(QVariant *out, QString *err)
 {
     QSqlQuery q;
-    if (!q.exec("SELECT id, name, price, stock, image FROM products ORDER BY id"))
+    if (!q.exec("SELECT id, name, price, stock, shelf, image FROM products ORDER BY id"))
         return fail(q, err);
     QVariantList list;
     while (q.next()) {
@@ -196,20 +213,24 @@ bool DB::products(QVariant *out, QString *err)
         m["name"] = q.value(1).toString();
         m["price"] = q.value(2).toInt();
         m["stock"] = q.value(3).toInt();
-        m["image"] = QString::fromLatin1(q.value(4).toByteArray().toBase64());
+        m["shelf"] = q.value(4).toInt();   // NULL -> 0 (지정 안 함)
+        m["image"] = QString::fromLatin1(q.value(5).toByteArray().toBase64());
         list << m;
     }
     *out = list;
     return true;
 }
 
-bool DB::addProduct(const QString &name0, int price, int stock, const QByteArray &img, QString *err)
+bool DB::addProduct(const QString &name0, int price, int stock, int shelf, const QByteArray &img, QString *err)
 {
     QString name = name0.trimmed();
     if (name.isEmpty() || price <= 0 || stock < 0) {
         *err = "상품명, 가격, 재고를 올바르게 입력하세요.";
         return false;
     }
+    QVariant shelfVal;
+    if (!shelfValue(shelf, &shelfVal, err))
+        return false;
     bool found = false;
     if (!exists(name, 0, &found, err))
         return false;
@@ -219,10 +240,11 @@ bool DB::addProduct(const QString &name0, int price, int stock, const QByteArray
     }
 
     QSqlQuery q;
-    q.prepare("INSERT INTO products (name, price, stock, image) VALUES (?, ?, ?, ?)");
+    q.prepare("INSERT INTO products (name, price, stock, shelf, image) VALUES (?, ?, ?, ?, ?)");
     q.addBindValue(name);
     q.addBindValue(price);
     q.addBindValue(stock);
+    q.addBindValue(shelfVal);
     q.addBindValue(img.isEmpty() ? QVariant(QVariant::ByteArray) : QVariant(img));
     return q.exec() || fail(q, err);
 }
@@ -273,13 +295,20 @@ bool DB::editProduct(int id, const QVariantMap &f, QString *err)
         sets << "stock = ?";
         vals << f.value("stock").toInt();
     }
+    if (f.contains("shelf")) {
+        QVariant shelfVal;
+        if (!shelfValue(f.value("shelf").toInt(), &shelfVal, err))
+            return false;
+        sets << "shelf = ?";
+        vals << shelfVal;
+    }
     if (f.contains("image")) {
         QByteArray img = f.value("image").toByteArray();
         sets << "image = ?";
         vals << (img.isEmpty() ? QVariant(QVariant::ByteArray) : QVariant(img));
     }
     if (sets.isEmpty()) {
-        *err = "변경할 항목(name, price, stock, image)이 없습니다.";
+        *err = "변경할 항목(name, price, stock, shelf, image)이 없습니다.";
         return false;
     }
 
