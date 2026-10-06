@@ -16,3 +16,5 @@ password=kiosk1234
 api_key=
 model=gemini-2.5-flash
 fallback_model=gemini-2.5-flash-lite
+; 0 = AI의 생각 단계를 꺼서 빠르게 답함, -1 = 모델 기본값 (오류가 나면 -1로)
+thinking_budget=0

@@ -597,9 +597,15 @@ QLabel *Admin::addBubble(const QString &text, bool mine)
 {
     QLabel *lbl = new QLabel(text);
     lbl->setWordWrap(true);
-    lbl->setMaximumWidth(ui->scrollChat->viewport()->width() * 3 / 4);
     lbl->setStyleSheet(css(mine ? "background: #2a78d6; color: white; border-radius: 12px; padding: 10px; font-size: 17px;"
                                 : "background: #eeede8; color: #0b0b0b; border-radius: 12px; padding: 10px; font-size: 17px;"));
+
+    // 줄바꿈 QLabel은 레이아웃이 높이를 한 줄로 잡아 잘리므로, 글자 크기로 말풍선 크기를 직접 정한다.
+    lbl->ensurePolished();
+    int pad = px(10) * 2 + 4;
+    int maxWidth = qMax(px(300), ui->scrollChat->viewport()->width() * 3 / 4);
+    QRect r = lbl->fontMetrics().boundingRect(QRect(0, 0, maxWidth - pad, 100000), Qt::TextWordWrap, text);
+    lbl->setFixedSize(r.width() + pad, r.height() + pad);
     ui->layoutChat->addWidget(lbl, 0, mine ? Qt::AlignRight : Qt::AlignLeft);
 
     QTimer::singleShot(50, this, [this]() {   // 크기 계산이 끝난 뒤 맨 아래로 스크롤
