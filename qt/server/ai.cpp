@@ -16,14 +16,14 @@ static const int ATTEMPT = 35000;    // 요청 1번의 제한 시간 (넘으면 
 static QString apiKey;
 static QString model;
 static QString fallback;
-static int thinkingBudget;
+static QString thinkingLevel;
 
 void AI::setup(const QSettings &ini)
 {
     apiKey = ini.value("ai/api_key").toString();
-    model = ini.value("ai/model", "gemini-2.5-flash").toString();
-    fallback = ini.value("ai/fallback_model", "gemini-2.5-flash-lite").toString();
-    thinkingBudget = ini.value("ai/thinking_budget", 0).toInt();
+    model = ini.value("ai/model", "gemini-3.5-flash-lite").toString();
+    fallback = ini.value("ai/fallback_model", "gemini-3.8-flash").toString();
+    thinkingLevel = ini.value("ai/thinking_level", "low").toString();
 }
 
 static QJsonObject textPart(const QString &text)
@@ -81,8 +81,8 @@ bool AI::ask(const QString &system, const QString &prompt, const QJsonObject &sc
         config["responseMimeType"] = "application/json";
         config["responseSchema"] = schema;
     }
-    if (thinkingBudget >= 0)   // 0 = 생각 단계 끄기 (훨씬 빠름), -1 = 모델 기본값
-        config["thinkingConfig"] = QJsonObject{{"thinkingBudget", thinkingBudget}};
+    if (!thinkingLevel.isEmpty())   // 생각 단계를 줄여 빠르게 답하게 한다 (빈 값 = 모델 기본값)
+        config["thinkingConfig"] = QJsonObject{{"thinkingLevel", thinkingLevel}};
     QJsonObject user = textPart(prompt);
     user["role"] = "user";
     QJsonObject body;
