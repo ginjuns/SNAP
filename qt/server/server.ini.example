@@ -9,7 +9,8 @@ database=kiosk
 user=kiosk
 password=kiosk1234
 
-; AI 판매 분석 (console.anthropic.com 에서 발급한 API 키)
+; AI 판매 분석 - Gemini API (aistudio.google.com 에서 발급한 API 키)
+; model 은 AI Studio 에서 쓸 수 있는 모델 이름으로 바꿔도 됩니다.
 [ai]
 api_key=
-model=claude-opus-5-5
+model=gemini-2.5-flash

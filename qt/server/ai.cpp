@@ -15,8 +15,15 @@ static QString model;
 void AI::setup(const QSettings &ini)
 {
     apiKey = ini.value("ai/api_key").toString();
-    model = ini.value("ai/model", "claude-opus-5-5").toString();
+    model = ini.value("ai/model", "gemini-2.5-flash").toString();
 }
+
+static QJsonObject textPart(const QString &text)
+{
+    return QJsonObject{{"parts", QJsonArray{QJsonObject{{"text", text}}}}};
+}
+
+// Gemini API (generateContent) 호출
 bool AI::ask(const QString &system, const QString &prompt, const QJsonObject &schema,QString *answer, QString *err)
 {
     if (apiKey.isEmpty()) {
@@ -29,21 +36,19 @@ bool AI::ask(const QString &system, const QString &prompt, const QJsonObject &sc
         return false;
     }
     QJsonObject config;
-    config["effort"] = "low";
-    if (!schema.isEmpty())
-        config["format"] = QJsonObject{{"type", "json_schema"}, {"schema", schema}};
+    if (!schema.isEmpty()) {
+        config["responseMimeType"] = "application/json";
+        config["responseSchema"] = schema;
+    }
+    QJsonObject user = textPart(prompt);
+    user["role"] = "user";
     QJsonObject body;
-    body["model"] = model;
-    body["max_tokens"] = 4000;
-    body["system"] = system;
-    body["output_config"] = config;
-    body["fallbacks"] = "default";
-    body["messages"] = QJsonArray{QJsonObject{{"role", "user"}, {"content", prompt}}};
-    QNetworkRequest req(QUrl("https://api.anthropic.com/v1/messages"));
+    body["systemInstruction"] = textPart(system);
+    body["contents"] = QJsonArray{user};
+    body["generationConfig"] = config;
+    QNetworkRequest req(QUrl(QString("https://generativelanguage.googleapis.com/v1beta/models/%1:generateContent").arg(model)));
     req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-    req.setRawHeader("x-api-key", apiKey.toUtf8());
-    req.setRawHeader("anthropic-version", "2023-06-01");
-    req.setRawHeader("anthropic-beta", "server-side-fallback-2026-07-01");
+    req.setRawHeader("x-goog-api-key", apiKey.toUtf8());
     QNetworkAccessManager net;
     QNetworkReply *rep = net.post(req, QJsonDocument(body).toJson(QJsonDocument::Compact));
     QEventLoop loop;
@@ -64,15 +69,21 @@ bool AI::ask(const QString &system, const QString &prompt, const QJsonObject &sc
         *err = res.value("error").toObject().value("message").toString(rep->errorString());
         return false;
     }
-    if (res.value("stop_reason").toString() == "refusal") {
-        *err = "AI가 답변을 거절했습니다.";
+    QJsonArray candidates = res.value("candidates").toArray();
+    if (candidates.isEmpty()) {
+        *err = "AI가 답변을 거절했습니다. (" + res.value("promptFeedback").toObject().value("blockReason").toString() + ")";
         return false;
     }
+    QJsonObject first = candidates.at(0).toObject();
     answer->clear();
-    foreach (const QJsonValue &v, res.value("content").toArray()) {
-        QJsonObject block = v.toObject();
-        if (block.value("type").toString() == "text")
-            *answer += block.value("text").toString();
+    foreach (const QJsonValue &v, first.value("content").toObject().value("parts").toArray()) {
+        QJsonObject part = v.toObject();
+        if (!part.value("thought").toBool())
+            *answer += part.value("text").toString();
+    }
+    if (answer->isEmpty()) {
+        *err = "AI 답변이 비어 있습니다. (" + first.value("finishReason").toString() + ")";
+        return false;
     }
     return true;
 }

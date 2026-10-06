@@ -233,10 +233,10 @@ static bool aiAsk(DB *db, const QString &question, int productId, int userId, QV
     }
 
     QJsonObject schema = QJsonDocument::fromJson(
-        "{\"type\":\"object\",\"properties\":{"
-        "\"answer\":{\"type\":\"string\"},"
-        "\"followUps\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}}},"
-        "\"required\":[\"answer\",\"followUps\"],\"additionalProperties\":false}").object();
+        "{\"type\":\"OBJECT\",\"properties\":{"
+        "\"answer\":{\"type\":\"STRING\"},"
+        "\"followUps\":{\"type\":\"ARRAY\",\"items\":{\"type\":\"STRING\"}}},"
+        "\"required\":[\"answer\",\"followUps\"]}").object();
     QString system = "당신은 무인 키오스크 매장의 매출 상담 AI입니다. "
                      "주어진 JSON 데이터의 숫자만 근거로 답하고, 데이터에 없으면 없다고 말하세요. "
                      "answer는 마크다운 없이 5문장 이내의 한국어로 쓰고, "
