@@ -35,8 +35,6 @@ private slots:
     void prev();
     void next();
     void today();
-
-    // AI 판매 분석
     void makeReport();
     void onCategory();
     void ask();

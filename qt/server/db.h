@@ -23,6 +23,10 @@ public:
     bool pay(int userId, const QString &method, const QString &cardUid, const QVariantList &items,
              QVariant *out, QString *err);
     bool sales(const QString &unit, const QString &date, QVariant *out, QString *err);
+    bool members(QVariant *out, QString *err);
+    bool summary(const QDateTime &from, const QDateTime &to, QVariantMap *out, QString *err);
+    bool daily(int productId, const QDate &from, int days, QVector<int> *qty, QString *err);
+    bool purchases(int userId, int days, QVariantList *out, QString *err);
 };
 
 #endif

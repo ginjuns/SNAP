@@ -153,7 +153,8 @@ void Admin::start(const QVariantMap &user)
     ui->date->setDate(QDate::currentDate());
     ui->date->blockSignals(false);
     loadSales();
-    // TODO: AI 탭 - loadTargets(), onCategory()
+    loadTargets();
+    onCategory();
 }
 
 void Admin::reset()
@@ -466,51 +467,190 @@ void Admin::today()
         ui->date->setDate(QDate::currentDate());
 }
 
-// ================================================================ AI 판매 분석
+struct Question
+{
+    const char *category;
+    const char *text;
+    int target;
+};
+
+static const Question QUESTIONS[] = {
+    {"매출", "오늘 매출 요약해줘", 0},
+    {"매출", "지난주와 비교해줘", 0},
+    {"매출", "매출이 떨어진 이유는?", 0},
+    {"상품", "가장 잘 팔리는 상품은?", 0},
+    {"상품", "안 팔리는 상품 개선 방법은?", 0},
+    {"상품", "[상품] 판매 추이는?", 1},
+    {"재고", "곧 품절될 상품은?", 0},
+    {"재고", "이번 주 발주 추천해줘", 0},
+    {"고객", "단골 고객 분석해줘", 0},
+    {"고객", "[회원] 님의 구매 성향은?", 2},
+    {"고객", "최근 안 오는 고객은?", 0},
+    {"전략", "세트 메뉴 추천해줘", 0},
+    {"전략", "바쁜 시간대 대비 방법은?", 0},
+};
+
+static void clearLayout(QLayout *layout)
+{
+    while (QLayoutItem *item = layout->takeAt(0)) {
+        if (item->widget())
+            item->widget()->deleteLater();   // 누른 버튼 자신을 지울 수 있으므로 deleteLater
+        delete item;
+    }
+}
 
 void Admin::loadTargets()
 {
-    // TODO: comboProduct("전체 상품" + m_list 상품명), 회원 목록 명령(예: "MEMBERS") -> m_members
-}
+    QVariant data;
+    QString err;
+    if (Net::call("MEMBERS", QVariantMap(), &data, &err))
+        m_members = data.toList();
 
-// ---------------------------------------------------------------- AI 리포트
+    ui->comboProduct->clear();
+    ui->comboProduct->addItem("전체 상품", 0);
+    foreach (const QVariant &v, m_list) {
+        QVariantMap m = v.toMap();
+        ui->comboProduct->addItem(m.value("name").toString(), m.value("id"));
+    }
+}
 
 void Admin::makeReport()
 {
-    // TODO: Net::call("AI_REPORT", {{"period", "day"|"week"|"month"}}) -> textReport
-}
+    static const char *PERIODS[] = {"day", "week", "month"};
 
-// ---------------------------------------------------------------- AI 상담
+    ui->btnReport->setEnabled(false);
+    ui->lblReportInfo->setText("AI가 분석 중입니다...");
+    qApp->processEvents();                    // 위 문구가 먼저 화면에 보이도록
+
+    QVariant data;
+    QString err;
+    QVariantMap args{{"period", PERIODS[ui->comboPeriod->currentIndex()]}};
+    bool ok = Net::call("AI_REPORT", args, &data, &err);
+    ui->btnReport->setEnabled(true);
+    if (!ok) {
+        ui->lblReportInfo->setText("리포트 생성 실패");
+        Msg::warn(this, "AI 리포트", err);
+        return;
+    }
+    ui->textReport->setMarkdown(data.toString());   // Qt 5.14 미만이면 setPlainText
+    ui->lblReportInfo->setText(QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm 생성"));
+}
 
 void Admin::onCategory()
 {
-    // TODO: 분류별 질문 버튼을 layoutQuestions에 다시 만들고,
-    //       [상품]/[회원]이 들어가는 질문이 있으면 comboTarget을 보여준다.
+    clearLayout(ui->layoutQuestions);
+    QString category = ui->comboCategory->currentText();
+    int target = 0, n = 0;
+    for (const Question &q : QUESTIONS) {
+        if (category != q.category)
+            continue;
+        QPushButton *btn = new QPushButton(q.text);
+        btn->setMinimumHeight(px(56));
+        btn->setProperty("target", q.target);
+        connect(btn, SIGNAL(clicked()), SLOT(ask()));
+        ui->layoutQuestions->addWidget(btn, n / 2, n % 2);
+        ++n;
+        target = qMax(target, q.target);
+    }
+
+    ui->comboTarget->clear();
+    foreach (const QVariant &v, target == 1 ? m_list : target == 2 ? m_members : QVariantList()) {
+        QVariantMap m = v.toMap();
+        ui->comboTarget->addItem(m.value("name").toString(), m.value("id"));
+    }
+    ui->comboTarget->setVisible(target != 0);
 }
 
 void Admin::ask()
 {
-    // TODO: sender() 버튼의 질문 키 + comboTarget 값으로 Net::call("AI_ASK")
-    //       -> addBubble(질문, true), addBubble(답변, false), setFollowUps(추천 질문)
+    QPushButton *btn = qobject_cast<QPushButton *>(sender());
+    if (!btn)
+        return;
+    QString text = btn->text();
+    int target = btn->property("target").toInt();
+
+    QVariantMap args;
+    if (target) {
+        text.replace(target == 1 ? "[상품]" : "[회원]", ui->comboTarget->currentText());
+        args[target == 1 ? "productId" : "userId"] = ui->comboTarget->currentData();
+    }
+    args["question"] = text;
+
+    addBubble(text, true);
+    QLabel *wait = addBubble("AI가 분석 중...", false);
+    qApp->processEvents();
+
+    QVariant data;
+    QString err;
+    bool ok = Net::call("AI_ASK", args, &data, &err);
+    delete wait;
+    if (!ok) {
+        addBubble("오류: " + err, false);
+        return;
+    }
+    QVariantMap res = data.toMap();
+    addBubble(res.value("answer").toString(), false);
+    setFollowUps(res.value("followUps").toStringList());
 }
 
-void Admin::addBubble(const QString &text, bool mine)
+QLabel *Admin::addBubble(const QString &text, bool mine)
 {
-    // TODO: QLabel 말풍선을 layoutChat의 맨 아래 spacer 앞에 끼워 넣고 스크롤을 끝으로 내린다.
-    Q_UNUSED(text);
-    Q_UNUSED(mine);
+    QLabel *lbl = new QLabel(text);
+    lbl->setWordWrap(true);
+    lbl->setMaximumWidth(ui->scrollChat->viewport()->width() * 3 / 4);
+    lbl->setStyleSheet(css(mine ? "background: #2a78d6; color: white; border-radius: 12px; padding: 10px; font-size: 17px;"
+                                : "background: #eeede8; color: #0b0b0b; border-radius: 12px; padding: 10px; font-size: 17px;"));
+    ui->layoutChat->addWidget(lbl, 0, mine ? Qt::AlignRight : Qt::AlignLeft);
+
+    QTimer::singleShot(50, this, [this]() {   // 크기 계산이 끝난 뒤 맨 아래로 스크롤
+        QScrollBar *bar = ui->scrollChat->verticalScrollBar();
+        bar->setValue(bar->maximum());
+    });
+    return lbl;
 }
 
 void Admin::setFollowUps(const QStringList &list)
 {
-    // TODO: layoutFollow의 버튼을 지우고 list로 다시 만든다. (누르면 ask())
-    Q_UNUSED(list);
+    clearLayout(ui->layoutFollow);
+    foreach (const QString &s, list) {
+        QPushButton *btn = new QPushButton(s);
+        btn->setMinimumHeight(px(56));
+        connect(btn, SIGNAL(clicked()), SLOT(ask()));   // target 속성이 없으면 0 -> 문구 그대로 질문
+        ui->layoutFollow->addWidget(btn);
+    }
 }
-
-// ---------------------------------------------------------------- AI 판매 예측
 
 void Admin::forecast()
 {
-    // TODO: Net::call("AI_FORECAST", {{"productId", id}, {"days", 7|14}})
-    //       -> forecastChart->setData(), lblForecastSum, tableForecast
+    int days = ui->comboDays->currentIndex() == 0 ? 7 : 14;
+    QVariantMap args{{"productId", ui->comboProduct->currentData()}, {"days", days}};
+    QVariant data;
+    QString err;
+    if (!Net::call("AI_FORECAST", args, &data, &err)) {
+        Msg::warn(this, "AI 판매 예측", err);
+        return;
+    }
+    QVariantMap res = data.toMap();
+    ui->forecastChart->setData(res.value("past").toList(), res.value("future").toList(),
+                               ui->comboProduct->currentText() + QString(" - 앞으로 %1일 판매 예측").arg(days));
+
+    QVariantList rows = res.value("rows").toList();
+    ui->tableForecast->setRowCount(rows.size());
+    int danger = 0;
+    for (int i = 0; i < rows.size(); ++i) {
+        QVariantMap m = rows.at(i).toMap();
+        int left = m.value("daysLeft").toInt();
+        int order = m.value("order").toInt();
+        ui->tableForecast->setItem(i, 0, cell(m.value("name").toString()));
+        ui->tableForecast->setItem(i, 1, cell(QString("%L1개").arg(m.value("stock").toInt()), true));
+        ui->tableForecast->setItem(i, 2, cell(QString::number(m.value("avg").toDouble(), 'f', 1) + "개", true));
+        ui->tableForecast->setItem(i, 3, cell(QString("%L1개").arg(qRound(m.value("predicted").toDouble())), true));
+        ui->tableForecast->setItem(i, 4, cell(left < 0 ? "-" : left == 0 ? "품절" : QString("%1일 후").arg(left)));
+        ui->tableForecast->setItem(i, 5, cell(order ? QString("%L1개").arg(order) : "-", true));
+        if (left >= 0 && left <= 3) {
+            ++danger;
+            ui->tableForecast->item(i, 4)->setForeground(QColor("#d03b3b"));
+        }
+    }
+    ui->lblForecastSum->setText(QString("품절 위험(3일 이내) %1개 상품").arg(danger));
 }

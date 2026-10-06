@@ -25,7 +25,7 @@ bool Net::call(const QString &cmd, const QVariantMap &args, QVariant *out, QStri
     QByteArray buf;
     QJsonObject res;
     while (!unpack(buf, &res)) {
-        if (!sock.waitForReadyRead(10000)) {
+        if (!sock.waitForReadyRead(cmd.startsWith("AI_") ? 90000 : 10000)) {
             *err = "서버 응답이 없습니다.";
             return false;
         }

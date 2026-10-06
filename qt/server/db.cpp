@@ -488,3 +488,133 @@ bool DB::sales(const QString &unit, const QString &date, QVariant *out, QString 
     *out = res;
     return true;
 }
+
+static bool range(QSqlQuery &q, const QString &sql, const QDateTime &from, const QDateTime &to)
+{
+    q.prepare(sql);
+    q.addBindValue(from);
+    q.addBindValue(to);
+    return q.exec();
+}
+
+bool DB::members(QVariant *out, QString *err)
+{
+    QSqlQuery q;
+    if (!q.exec("SELECT id, name FROM users WHERE role = 'member' ORDER BY name"))
+        return fail(q, err);
+    QVariantList list;
+    while (q.next()) {
+        QVariantMap m;
+        m["id"] = q.value(0).toInt();
+        m["name"] = q.value(1).toString();
+        list << m;
+    }
+    *out = list;
+    return true;
+}
+
+bool DB::summary(const QDateTime &from, const QDateTime &to, QVariantMap *out, QString *err)
+{
+    QSqlQuery q;
+    QVariantMap res;
+    if (!range(q, "SELECT COALESCE(SUM(amount), 0), COALESCE(SUM(qty), 0), COUNT(DISTINCT sold_at),"
+                  " COALESCE(SUM(CASE WHEN method = 'card' THEN amount END), 0)"
+                  " FROM sales WHERE sold_at >= ? AND sold_at < ?", from, to) || !q.next())
+        return fail(q, err);
+    res["from"] = from.toString("yyyy-MM-dd HH:mm");
+    res["to"] = to.toString("yyyy-MM-dd HH:mm");
+    res["total"] = q.value(0).toInt();
+    res["qty"] = q.value(1).toInt();
+    res["orders"] = q.value(2).toInt();
+    res["card"] = q.value(3).toInt();
+    res["face"] = q.value(0).toInt() - q.value(3).toInt();
+
+    if (!range(q, "SELECT product_name, SUM(qty), SUM(amount) FROM sales"
+                  " WHERE sold_at >= ? AND sold_at < ? GROUP BY product_name ORDER BY SUM(qty) DESC", from, to))
+        return fail(q, err);
+    QVariantList products;
+    while (q.next()) {
+        QVariantMap m;
+        m["name"] = q.value(0).toString();
+        m["qty"] = q.value(1).toInt();
+        m["amount"] = q.value(2).toInt();
+        products << m;
+    }
+    res["products"] = products;
+
+    if (!range(q, "SELECT HOUR(sold_at), SUM(amount) FROM sales"
+                  " WHERE sold_at >= ? AND sold_at < ? GROUP BY HOUR(sold_at) ORDER BY 1", from, to))
+        return fail(q, err);
+    QVariantList hours;
+    while (q.next()) {
+        QVariantMap m;
+        m["hour"] = q.value(0).toInt();
+        m["amount"] = q.value(1).toInt();
+        hours << m;
+    }
+    res["hours"] = hours;
+
+    if (!range(q, "SELECT COALESCE(u.name, '(비회원)'), COUNT(DISTINCT s.sold_at), SUM(s.amount), MAX(s.sold_at)"
+                  " FROM sales s LEFT JOIN users u ON u.id = s.user_id"
+                  " WHERE s.sold_at >= ? AND s.sold_at < ?"
+                  " GROUP BY s.user_id, u.name ORDER BY SUM(s.amount) DESC LIMIT 10", from, to))
+        return fail(q, err);
+    QVariantList buyers;
+    while (q.next()) {
+        QVariantMap m;
+        m["name"] = q.value(0).toString();
+        m["visits"] = q.value(1).toInt();
+        m["amount"] = q.value(2).toInt();
+        m["last"] = q.value(3).toDateTime().toString("yyyy-MM-dd HH:mm");
+        buyers << m;
+    }
+    res["buyers"] = buyers;
+
+    *out = res;
+    return true;
+}
+
+bool DB::daily(int productId, const QDate &from, int days, QVector<int> *qty, QString *err)
+{
+    QSqlQuery q;
+    q.prepare(QString("SELECT DATE(sold_at), SUM(qty) FROM sales"
+                      " WHERE sold_at >= ? AND sold_at < ? %1 GROUP BY DATE(sold_at)")
+                  .arg(productId ? "AND product_id = ?" : ""));
+    q.addBindValue(QDateTime(from));
+    q.addBindValue(QDateTime(from.addDays(days)));
+    if (productId)
+        q.addBindValue(productId);
+    if (!q.exec())
+        return fail(q, err);
+    qty->fill(0, days);
+    while (q.next()) {
+        int i = from.daysTo(q.value(0).toDate());
+        if (i >= 0 && i < days)
+            (*qty)[i] = q.value(1).toInt();
+    }
+    return true;
+}
+
+bool DB::purchases(int userId, int days, QVariantList *out, QString *err)
+{
+    QSqlQuery q;
+    q.prepare("SELECT product_name, SUM(qty), COUNT(DISTINCT DATE(sold_at)), MAX(sold_at),"
+              " GROUP_CONCAT(DISTINCT HOUR(sold_at))"
+              " FROM sales WHERE user_id = ? AND sold_at >= ?"
+              " GROUP BY product_name ORDER BY SUM(qty) DESC");
+    q.addBindValue(userId);
+    q.addBindValue(QDateTime::currentDateTime().addDays(-days));
+    if (!q.exec())
+        return fail(q, err);
+    out->clear();
+    while (q.next()) {
+        QVariantMap m;
+        m["product"] = q.value(0).toString();
+        m["qty"] = q.value(1).toInt();
+        m["days"] = q.value(2).toInt();
+        m["last"] = q.value(3).toDateTime().toString("yyyy-MM-dd HH:mm");
+        m["hours"] = q.value(4).toString();
+        *out << m;
+    }
+    return true;
+}
