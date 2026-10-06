@@ -22,8 +22,11 @@ HEADERS += ../server/packet.h \
            face.h \
            login.h \
            keyboard.h \
+           forecastchart.h \
            ../server/db.h \
-           ../server/server.h
+           ../server/server.h \
+           ../server/ai.h \
+           ../server/forecast.h
 
 SOURCES += main.cpp \
            net.cpp \
@@ -37,8 +40,11 @@ SOURCES += main.cpp \
            face.cpp \
            login.cpp \
            keyboard.cpp \
+           forecastchart.cpp \
            ../server/db.cpp \
-           ../server/server.cpp
+           ../server/server.cpp \
+           ../server/ai.cpp \
+           ../server/forecast.cpp
 
 FORMS += mainwindow.ui \
          member.ui \

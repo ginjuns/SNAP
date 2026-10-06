@@ -476,7 +476,310 @@
       <attribute name="title">
        <string>AI 판매 분석</string>
       </attribute>
-      <layout class="QVBoxLayout" name="layoutAi"/>
+      <layout class="QVBoxLayout" name="layoutAi">
+       <property name="leftMargin">
+        <number>0</number>
+       </property>
+       <property name="topMargin">
+        <number>0</number>
+       </property>
+       <property name="rightMargin">
+        <number>0</number>
+       </property>
+       <property name="bottomMargin">
+        <number>0</number>
+       </property>
+       <item>
+        <widget class="QTabWidget" name="tabAiSub">
+         <property name="currentIndex">
+          <number>0</number>
+         </property>
+         <widget class="QWidget" name="tabReport">
+          <attribute name="title">
+           <string>AI 리포트</string>
+          </attribute>
+          <layout class="QVBoxLayout" name="layoutReport" stretch="0,0,1">
+           <item>
+            <layout class="QHBoxLayout" name="layoutReportTop">
+             <item>
+              <widget class="QComboBox" name="comboPeriod">
+               <item>
+                <property name="text">
+                 <string>오늘</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>이번 주</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>이번 달</string>
+                </property>
+               </item>
+              </widget>
+             </item>
+             <item>
+              <spacer name="spacerReport">
+               <property name="orientation">
+                <enum>Qt::Horizontal</enum>
+               </property>
+               <property name="sizeHint" stdset="0">
+                <size>
+                 <width>0</width>
+                 <height>0</height>
+                </size>
+               </property>
+              </spacer>
+             </item>
+             <item>
+              <widget class="QPushButton" name="btnReport">
+               <property name="text">
+                <string>AI 리포트 생성</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <widget class="QLabel" name="lblReportInfo">
+             <property name="styleSheet">
+              <string notr="true">color: #888;</string>
+             </property>
+             <property name="text">
+              <string>기간을 고르고 [AI 리포트 생성]을 누르세요.</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QTextBrowser" name="textReport">
+             <property name="styleSheet">
+              <string notr="true">font-size: 18px;</string>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+         <widget class="QWidget" name="tabChat">
+          <attribute name="title">
+           <string>AI 상담</string>
+          </attribute>
+          <layout class="QVBoxLayout" name="layoutChatTab" stretch="1,0,0,0,0">
+           <item>
+            <widget class="QScrollArea" name="scrollChat">
+             <property name="widgetResizable">
+              <bool>true</bool>
+             </property>
+             <widget class="QWidget" name="chatBox">
+              <property name="geometry">
+               <rect>
+                <x>0</x>
+                <y>0</y>
+                <width>680</width>
+                <height>600</height>
+               </rect>
+              </property>
+              <layout class="QVBoxLayout" name="layoutChat">
+               <item>
+                <spacer name="spacerChat">
+                 <property name="orientation">
+                  <enum>Qt::Vertical</enum>
+                 </property>
+                 <property name="sizeHint" stdset="0">
+                  <size>
+                   <width>0</width>
+                   <height>0</height>
+                  </size>
+                 </property>
+                </spacer>
+               </item>
+              </layout>
+             </widget>
+            </widget>
+           </item>
+           <item>
+            <widget class="QLabel" name="lblFollow">
+             <property name="styleSheet">
+              <string notr="true">font-weight: bold;</string>
+             </property>
+             <property name="text">
+              <string>AI 추천 질문</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QWidget" name="followBox">
+             <layout class="QHBoxLayout" name="layoutFollow">
+              <property name="leftMargin">
+               <number>0</number>
+              </property>
+              <property name="topMargin">
+               <number>0</number>
+              </property>
+              <property name="rightMargin">
+               <number>0</number>
+              </property>
+              <property name="bottomMargin">
+               <number>0</number>
+              </property>
+             </layout>
+            </widget>
+           </item>
+           <item>
+            <layout class="QHBoxLayout" name="layoutTarget" stretch="1,1">
+             <item>
+              <widget class="QComboBox" name="comboCategory">
+               <item>
+                <property name="text">
+                 <string>매출</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>상품</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>재고</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>고객</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>전략</string>
+                </property>
+               </item>
+              </widget>
+             </item>
+             <item>
+              <widget class="QComboBox" name="comboTarget"/>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <widget class="QWidget" name="questionBox">
+             <layout class="QGridLayout" name="layoutQuestions">
+              <property name="leftMargin">
+               <number>0</number>
+              </property>
+              <property name="topMargin">
+               <number>0</number>
+              </property>
+              <property name="rightMargin">
+               <number>0</number>
+              </property>
+              <property name="bottomMargin">
+               <number>0</number>
+              </property>
+             </layout>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+         <widget class="QWidget" name="tabForecast">
+          <attribute name="title">
+           <string>AI 판매 예측</string>
+          </attribute>
+          <layout class="QVBoxLayout" name="layoutForecast" stretch="0,0,0,1">
+           <item>
+            <layout class="QHBoxLayout" name="layoutForecastTop" stretch="1,0,0">
+             <item>
+              <widget class="QComboBox" name="comboProduct"/>
+             </item>
+             <item>
+              <widget class="QComboBox" name="comboDays">
+               <item>
+                <property name="text">
+                 <string>7일 예측</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
+                 <string>14일 예측</string>
+                </property>
+               </item>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="btnForecast">
+               <property name="text">
+                <string>예측하기</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
+           </item>
+           <item>
+            <widget class="ForecastChart" name="forecastChart">
+             <property name="minimumSize">
+              <size>
+               <width>0</width>
+               <height>300</height>
+              </size>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QLabel" name="lblForecastSum">
+             <property name="styleSheet">
+              <string notr="true">font-size: 18px; font-weight: bold;</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QTableWidget" name="tableForecast">
+             <property name="editTriggers">
+              <set>QAbstractItemView::NoEditTriggers</set>
+             </property>
+             <property name="selectionBehavior">
+              <enum>QAbstractItemView::SelectRows</enum>
+             </property>
+             <attribute name="verticalHeaderVisible">
+              <bool>false</bool>
+             </attribute>
+             <column>
+              <property name="text">
+               <string>상품</string>
+              </property>
+             </column>
+             <column>
+              <property name="text">
+               <string>재고</string>
+              </property>
+             </column>
+             <column>
+              <property name="text">
+               <string>일평균</string>
+              </property>
+             </column>
+             <column>
+              <property name="text">
+               <string>예측 판매</string>
+              </property>
+             </column>
+             <column>
+              <property name="text">
+               <string>품절 예상</string>
+              </property>
+             </column>
+             <column>
+              <property name="text">
+               <string>추천 발주</string>
+              </property>
+             </column>
+            </widget>
+           </item>
+          </layout>
+         </widget>
+        </widget>
+       </item>
+      </layout>
      </widget>
     </widget>
    </item>
@@ -487,6 +790,11 @@
    <class>Chart</class>
    <extends>QWidget</extends>
    <header>chart.h</header>
+  </customwidget>
+  <customwidget>
+   <class>ForecastChart</class>
+   <extends>QWidget</extends>
+   <header>forecastchart.h</header>
   </customwidget>
  </customwidgets>
  <resources/>

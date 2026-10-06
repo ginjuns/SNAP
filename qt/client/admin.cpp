@@ -124,6 +124,18 @@ Admin::Admin(QWidget *parent)
     ui->splitter->setHandleWidth(px(16));
     ui->splitter->setStretchFactor(0, 1);
     ui->splitter->setStretchFactor(1, 1);
+
+    connect(ui->btnReport, SIGNAL(clicked()), SLOT(makeReport()));
+    connect(ui->comboCategory, SIGNAL(currentIndexChanged(int)), SLOT(onCategory()));
+    connect(ui->btnForecast, SIGNAL(clicked()), SLOT(forecast()));
+    foreach (QComboBox *c, QList<QComboBox *>() << ui->comboPeriod << ui->comboCategory << ui->comboTarget
+                                                << ui->comboProduct << ui->comboDays) {
+        c->setView(new QListView);
+        c->setStyleSheet(css("QComboBox QAbstractItemView::item { min-height: 48px; }"));
+    }
+    touchScroll(ui->scrollChat);
+    touchScroll(ui->tableForecast);
+    stretch(ui->tableForecast);
 }
 
 Admin::~Admin()
@@ -141,6 +153,7 @@ void Admin::start(const QVariantMap &user)
     ui->date->setDate(QDate::currentDate());
     ui->date->blockSignals(false);
     loadSales();
+    // TODO: AI 탭 - loadTargets(), onCategory()
 }
 
 void Admin::reset()
@@ -451,4 +464,53 @@ void Admin::today()
         loadSales();
     else
         ui->date->setDate(QDate::currentDate());
+}
+
+// ================================================================ AI 판매 분석
+
+void Admin::loadTargets()
+{
+    // TODO: comboProduct("전체 상품" + m_list 상품명), 회원 목록 명령(예: "MEMBERS") -> m_members
+}
+
+// ---------------------------------------------------------------- AI 리포트
+
+void Admin::makeReport()
+{
+    // TODO: Net::call("AI_REPORT", {{"period", "day"|"week"|"month"}}) -> textReport
+}
+
+// ---------------------------------------------------------------- AI 상담
+
+void Admin::onCategory()
+{
+    // TODO: 분류별 질문 버튼을 layoutQuestions에 다시 만들고,
+    //       [상품]/[회원]이 들어가는 질문이 있으면 comboTarget을 보여준다.
+}
+
+void Admin::ask()
+{
+    // TODO: sender() 버튼의 질문 키 + comboTarget 값으로 Net::call("AI_ASK")
+    //       -> addBubble(질문, true), addBubble(답변, false), setFollowUps(추천 질문)
+}
+
+void Admin::addBubble(const QString &text, bool mine)
+{
+    // TODO: QLabel 말풍선을 layoutChat의 맨 아래 spacer 앞에 끼워 넣고 스크롤을 끝으로 내린다.
+    Q_UNUSED(text);
+    Q_UNUSED(mine);
+}
+
+void Admin::setFollowUps(const QStringList &list)
+{
+    // TODO: layoutFollow의 버튼을 지우고 list로 다시 만든다. (누르면 ask())
+    Q_UNUSED(list);
+}
+
+// ---------------------------------------------------------------- AI 판매 예측
+
+void Admin::forecast()
+{
+    // TODO: Net::call("AI_FORECAST", {{"productId", id}, {"days", 7|14}})
+    //       -> forecastChart->setData(), lblForecastSum, tableForecast
 }

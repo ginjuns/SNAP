@@ -8,3 +8,8 @@ port=3306
 database=kiosk
 user=kiosk
 password=kiosk1234
+
+; AI 판매 분석 (console.anthropic.com 에서 발급한 API 키)
+[ai]
+api_key=
+model=claude-opus-5-5

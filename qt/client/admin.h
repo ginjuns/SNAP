@@ -36,16 +36,27 @@ private slots:
     void next();
     void today();
 
+    // AI 판매 분석
+    void makeReport();
+    void onCategory();
+    void ask();
+    void forecast();
+
 private:
     void pickDate();
     int row() const;
     bool readForm(QString *name, int *price, int *stock);
     bool monthly() const;
 
+    void loadTargets();
+    void addBubble(const QString &text, bool mine);
+    void setFollowUps(const QStringList &list);
+
     Ui::Admin *ui;
     QByteArray m_img;
     bool m_imgChanged;
     QVariantList m_list;
+    QVariantList m_members;
 };
 
 #endif
