@@ -95,6 +95,11 @@ bool DB::open(const QSettings &ini, QString *err)
                "DB를 최신으로 맞추려면 sudo mysql < db/kiosk.sql 을 실행하세요.";
         return false;
     }
+    if (!q.exec("SELECT 1 FROM cards LIMIT 1")) {
+        *err = "카드(cards) 테이블이 없습니다.\n"
+               "DB를 최신으로 맞추려면 sudo mysql < db/kiosk.sql 을 실행하세요.";
+        return false;
+    }
     return true;
 }
 
@@ -333,7 +338,34 @@ bool DB::delProduct(int id, QString *err)
     return true;
 }
 
-bool DB::pay(int userId, const QString &method, const QVariantList &items, QVariant *out, QString *err)
+// 잔액 차감 (트랜잭션 안에서). table: users(id) / cards(uid)
+static bool charge(const QString &table, const QString &key, const QVariant &id, int total,
+                   QVariantMap *res, QString *err)
+{
+    bool card = table == "cards";
+    QSqlQuery q;
+    q.prepare(QString("UPDATE %1 SET balance = balance - ? WHERE %2 = ? AND balance >= ?").arg(table, key));
+    q.addBindValue(total);
+    q.addBindValue(id);
+    q.addBindValue(total);
+    if (!q.exec())
+        return rollback(q.lastError().text(), err);
+    bool paid = q.numRowsAffected() > 0;
+
+    q.prepare(QString("SELECT balance FROM %1 WHERE %2 = ?").arg(table, key));
+    q.addBindValue(id);
+    if (!q.exec() || !q.next())
+        return rollback(card ? "등록되지 않은 카드입니다." : "등록되지 않은 사용자입니다.", err);
+    int balance = q.value(0).toInt();
+    if (!paid)
+        return rollback(QString("%1잔액이 부족합니다. (잔액 %2원 / 결제금액 %3원)")
+                            .arg(card ? "카드 " : "").arg(balance).arg(total), err);
+    (*res)["balance"] = balance;
+    return true;
+}
+
+bool DB::pay(int userId, const QString &method, const QString &cardUid, const QVariantList &items,
+             QVariant *out, QString *err)
 {
     if (items.isEmpty()) {
         *err = "장바구니가 비어 있습니다.";
@@ -388,24 +420,10 @@ bool DB::pay(int userId, const QString &method, const QVariantList &items, QVari
     QVariantMap res;
     res["total"] = total;
 
-    if (method == "face") {
-        q.prepare("UPDATE users SET balance = balance - ? WHERE id = ? AND balance >= ?");
-        q.addBindValue(total);
-        q.addBindValue(userId);
-        q.addBindValue(total);
-        if (!q.exec())
-            return rollback(q.lastError().text(), err);
-        bool paid = q.numRowsAffected() > 0;
-
-        q.prepare("SELECT balance FROM users WHERE id = ?");
-        q.addBindValue(userId);
-        if (!q.exec() || !q.next())
-            return rollback("등록되지 않은 사용자입니다.", err);
-        int balance = q.value(0).toInt();
-        if (!paid)
-            return rollback(QString("잔액이 부족합니다. (잔액 %1원 / 결제금액 %2원)").arg(balance).arg(total), err);
-        res["balance"] = balance;
-    }
+    bool charged = method == "face" ? charge("users", "id", userId, total, &res, err)
+                                    : charge("cards", "uid", cardUid, total, &res, err);
+    if (!charged)
+        return false;
 
     if (!QSqlDatabase::database().commit())
         return rollback(QSqlDatabase::database().lastError().text(), err);

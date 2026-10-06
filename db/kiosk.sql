@@ -69,6 +69,16 @@ CREATE TABLE IF NOT EXISTS face_images (
     CONSTRAINT fk_face_images_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
+-- 카드: ESP32(RC522)가 읽은 카드 UID별 잔액. 카드 결제 시 여기서 차감한다.
+-- uid는 공백 없는 대문자 16진수 (예: A1B2C3D4)
+CREATE TABLE IF NOT EXISTS cards (
+    uid         VARCHAR(32)  NOT NULL,
+    name        VARCHAR(50)  NOT NULL,
+    balance     INT          NOT NULL DEFAULT 0,          -- 카드 잔액(원)
+    created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (uid)
+) ENGINE=InnoDB;
+
 -- -------------------------------------------------------------
 -- 2. 예전 버전 DB 업데이트 (이미 최신이면 아무것도 하지 않음)
 --    MySQL은 "칸이 없을 때만 추가"를 바로 쓸 수 없어서, 칸이 있는지 확인한 뒤 실행한다.
@@ -133,6 +143,12 @@ INSERT IGNORE INTO products (name, price, stock) VALUES
     ('카페라떼',   3500, 20),
     ('샌드위치',   5000, 10);
 
+-- 테스트 카드 2장: 성공 카드(잔액 있음) / 실패 카드(잔액 0)
+-- uid는 실제 카드 UID로 바꿔서 쓴다. (카드를 태그하면 키오스크 로그에 [ESP32] card:UID 로 찍힘)
+INSERT IGNORE INTO cards (uid, name, balance) VALUES
+    ('11223344', '성공 카드', 100000),
+    ('55667788', '실패 카드', 0);
+
 -- -------------------------------------------------------------
 -- 4. 서버 접속 계정 (비밀번호는 바꿔서 쓰고 qt/server/server.ini 에도 같게 입력)
 -- -------------------------------------------------------------
@@ -144,3 +160,5 @@ FLUSH PRIVILEGES;
 --   UPDATE users SET password = 'jun1234' WHERE login_id = 'jun';
 -- 회원 잔액 충전 예:
 --   UPDATE users SET balance = balance + 10000 WHERE login_id = 'jun';
+-- 테스트 카드 UID를 실제 카드로 바꾸는 예:
+--   UPDATE cards SET uid = 'A1B2C3D4' WHERE name = '성공 카드';

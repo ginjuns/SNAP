@@ -32,15 +32,17 @@ private slots:
     void refresh();
     void payCard();
     void payFace();
+    void onCard(const QString &uid) { m_cardUid = uid; }
 
 private:
     int total() const;
     bool checkSoldOut();
-    bool pay(int userId, const QString &method, QVariantMap *out);
+    bool pay(int userId, const QString &method, QVariantMap *out, const QString &cardUid = QString());
 
     Ui::Cart *ui;
     QVariantMap m_user;
     QList<Item> *m_items;
+    QString m_cardUid;   // 마지막으로 태그된 카드 UID
 };
 
 #endif

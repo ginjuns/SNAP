@@ -119,7 +119,8 @@ QJsonObject Server::handle(const QJsonObject &req)
         ok = m_db->delProduct(req.value("productId").toInt(), &err);
     } else if (cmd == "PAY") {
         ok = m_db->pay(req.value("userId").toInt(), req.value("method").toString(),
-                       req.value("items").toArray().toVariantList(), &data, &err);
+                       req.value("cardUid").toString(), req.value("items").toArray().toVariantList(),
+                       &data, &err);
     } else if (cmd == "SALES") {
         ok = m_db->sales(req.value("unit").toString(), req.value("date").toString(), &data, &err);
     } else {
@@ -285,7 +286,7 @@ void Esp::onClose()
     sock->deleteLater();
 }
 
-// 단어 명령 한 줄: "person:1", "card:ok", "stand 1:1" (대소문자 무시)
+// 단어 명령 한 줄: "person:1", "card:A1B2C3D4", "stand 1:1" (대소문자 무시)
 void Esp::handle(const QString &line)
 {
     QString cmd = line.section(':', 0, 0).trimmed().toLower();
@@ -294,8 +295,8 @@ void Esp::handle(const QString &line)
     if (cmd == "person") {
         m_present = val == "1";
         emit presence(m_present);
-    } else if (cmd == "card" && val == "ok") {
-        emit card();
+    } else if (cmd == "card" && !val.isEmpty()) {
+        emit card(val.remove(' ').toUpper());   // UID: 공백 없는 대문자 16진수
     } else if (n >= 1 && n <= SHELF_COUNT) {
         m_shelf[n - 1] = val == "1" ? 1 : 0;
         emit shelfChanged(m_shelf);
@@ -318,4 +319,22 @@ void Esp::send(const QString &cmd)
 void Esp::buzzer()
 {
     send("BUZZER");
+}
+
+// 카드 결제 선택 -> ESP32가 카드 리더기를 켠다
+void Esp::cardSelect()
+{
+    send("CARD_SELECT");
+}
+
+// 카드 잔액 부족 등으로 결제 실패 (리더기는 켜진 채로 다른 카드 대기)
+void Esp::cardFail()
+{
+    send("CARD_FAIL");
+}
+
+// 카드 결제 취소 -> ESP32가 카드 리더기를 끈다
+void Esp::cardCancel()
+{
+    send("CARD_CANCEL");
 }

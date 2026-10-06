@@ -24,8 +24,10 @@ Cart::Cart(const QVariantMap &user, QList<Item> *items, QWidget *parent)
     connect(ui->btnFace, SIGNAL(clicked()), SLOT(payFace()));
     // 아이디/비밀번호로 로그인한 손님은 카드 결제만 가능
     ui->btnFace->setVisible(!m_user.value("pwLogin").toBool());
-    if (Esp::get())
+    if (Esp::get()) {
         connect(Esp::get(), SIGNAL(shelfChanged(QVariantList)), SLOT(refresh()));
+        connect(Esp::get(), SIGNAL(card(QString)), SLOT(onCard(QString)));
+    }
 
     refresh();
 }
@@ -126,7 +128,7 @@ bool Cart::checkSoldOut()
     return false;
 }
 
-bool Cart::pay(int userId, const QString &method, QVariantMap *out)
+bool Cart::pay(int userId, const QString &method, QVariantMap *out, const QString &cardUid)
 {
     if (m_items->isEmpty()) {
         Msg::info(this, "결제", "장바구니가 비어 있습니다.");
@@ -145,8 +147,10 @@ bool Cart::pay(int userId, const QString &method, QVariantMap *out)
 
     QVariant data;
     QString err;
-    QVariantMap args{{"userId", userId}, {"method", method}, {"items", list}};
+    QVariantMap args{{"userId", userId}, {"method", method}, {"cardUid", cardUid}, {"items", list}};
     if (!Net::call("PAY", args, &data, &err)) {
+        if (method == "card" && Esp::get())
+            Esp::get()->cardFail();
         Msg::warn(this, "결제 실패", err);
         return false;
     }
@@ -165,16 +169,23 @@ void Cart::payCard()
         Msg::warn(this, "카드 결제", "카드 리더기(ESP32)가 연결되어 있지 않습니다.\n얼굴인식 결제를 이용해 주세요.");
         return;
     }
-    if (!Msg::wait(this, "카드 결제",
-                   QString("결제 금액: %1\n\n카드를 리더기에 대 주세요.").arg(won(total())),
-                   esp, SIGNAL(card())))
-        return;
-
+    esp->cardSelect();
     QVariantMap r;
-    if (!pay(m_user.value("id").toInt(), "card", &r))
-        return;
+    // 실패하면(잔액 부족 등) 리더기는 켜진 채로 다른 카드를 기다린다. 취소하면 리더기를 끈다.
+    for (;;) {
+        if (!Msg::wait(this, "카드 결제",
+                       QString("결제 금액: %1\n\n카드를 리더기에 대 주세요.").arg(won(total())),
+                       esp, SIGNAL(card(QString))) || !checkSoldOut()) {
+            esp->cardCancel();
+            return;
+        }
+        if (pay(m_user.value("id").toInt(), "card", &r, m_cardUid))
+            break;
+    }
     Msg::info(this, "결제 완료",
-              QString("%1 카드 결제가 완료되었습니다.\n처음 화면으로 돌아갑니다.").arg(won(r.value("total").toInt())));
+              QString("%1 카드 결제가 완료되었습니다.\n카드 잔액: %2\n\n처음 화면으로 돌아갑니다.")
+                  .arg(won(r.value("total").toInt()))
+                  .arg(won(r.value("balance").toInt())));
     accept();
 }
 

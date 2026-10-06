@@ -60,10 +60,13 @@ public:
     static bool shelfEmpty(int shelf);
 
     void buzzer();
+    void cardSelect();
+    void cardFail();
+    void cardCancel();
 
 signals:
     void presence(bool on);
-    void card();
+    void card(const QString &uid);
     void shelfChanged(const QVariantList &shelf);
 
 private slots:

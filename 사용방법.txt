@@ -144,7 +144,7 @@ Qt Creator 에서 실행(Ctrl+R) 하거나 터미널에서 실행합니다.
 - 아래 장바구니 바에 총 금액이 보이고, [장바구니] 를 누르면
   수량 변경 / [비우기] / [계속 쇼핑] 을 할 수 있습니다.
 - 결제
-   [카드 결제]       카드를 단말기에 태그한 뒤 [예]
+   [카드 결제]       카드를 리더기에 태그하면 카드 잔액에서 차감 (잔액 부족이면 다른 카드 태그)
    [얼굴인식 결제]   얼굴을 한 번 더 확인하고 충전 잔액에서 차감
 - 결제하면 재고가 줄고, 처음 화면으로 돌아갑니다.
 - [처음으로] 를 누르면 로그아웃됩니다.
@@ -189,7 +189,7 @@ ESP32 는 키오스크 PC 의 8000번 포트로 TCP 접속해서 연결을 계�
 
 ESP32 -> 키오스크 (응답 없음)
   사람 감지 (초음파)     person:1             떠나면 person:0
-  카드 접촉 (NFC)        card:ok
+  카드 접촉 (RFID)       card:A1B2C3D4        card:카드UID (16진수, 공백은 무시)
   선반 물건 유무 (ToF)   stand 1:1            stand 진열대번호(1~6):1=있음 0=없음
                          바뀐 진열대만 한 줄씩 보내면 됩니다. 소식이 없는 진열대는 있음으로 봅니다.
                          (관리자 화면에서 상품마다 진열대 번호를 지정)
@@ -198,11 +198,27 @@ ESP32 -> 키오스크 (응답 없음)
 
 키오스크 -> ESP32
   결제 성공 효과음       BUZZER
+  카드로 결제 선택       CARD_SELECT          카드 리더기 켜기
+  카드 결제 실패         CARD_FAIL            카드 잔액 부족 등. 리더기는 켜 둔 채 다른 카드 대기
+  카드 결제 취소         CARD_CANCEL          카드 리더기 끄기
+
+카드 결제 흐름
+  [카드 결제] -> CARD_SELECT -> ESP32 가 card:UID 전송 -> cards 테이블에서 잔액 차감
+    성공: BUZZER
+    실패: CARD_FAIL (등록 안 된 카드 / 잔액 부족) -> 다른 카드를 대면 다시 결제
+    [취소] 또는 사람이 떠남: CARD_CANCEL
+
+테스트 카드 (cards 테이블, db/kiosk.sql 에서 추가)
+  성공 카드   uid 11223344   잔액 100,000원
+  실패 카드   uid 55667788   잔액 0원
+  실제 카드를 태그하면 로그에 [ESP32] card:UID 가 찍히니 그 값으로 바꿉니다.
+    sudo mysql kiosk -e "UPDATE cards SET uid='A1B2C3D4' WHERE name='성공 카드';"
 
 연결 시험 (키오스크 PC 에서, ESP32 대신)
   nc 127.0.0.1 8000
   person:1                             <- 입력 후 Enter, 키오스크 로그에 [ESP32] 로 표시
-  이 상태에서 결제하면 BUZZER 가 화면에 찍힙니다.
+  [카드 결제] 를 누르면 CARD_SELECT 가 찍히고,
+  card:11223344 입력 -> 결제 성공(BUZZER), card:55667788 입력 -> 결제 실패(CARD_FAIL)
 
 
 --------------------------------------------------------------
@@ -217,6 +233,7 @@ ESP32 -> 키오스크 (응답 없음)
    SELECT id, name, price, stock FROM products;              -- 상품
    SELECT * FROM sales ORDER BY sold_at DESC;                -- 매출
    SELECT id, user_id, image FROM face_images;               -- 얼굴 사진
+   SELECT * FROM cards;                                      -- 카드 잔액
 
 얼굴 사진 보기: image 칸 오른쪽 클릭 -> Open Value in Editor -> Image 탭
 

@@ -20,7 +20,8 @@ public:
     bool addProduct(const QString &name, int price, int stock, int shelf, const QByteArray &img, QString *err);
     bool editProduct(int id, const QVariantMap &f, QString *err);
     bool delProduct(int id, QString *err);
-    bool pay(int userId, const QString &method, const QVariantList &items, QVariant *out, QString *err);
+    bool pay(int userId, const QString &method, const QString &cardUid, const QVariantList &items,
+             QVariant *out, QString *err);
     bool sales(const QString &unit, const QString &date, QVariant *out, QString *err);
 };
 
