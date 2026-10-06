@@ -10,7 +10,8 @@ class AI
 {
 public:
     static void setup(const QSettings &ini);
-    static bool ask(const QString &system, const QString &prompt, QString *answer, QString *err);
+    static bool ask(const QString &system, const QString &prompt, const QJsonObject &schema,
+                    QString *answer, QString *err);
 };
 
 #endif

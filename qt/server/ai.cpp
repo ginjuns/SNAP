@@ -5,6 +5,7 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QSettings>
+#include <QSslSocket>
 #include <QTimer>
 
 static const int TIMEOUT = 60000;
@@ -20,6 +21,11 @@ bool AI::ask(const QString &system, const QString &prompt, const QJsonObject &sc
 {
     if (apiKey.isEmpty()) {
         *err = "server.ini 의 [ai] api_key 가 비어 있습니다.";
+        return false;
+    }
+    if (!QSslSocket::supportsSsl()) {
+        *err = "HTTPS를 사용할 수 없습니다. OpenSSL 라이브러리를 설치하세요.\n"
+               "Ubuntu: sudo apt install libssl1.0.0 libssl1.1";
         return false;
     }
     QJsonObject config;

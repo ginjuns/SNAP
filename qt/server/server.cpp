@@ -184,8 +184,9 @@ static bool aiReport(DB *db, const QString &period, QVariant *out, QString *err)
 
     QString system = "당신은 무인 키오스크 매장의 매출 분석가입니다. "
                      "주어진 JSON 데이터의 숫자만 사용하고, 데이터에 없는 내용은 추측하지 마세요. "
-                     "한국어 마크다운으로 '## 요약'(3줄), '## 잘한 점', '## 개선 제안'(2개), "
-                     "'## 재고 알림' 순서로 짧게 작성하세요.";
+                     "한국어로 '요약'(3줄), '잘한 점', '개선 제안'(2개), '재고 알림' 순서로 짧게 작성하세요. "
+                     "제목은 <h3>, 문단은 <p>, 목록은 <ul><li>, 강조는 <b> 태그만 쓴 HTML 조각으로만 답하고 "
+                     "```나 <html> 태그는 쓰지 마세요.";
     QString answer;
     if (!AI::ask(system, name + " 매출 리포트를 작성해 주세요.\n\n" + toJson(data), QJsonObject(), &answer, err))
         return false;

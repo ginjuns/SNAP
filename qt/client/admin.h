@@ -7,6 +7,7 @@
 namespace Ui {
 class Admin;
 }
+class QLabel;
 
 class Admin : public QWidget
 {
@@ -47,7 +48,7 @@ private:
     bool monthly() const;
 
     void loadTargets();
-    void addBubble(const QString &text, bool mine);
+    QLabel *addBubble(const QString &text, bool mine);
     void setFollowUps(const QStringList &list);
 
     Ui::Admin *ui;

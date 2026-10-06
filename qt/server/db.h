@@ -1,8 +1,10 @@
 #ifndef DB_H
 #define DB_H
 
+#include <QDateTime>
 #include <QString>
 #include <QVariant>
+#include <QVector>
 
 class QSettings;
 

@@ -532,7 +532,7 @@ void Admin::makeReport()
         Msg::warn(this, "AI 리포트", err);
         return;
     }
-    ui->textReport->setMarkdown(data.toString());   // Qt 5.14 미만이면 setPlainText
+    ui->textReport->setHtml(data.toString());   // Qt 5.9에는 setMarkdown이 없어서 HTML로 받는다
     ui->lblReportInfo->setText(QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm 생성"));
 }
 
