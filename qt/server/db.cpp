@@ -30,7 +30,6 @@ static bool exists(const QString &name, int except, bool *found, QString *err)
     return true;
 }
 
-// 진열대 번호: 0 = 지정 안 함(NULL), 1~SHELF_COUNT
 static bool shelfValue(int shelf, QVariant *v, QString *err)
 {
     if (shelf < 0 || shelf > SHELF_COUNT) {
@@ -338,7 +337,6 @@ bool DB::delProduct(int id, QString *err)
     return true;
 }
 
-// 잔액 차감 (트랜잭션 안에서). table: users(id) / cards(uid)
 static bool charge(const QString &table, const QString &key, const QVariant &id, int total,
                    QVariantMap *res, QString *err)
 {

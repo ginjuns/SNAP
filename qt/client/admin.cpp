@@ -494,7 +494,7 @@ static void clearLayout(QLayout *layout)
 {
     while (QLayoutItem *item = layout->takeAt(0)) {
         if (item->widget())
-            item->widget()->deleteLater();   // 누른 버튼 자신을 지울 수 있으므로 deleteLater
+            item->widget()->deleteLater();
         delete item;
     }
 }
@@ -520,7 +520,7 @@ void Admin::makeReport()
 
     ui->btnReport->setEnabled(false);
     ui->lblReportInfo->setText("AI가 분석 중입니다...");
-    qApp->processEvents();                    // 위 문구가 먼저 화면에 보이도록
+    qApp->processEvents();
 
     QVariant data;
     QString err;
@@ -532,7 +532,7 @@ void Admin::makeReport()
         Msg::warn(this, "AI 리포트", err);
         return;
     }
-    ui->textReport->setHtml(data.toString());   // Qt 5.9에는 setMarkdown이 없어서 HTML로 받는다
+    ui->textReport->setHtml(data.toString());
     ui->lblReportInfo->setText(QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm 생성"));
 }
 
@@ -600,7 +600,6 @@ QLabel *Admin::addBubble(const QString &text, bool mine)
     lbl->setStyleSheet(css(mine ? "background: #2a78d6; color: white; border-radius: 12px; padding: 10px; font-size: 17px;"
                                 : "background: #eeede8; color: #0b0b0b; border-radius: 12px; padding: 10px; font-size: 17px;"));
 
-    // 줄바꿈 QLabel은 레이아웃이 높이를 한 줄로 잡아 잘리므로, 글자 크기로 말풍선 크기를 직접 정한다.
     lbl->ensurePolished();
     int pad = px(10) * 2 + 4;
     int maxWidth = qMax(px(300), ui->scrollChat->viewport()->width() * 3 / 4);
@@ -608,7 +607,7 @@ QLabel *Admin::addBubble(const QString &text, bool mine)
     lbl->setFixedSize(r.width() + pad, r.height() + pad);
     ui->layoutChat->addWidget(lbl, 0, mine ? Qt::AlignRight : Qt::AlignLeft);
 
-    QTimer::singleShot(50, this, [this]() {   // 크기 계산이 끝난 뒤 맨 아래로 스크롤
+    QTimer::singleShot(50, this, [this]() {
         QScrollBar *bar = ui->scrollChat->verticalScrollBar();
         bar->setValue(bar->maximum());
     });
@@ -621,7 +620,7 @@ void Admin::setFollowUps(const QStringList &list)
     foreach (const QString &s, list) {
         QPushButton *btn = new QPushButton(s);
         btn->setMinimumHeight(px(56));
-        connect(btn, SIGNAL(clicked()), SLOT(ask()));   // target 속성이 없으면 0 -> 문구 그대로 질문
+        connect(btn, SIGNAL(clicked()), SLOT(ask()));
         ui->layoutFollow->addWidget(btn);
     }
 }

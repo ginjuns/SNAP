@@ -12,10 +12,9 @@
 #include <QThread>
 #include <QTimer>
 
-static const int DEADLINE = 70000;   // 재시도 포함 전체 제한 시간 (클라이언트는 90초까지 기다림)
-static const int ATTEMPT = 35000;    // 요청 1번의 제한 시간 (넘으면 다시 시도)
+static const int DEADLINE = 70000;
+static const int ATTEMPT = 35000;
 
-// AI 서비스 하나 (Groq 또는 Gemini의 모델 1개)
 struct Target
 {
     bool gemini;
@@ -24,7 +23,7 @@ struct Target
 
 static QString groqKey;
 static QString geminiKey;
-static QList<Target> targets;   // 앞에서부터 시도하고, 실패하면 다음으로 넘어간다
+static QList<Target> targets;
 
 void AI::setup(const QSettings &ini)
 {
@@ -58,7 +57,6 @@ static QJsonObject makeBody(const Target &t, const QString &system, const QStrin
         body["contents"] = QJsonArray{QJsonObject{{"role", "user"}, {"parts", QJsonArray{QJsonObject{{"text", prompt}}}}}};
         body["generationConfig"] = config;
     } else {
-        // Groq의 추론 모델은 system 대신 user 메시지에 지시문을 함께 넣는 것을 권장한다.
         body["model"] = t.model;
         body["messages"] = QJsonArray{QJsonObject{{"role", "user"}, {"content", system + "\n\n" + prompt}}};
         body["reasoning_effort"] = "low";
@@ -71,7 +69,6 @@ static QJsonObject makeBody(const Target &t, const QString &system, const QStrin
     return body;
 }
 
-// 요청 1번. 반환값: HTTP 상태 코드 (0 = 시간 초과). 실패했을 때만 err를 채운다.
 static int post(const Target &t, const QJsonObject &body, int timeout, QJsonObject *res, QString *err)
 {
     QNetworkRequest req;
@@ -108,7 +105,6 @@ static int post(const Target &t, const QJsonObject &body, int timeout, QJsonObje
     return status;
 }
 
-// 응답에서 답변 글만 꺼낸다.
 static bool readAnswer(const Target &t, const QJsonObject &res, QString *answer, QString *err)
 {
     answer->clear();
@@ -155,7 +151,6 @@ bool AI::ask(const QString &system, const QString &prompt, const QJsonObject &sc
         return false;
     }
 
-    // 모델마다 실패하면 1초 쉬고 한 번 더 시도하고, 그래도 안 되면 다음 모델로 넘어간다.
     QElapsedTimer clock;
     clock.start();
     QStringList errors;

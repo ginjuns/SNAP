@@ -22,7 +22,6 @@ Cart::Cart(const QVariantMap &user, QList<Item> *items, QWidget *parent)
     connect(ui->btnBack, SIGNAL(clicked()), SLOT(reject()));
     connect(ui->btnCard, SIGNAL(clicked()), SLOT(payCard()));
     connect(ui->btnFace, SIGNAL(clicked()), SLOT(payFace()));
-    // 아이디/비밀번호로 로그인한 손님은 카드 결제만 가능
     ui->btnFace->setVisible(!m_user.value("pwLogin").toBool());
     if (Esp::get()) {
         connect(Esp::get(), SIGNAL(shelfChanged(QVariantList)), SLOT(refresh()));
@@ -114,7 +113,6 @@ void Cart::clearAll()
     refresh();
 }
 
-// 담은 뒤 진열대가 빈 상품이 있으면 결제 막기
 bool Cart::checkSoldOut()
 {
     QStringList names;
@@ -171,7 +169,6 @@ void Cart::payCard()
     }
     esp->cardSelect();
     QVariantMap r;
-    // 실패하면(잔액 부족 등) 리더기는 켜진 채로 다른 카드를 기다린다. 취소하면 리더기를 끈다.
     for (;;) {
         if (!Msg::wait(this, "카드 결제",
                        QString("결제 금액: %1\n\n카드를 리더기에 대 주세요.").arg(won(total())),
