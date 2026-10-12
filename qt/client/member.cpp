@@ -13,6 +13,7 @@ Member::Member(QWidget *parent)
     : QWidget(parent), ui(new Ui::Member), m_down(0)
 {
     ui->setupUi(this);
+    setAttribute(Qt::WA_StyledBackground);   // 공통 스타일의 화면 배경색 적용
     scaleUi(this);
     touchScroll(ui->scroll);
     connect(ui->btnHome, SIGNAL(clicked()), SIGNAL(done()));
@@ -76,9 +77,9 @@ void Member::build()
 
         QFrame *card = new QFrame;
         card->setObjectName(soldOut ? "soldOut" : "product");
-        card->setStyleSheet(css("QFrame#product { border: 1px solid #c3c2b7; border-radius: 8px; background: white; }"
-                                "QFrame#product[down=\"true\"] { border: 2px solid #2a78d6; background: #e8f0fb; }"
-                                "QFrame#soldOut { border: 2px solid #d32f2f; border-radius: 8px; background: #fdecea; }"));
+        card->setStyleSheet(css("QFrame#product { border: 2px solid #a8dca8; border-radius: 12px; background: white; }"
+                                "QFrame#product[down=\"true\"] { border: 2px solid #1f7a43; background: #cdffcd; }"
+                                "QFrame#soldOut { border: 2px solid #d32f2f; border-radius: 12px; background: #fdecea; }"));
         QVBoxLayout *v = new QVBoxLayout(card);
         v->addWidget(img, 0, Qt::AlignCenter);
         v->addWidget(name, 0, Qt::AlignCenter);

@@ -16,8 +16,6 @@
 #include <QTcpSocket>
 
 static const int MAX_IMG = 5 * 1024 * 1024;
-static const int ADMIN_MAX_FAILS = 5;      // 관리자 코드를 이만큼 틀리면
-static const int ADMIN_LOCK_SECS = 5 * 60; // 이 시간 동안 그 IP의 관리자 가입을 막는다
 
 // 요청의 image(Base64)를 바이트로 복원, 5MB 가 넘으면 오류
 static bool readImage(const QJsonObject &req, QByteArray *img, QString *err)
@@ -56,7 +54,7 @@ void Server::onRead()
 
     QJsonObject req;
     while (unpack(buf, &req))
-        sock->write(pack(handle(req, sock->peerAddress().toString())));
+        sock->write(pack(handle(req)));
 
     if (buf.size() > MAX_SIZE) {
         QJsonObject res;
@@ -250,8 +248,8 @@ static bool aiReport(DB *db, const QString &unit, const QString &date, QVariant 
     // ---- 핵심 지표 표 ----
     QString html = QString("<h3>%1 매출 리포트</h3>").arg(name.toHtmlEscaped());
     html += QString("<p style='color:#888'>비교 기준: %1</p>").arg(prevName);
-    html += "<table width=100% cellspacing=0 cellpadding=6 border=1 style='border-color:#ddd'>"
-            "<tr style='background:#f0efea'><th align=left>항목</th><th align=right>이번</th>"
+    html += "<table width=100% cellspacing=0 cellpadding=6 border=1 style='border-color:#a8dca8'>"
+            "<tr style='background:#cdffcd'><th align=left>항목</th><th align=right>이번</th>"
             "<th align=right>" + prevName.section(' ', 0, 0) + "</th><th align=right>변화</th></tr>";
     struct Kpi { const char *label; int cur, old; bool money; };
     Kpi kpis[] = {
@@ -365,8 +363,8 @@ static bool aiReport(DB *db, const QString &unit, const QString &date, QVariant 
     if (productHtml.isEmpty()) {
         html += "<p style='color:#888'>이 기간에 판매된 상품이 없습니다.</p>";
     } else {
-        html += "<table width=100% cellspacing=0 cellpadding=6 border=1 style='border-color:#ddd'>"
-                "<tr style='background:#f0efea'><th align=left>상품</th><th align=right>수량</th>"
+        html += "<table width=100% cellspacing=0 cellpadding=6 border=1 style='border-color:#a8dca8'>"
+                "<tr style='background:#cdffcd'><th align=left>상품</th><th align=right>수량</th>"
                 "<th align=right>매출</th><th align=right>이전</th><th align=right>변화</th></tr>"
                 + productHtml + "</table>";
     }
@@ -439,15 +437,8 @@ static bool aiAsk(DB *db, const QString &question, int productId, int userId, QV
 
 // 앱이 보낸 관리자 코드를 server.ini 의 admin/signup_code 와 비교한다.
 // 코드가 설정되지 않았으면 관리자 가입은 항상 거부.
-bool Server::checkAdminCode(const QString &code, const QString &peer, QString *err)
+bool Server::checkAdminCode(const QString &code, QString *err)
 {
-    QDateTime now = QDateTime::currentDateTime();
-    AdminTry &t = m_adminTries[peer];
-    if (t.lockedUntil.isValid() && now < t.lockedUntil) {
-        *err = QString("관리자 코드를 여러 번 틀렸습니다. %1분 후에 다시 시도하세요.")
-                   .arg((now.secsTo(t.lockedUntil) + 59) / 60);
-        return false;
-    }
     if (m_adminCode.isEmpty()) {
         *err = "이 키오스크는 관리자 회원가입을 받지 않습니다.";
         return false;
@@ -458,21 +449,15 @@ bool Server::checkAdminCode(const QString &code, const QString &peer, QString *e
     int diff = a.size() ^ b.size();
     for (int i = 0; i < a.size(); ++i)
         diff |= a.at(i) ^ b.at(i % b.size());
-    if (diff == 0) {
-        m_adminTries.remove(peer);
+    if (diff == 0)
         return true;
-    }
 
-    if (++t.fails >= ADMIN_MAX_FAILS) {
-        t.fails = 0;
-        t.lockedUntil = now.addSecs(ADMIN_LOCK_SECS);
-    }
     *err = "관리자 코드가 올바르지 않습니다.";
     return false;
 }
 
 // 요청 하나 처리: cmd 에 따라 DB/AI 함수 호출 후 {ok, data | error} 응답 생성
-QJsonObject Server::handle(const QJsonObject &req, const QString &peer)
+QJsonObject Server::handle(const QJsonObject &req)
 {
     QString cmd = req.value("cmd").toString();
     QVariant data;
@@ -499,7 +484,7 @@ QJsonObject Server::handle(const QJsonObject &req, const QString &peer)
         QString adminCode = req.value("adminCode").toString();
         QString role = "member";
         if (ok && !adminCode.isEmpty()) {
-            ok = checkAdminCode(adminCode, peer, &err);
+            ok = checkAdminCode(adminCode, &err);
             role = "admin";
         }
         ok = ok && m_db->join(req.value("name").toString(), req.value("loginId").toString(),

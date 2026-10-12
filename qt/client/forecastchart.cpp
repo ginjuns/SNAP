@@ -16,7 +16,7 @@ void ForecastChart::setData(const QVariantList &past, const QVariantList &future
 // 지난 판매량은 막대, 예측은 선과 예측 범위 띠로 그림
 void ForecastChart::paintEvent(QPaintEvent *)
 {
-    const QColor INK("#0b0b0b"), GRAY("#898781"), GRID("#e1e0d9"), BAR("#2a78d6"), PRED("#eb6834");
+    const QColor INK("#0b0b0b"), GRAY("#898781"), GRID("#e1e0d9"), BAR(Theme::GREEN), PRED("#eb6834");
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing);
     p.fillRect(rect(), QColor("#fcfcfb"));

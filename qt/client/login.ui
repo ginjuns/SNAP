@@ -60,9 +60,6 @@
      </item>
      <item>
       <widget class="QPushButton" name="btnOk">
-       <property name="styleSheet">
-        <string notr="true">background: #2a78d6; color: white; font-weight: bold;</string>
-       </property>
        <property name="text">
         <string>로그인</string>
        </property>

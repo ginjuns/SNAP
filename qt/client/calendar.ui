@@ -148,9 +148,6 @@
          <height>56</height>
         </size>
        </property>
-       <property name="styleSheet">
-        <string notr="true">background: #2a78d6; color: white; font-weight: bold;</string>
-       </property>
        <property name="text">
         <string>확인</string>
        </property>

@@ -62,7 +62,7 @@
    <item>
     <widget class="QFrame" name="bar">
      <property name="styleSheet">
-      <string notr="true">QFrame#bar { border-top: 1px solid #c3c2b7; }</string>
+      <string notr="true">QFrame#bar { border-top: 2px solid #a8dca8; background: #cdffcd; }</string>
      </property>
      <layout class="QHBoxLayout" name="horizontalLayout_2" stretch="1,0,0,0,0,0">
       <item>
@@ -127,7 +127,7 @@
          </size>
         </property>
         <property name="styleSheet">
-         <string notr="true">font-size: 20px; font-weight: bold; background: #2a78d6; color: white;</string>
+         <string notr="true">font-size: 20px;</string>
         </property>
         <property name="text">
          <string>장바구니</string>

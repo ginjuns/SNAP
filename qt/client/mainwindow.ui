@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>무인 키오스크</string>
+   <string>SNAP</string>
   </property>
   <widget class="QWidget" name="centralwidget">
    <layout class="QVBoxLayout" name="verticalLayout">
@@ -30,6 +30,9 @@
     <item>
      <widget class="QStackedWidget" name="stack">
       <widget class="QWidget" name="pageLogin">
+       <property name="styleSheet">
+        <string notr="true">QWidget#pageLogin { background: #cdffcd; }</string>
+       </property>
        <layout class="QVBoxLayout" name="verticalLayout_2">
         <item>
          <spacer name="verticalSpacer">
@@ -47,10 +50,10 @@
         <item>
          <widget class="QLabel" name="lblTitle">
           <property name="styleSheet">
-           <string notr="true">font-size: 40px; font-weight: bold;</string>
+           <string notr="true">font-size: 120px; font-weight: bold; color: #14532d;</string>
           </property>
           <property name="text">
-           <string>무인 키오스크</string>
+           <string>SNAP</string>
           </property>
           <property name="alignment">
            <set>Qt::AlignCenter</set>
@@ -58,7 +61,39 @@
          </widget>
         </item>
         <item>
+         <widget class="QLabel" name="lblSub">
+          <property name="styleSheet">
+           <string notr="true">font-size: 22px; font-weight: bold; color: #1f7a43;</string>
+          </property>
+          <property name="text">
+           <string>Smart No-touch Automated Payment</string>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignCenter</set>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <spacer name="verticalSpacer_4">
+          <property name="orientation">
+           <enum>Qt::Vertical</enum>
+          </property>
+          <property name="sizeType">
+           <enum>QSizePolicy::Fixed</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>0</width>
+            <height>60</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+        <item>
          <widget class="QLabel" name="lblGuide">
+          <property name="styleSheet">
+           <string notr="true">font-size: 20px; color: #17301f;</string>
+          </property>
           <property name="text">
            <string>아래 버튼을 누르고 카메라를 바라봐 주세요.</string>
           </property>
@@ -87,12 +122,12 @@
          <widget class="QPushButton" name="btnLogin">
           <property name="minimumSize">
            <size>
-            <width>360</width>
-            <height>100</height>
+            <width>420</width>
+            <height>110</height>
            </size>
           </property>
           <property name="styleSheet">
-           <string notr="true">font-size: 24px;</string>
+           <string notr="true">font-size: 28px; min-height: 110px; min-width: 420px; border-radius: 30px;</string>
           </property>
           <property name="text">
            <string>얼굴인식으로 시작하기</string>
@@ -122,10 +157,10 @@
         <item>
          <widget class="QLabel" name="lblSleep">
           <property name="styleSheet">
-           <string notr="true">color: #555555; font-size: 20px;</string>
+           <string notr="true">color: #3d6b4c; font-size: 20px;</string>
           </property>
           <property name="text">
-           <string>가까이 오시면 화면이 켜집니다</string>
+           <string>SNAP · 가까이 오시면 화면이 켜집니다</string>
           </property>
           <property name="alignment">
            <set>Qt::AlignCenter</set>

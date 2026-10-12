@@ -12,7 +12,7 @@ const QColor INK2("#52514e");
 const QColor GRAY("#898781");
 const QColor GRID("#e1e0d9");
 const QColor LINE("#c3c2b7");
-const QColor CARD("#2a78d6");
+const QColor CARD(Theme::GREEN);
 const QColor FACE("#eb6834");
 
 const double GAP = 2;

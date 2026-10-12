@@ -29,7 +29,7 @@ static QIcon makeIcon(Icon type)
     pix.fill(Qt::transparent);
     QPainter p(&pix);
     p.setRenderHint(QPainter::Antialiasing);
-    QColor color = (type == Trash) ? QColor("#d32f2f") : (type == Reset) ? QColor("#52514e") : QColor("#2a78d6");
+    QColor color = (type == Trash) ? QColor("#d32f2f") : (type == Reset) ? QColor("#52514e") : QColor(Theme::GREEN);
     p.setPen(QPen(color, 5, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
 
     switch (type) {
@@ -80,6 +80,7 @@ Admin::Admin(QWidget *parent)
     : QWidget(parent), ui(new Ui::Admin), m_imgChanged(false)
 {
     ui->setupUi(this);
+    setAttribute(Qt::WA_StyledBackground);   // 공통 스타일의 화면 배경색 적용
     scaleUi(this);
     connect(ui->btnLogout, SIGNAL(clicked()), SIGNAL(done()));
 
@@ -156,7 +157,7 @@ Admin::~Admin()
 // 관리자가 로그인할 때마다 이전 관리자가 보던 화면을 모두 처음 상태로 되돌린다.
 void Admin::start(const QVariantMap &user)
 {
-    ui->lblWelcome->setText(QString("관리자 모드 - %1").arg(user.value("name").toString()));
+    ui->lblWelcome->setText(QString("SNAP 관리자 - %1").arg(user.value("name").toString()));
     ui->tabWidget->setCurrentIndex(0);
     ui->tabAiSub->setCurrentIndex(0);
 
@@ -708,8 +709,8 @@ QLabel *Admin::addBubble(const QString &text, bool mine)
 {
     QLabel *lbl = new QLabel(text);
     lbl->setWordWrap(true);
-    lbl->setStyleSheet(css(mine ? "background: #2a78d6; color: white; border-radius: 12px; padding: 10px; font-size: 17px;"
-                                : "background: #eeede8; color: #0b0b0b; border-radius: 12px; padding: 10px; font-size: 17px;"));
+    lbl->setStyleSheet(css(mine ? "background: #1f7a43; color: white; border-radius: 12px; padding: 10px; font-size: 17px;"
+                                : "background: #cdffcd; color: #17301f; border-radius: 12px; padding: 10px; font-size: 17px;"));
 
     lbl->ensurePolished();
     int pad = px(10) * 2 + 4;
