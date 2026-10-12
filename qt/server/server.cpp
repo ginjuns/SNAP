@@ -18,6 +18,7 @@ static const int MAX_IMG = 5 * 1024 * 1024;
 static const int ADMIN_MAX_FAILS = 5;      // 관리자 코드를 이만큼 틀리면
 static const int ADMIN_LOCK_SECS = 5 * 60; // 이 시간 동안 그 IP의 관리자 가입을 막는다
 
+// 요청의 image(Base64)를 바이트로 복원, 5MB 가 넘으면 오류
 static bool readImage(const QJsonObject &req, QByteArray *img, QString *err)
 {
     *img = QByteArray::fromBase64(req.value("image").toString().toLatin1());
@@ -28,12 +29,14 @@ static bool readImage(const QJsonObject &req, QByteArray *img, QString *err)
     return true;
 }
 
+// 앱/화면 요청을 받는 서버 생성
 Server::Server(DB *db, QObject *parent)
     : QTcpServer(parent), m_db(db)
 {
     connect(this, SIGNAL(newConnection()), SLOT(onConnect()));
 }
 
+// 새 접속을 받아 수신 버퍼를 만들고 읽기/끊김 신호 연결
 void Server::onConnect()
 {
     while (QTcpSocket *sock = nextPendingConnection()) {
@@ -43,6 +46,7 @@ void Server::onConnect()
     }
 }
 
+// 받은 데이터에서 한 줄씩 요청을 꺼내 처리하고 응답, 너무 크면 연결 끊기
 void Server::onRead()
 {
     QTcpSocket *sock = qobject_cast<QTcpSocket *>(sender());
@@ -63,6 +67,7 @@ void Server::onRead()
     }
 }
 
+// 접속이 끊기면 버퍼 정리
 void Server::onClose()
 {
     QTcpSocket *sock = qobject_cast<QTcpSocket *>(sender());
@@ -72,11 +77,13 @@ void Server::onClose()
 
 static const int HISTORY = 28;
 
+// AI 에 넘길 데이터를 JSON 문자열로 변환
 static QString toJson(const QVariant &v)
 {
     return QString::fromUtf8(QJsonDocument::fromVariant(v).toJson(QJsonDocument::Compact));
 }
 
+// 상품(0 이면 전체)의 지난 28일 일별 판매량으로 앞으로 days 일 판매 예측
 static bool predictProduct(DB *db, int productId, int days, QVector<int> *past, Forecast *f, QString *err)
 {
     QDate from = QDate::currentDate().addDays(-HISTORY);
@@ -86,6 +93,7 @@ static bool predictProduct(DB *db, int productId, int days, QVector<int> *past, 
     return true;
 }
 
+// 상품마다 재고, 하루 평균 판매, 예측 판매량, 품절 예상일, 발주 추천 수량 계산
 static bool stockRows(DB *db, int productId, int days, QVariantList *rows, QString *err)
 {
     QVariant list;
@@ -118,6 +126,7 @@ static bool stockRows(DB *db, int productId, int days, QVariantList *rows, QStri
     return true;
 }
 
+// AI_FORECAST: 그래프용 지난 14일/예측 데이터와 상품별 재고 예측 표
 static bool aiForecast(DB *db, int productId, int days, QVariant *out, QString *err)
 {
     if (days <= 0 || days > 31)
@@ -155,6 +164,7 @@ static bool aiForecast(DB *db, int productId, int days, QVariant *out, QString *
     return true;
 }
 
+// AI_REPORT: 이번 기간과 이전 같은 기간 매출, 재고 예측을 AI 에 보내 리포트(HTML) 작성
 static bool aiReport(DB *db, const QString &period, QVariant *out, QString *err)
 {
     QDate today = QDate::currentDate();
@@ -196,6 +206,7 @@ static bool aiReport(DB *db, const QString &period, QVariant *out, QString *err)
     return true;
 }
 
+// AI_ASK: 질문에 필요한 매출/상품/회원 데이터를 모아 AI 에 묻고 답과 추천 질문 받기
 static bool aiAsk(DB *db, const QString &question, int productId, int userId, QVariant *out, QString *err)
 {
     QDate today = QDate::currentDate();
@@ -284,6 +295,7 @@ bool Server::checkAdminCode(const QString &code, const QString &peer, QString *e
     return false;
 }
 
+// 요청 하나 처리: cmd 에 따라 DB/AI 함수 호출 후 {ok, data | error} 응답 생성
 QJsonObject Server::handle(const QJsonObject &req, const QString &peer)
 {
     QString cmd = req.value("cmd").toString();
@@ -375,6 +387,7 @@ QJsonObject Server::handle(const QJsonObject &req, const QString &peer)
     return res;
 }
 
+// server.ini 찾기 (현재 폴더 → 실행 파일 폴더 → server 소스 폴더 순서)
 static QString findIni(QStringList *tried)
 {
     QStringList dirs;
@@ -389,12 +402,14 @@ static QString findIni(QStringList *tried)
     return QString();
 }
 
+// 프로그램 종료 시 서버 스레드 정리
 ServerThread::~ServerThread()
 {
     quit();
     wait();
 }
 
+// 서버 스레드를 시작하고 준비(성공/실패)될 때까지 기다림
 bool ServerThread::startWait(QString *err)
 {
     start();
@@ -403,6 +418,7 @@ bool ServerThread::startWait(QString *err)
     return m_ok;
 }
 
+// 서버 스레드 본체: server.ini 읽기, AI 설정, DB 연결, 9000번 포트 열기
 void ServerThread::run()
 {
     m_ok = false;
@@ -436,6 +452,7 @@ void ServerThread::run()
 
 static Esp *instance = 0;
 
+// ESP32 연결 서버 생성, 진열대는 모두 '물건 있음'으로 시작
 Esp::Esp(QObject *parent)
     : QTcpServer(parent), m_sock(0), m_present(false)
 {
@@ -451,11 +468,13 @@ Esp::~Esp()
         instance = 0;
 }
 
+// 프로그램에 하나뿐인 Esp 객체 (없으면 0)
 Esp *Esp::get()
 {
     return instance;
 }
 
+// 그 진열대가 비었는지 (0 이나 범위 밖이면 false)
 bool Esp::shelfEmpty(int shelf)
 {
     if (!instance || shelf < 1 || shelf > instance->m_shelf.size())
@@ -463,6 +482,7 @@ bool Esp::shelfEmpty(int shelf)
     return instance->m_shelf.at(shelf - 1).toInt() == 0;
 }
 
+// 8000번 포트 열기
 bool Esp::start(QString *err)
 {
     if (listen(QHostAddress::Any, ESP_PORT))
@@ -471,11 +491,13 @@ bool Esp::start(QString *err)
     return false;
 }
 
+// ESP32 가 지금 연결되어 있는지
 bool Esp::connected() const
 {
     return m_sock && m_sock->state() == QAbstractSocket::ConnectedState;
 }
 
+// ESP32 접속 (새로 접속하면 이전 연결은 끊음)
 void Esp::onConnect()
 {
     while (QTcpSocket *sock = nextPendingConnection()) {
@@ -489,6 +511,7 @@ void Esp::onConnect()
     }
 }
 
+// 받은 데이터를 줄 단위로 나눠 handle() 로 처리
 void Esp::onRead()
 {
     QTcpSocket *sock = qobject_cast<QTcpSocket *>(sender());
@@ -512,6 +535,7 @@ void Esp::onRead()
     }
 }
 
+// ESP32 연결이 끊김
 void Esp::onClose()
 {
     QTcpSocket *sock = qobject_cast<QTcpSocket *>(sender());
@@ -523,6 +547,7 @@ void Esp::onClose()
     sock->deleteLater();
 }
 
+// ESP32 명령 한 줄 처리: person(사람 감지), card(카드 UID), stand N(진열대 상태)
 void Esp::handle(const QString &line)
 {
     QString cmd = line.section(':', 0, 0).trimmed().toLower();
@@ -543,6 +568,7 @@ void Esp::handle(const QString &line)
     qDebug("[ESP32] %s", qPrintable(line));
 }
 
+// ESP32 에 명령 한 줄 보내기 (연결 안 됐으면 로그만)
 void Esp::send(const QString &cmd)
 {
     if (!connected()) {
@@ -552,21 +578,25 @@ void Esp::send(const QString &cmd)
     m_sock->write(cmd.toUtf8() + '\n');
 }
 
+// 결제 성공 효과음
 void Esp::buzzer()
 {
     send("BUZZER");
 }
 
+// 카드 리더기 켜기
 void Esp::cardSelect()
 {
     send("CARD_SELECT");
 }
 
+// 카드 결제 실패 알림 (리더기는 켜 둔 채 다른 카드 대기)
 void Esp::cardFail()
 {
     send("CARD_FAIL");
 }
 
+// 카드 리더기 끄기
 void Esp::cardCancel()
 {
     send("CARD_CANCEL");

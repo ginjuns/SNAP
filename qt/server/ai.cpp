@@ -25,6 +25,7 @@ static QString groqKey;
 static QString geminiKey;
 static QList<Target> targets;
 
+// server.ini 의 [ai] 를 읽어 시도할 모델 순서 결정
 void AI::setup(const QSettings &ini)
 {
     groqKey = ini.value("ai/groq_key").toString();
@@ -43,6 +44,7 @@ void AI::setup(const QSettings &ini)
     }
 }
 
+// 모델 종류에 맞는 요청 본문 만들기, schema 가 있으면 JSON 형식으로 답하게 함
 static QJsonObject makeBody(const Target &t, const QString &system, const QString &prompt, const QJsonObject &schema)
 {
     QJsonObject body;
@@ -69,6 +71,7 @@ static QJsonObject makeBody(const Target &t, const QString &system, const QStrin
     return body;
 }
 
+// AI API 에 요청을 보내고 HTTP 상태 코드를 돌려줌 (시간 초과면 0)
 static int post(const Target &t, const QJsonObject &body, int timeout, QJsonObject *res, QString *err)
 {
     QNetworkRequest req;
@@ -105,6 +108,7 @@ static int post(const Target &t, const QJsonObject &body, int timeout, QJsonObje
     return status;
 }
 
+// 응답에서 답 글자만 꺼냄 (빈 답/거절이면 오류)
 static bool readAnswer(const Target &t, const QJsonObject &res, QString *answer, QString *err)
 {
     answer->clear();
@@ -134,11 +138,13 @@ static bool readAnswer(const Target &t, const QJsonObject &res, QString *answer,
     return true;
 }
 
+// 다시 시도해 볼 만한 오류인지 (시간 초과, 서버 혼잡)
 static bool retry(int status)
 {
     return status == 0 || status == 500 || status == 502 || status == 503;
 }
 
+// AI 에 질문: 모델을 순서대로 시도하고(모델마다 최대 2번) 처음 성공한 답을 돌려줌
 bool AI::ask(const QString &system, const QString &prompt, const QJsonObject &schema,QString *answer, QString *err)
 {
     if (targets.isEmpty()) {

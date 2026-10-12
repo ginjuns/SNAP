@@ -1,3 +1,5 @@
+// 팝업 창과 메시지 창 공통 함수 (popup.cpp 참고)
+
 #ifndef POPUP_H
 #define POPUP_H
 

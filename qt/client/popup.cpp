@@ -4,11 +4,13 @@
 static bool blocked = false;
 static QList<QDialog *> opened;
 
+// 절전 중에는 새 팝업을 띄우지 않도록 막음
 void setBlocked(bool on)
 {
     blocked = on;
 }
 
+// 열려 있는 팝업을 모두 닫음 (절전 모드 들어갈 때)
 void closeAll()
 {
     QList<QDialog *> list = opened;
@@ -16,6 +18,7 @@ void closeAll()
         list.at(i)->reject();
 }
 
+// 팝업을 열린 목록에 넣고 실행 (닫을 때 목록에서 뺌)
 static int run(QDialog *dlg)
 {
     opened << dlg;
@@ -24,6 +27,7 @@ static int run(QDialog *dlg)
     return ret;
 }
 
+// 팝업을 반투명 배경 위 화면 가운데(full 이면 전체 화면)에 띄우고 결과를 돌려줌
 int popup(QDialog *dlg, bool full)
 {
     if (blocked)
@@ -65,6 +69,7 @@ int popup(QDialog *dlg, bool full)
     return ret;
 }
 
+// 메시지 창 공통 처리 (제목 강조, 취소 버튼 한글화, 신호가 오면 자동으로 닫힘)
 static int msg(QMessageBox::Icon icon, QWidget *parent, const QString &title, const QString &text,
                QMessageBox::StandardButtons buttons, QObject *src = 0, const char *signal = 0)
 {
@@ -80,21 +85,25 @@ static int msg(QMessageBox::Icon icon, QWidget *parent, const QString &title, co
 
 namespace Msg {
 
+// 안내 메시지
 void info(QWidget *parent, const QString &title, const QString &text)
 {
     msg(QMessageBox::Information, parent, title, text, QMessageBox::Ok);
 }
 
+// 경고 메시지
 void warn(QWidget *parent, const QString &title, const QString &text)
 {
     msg(QMessageBox::Warning, parent, title, text, QMessageBox::Ok);
 }
 
+// 예/아니오 확인, 예면 true
 bool ask(QWidget *parent, const QString &title, const QString &text)
 {
     return msg(QMessageBox::Question, parent, title, text, QMessageBox::Yes | QMessageBox::No) == QMessageBox::Yes;
 }
 
+// signal 이 올 때까지 기다리는 메시지 (예: 카드 태그 대기), 취소하면 false
 bool wait(QWidget *parent, const QString &title, const QString &text, QObject *src, const char *signal)
 {
     return msg(QMessageBox::Information, parent, title, text, QMessageBox::Cancel, src, signal) == QDialog::Accepted;

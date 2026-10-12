@@ -21,6 +21,7 @@ const char *EN[2][3] = {
     { "QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM" }
 };
 
+// 두 자모를 겹받침/이중모음으로 합침 (예: ㄱ+ㅅ → ㄳ), 안 되면 빈 문자
 QChar combine(const QChar &a, const QChar &b, const QStringList &table)
 {
     foreach (const QString &t, table)
@@ -29,6 +30,7 @@ QChar combine(const QChar &a, const QChar &b, const QStringList &table)
     return QChar();
 }
 
+// 겹받침/이중모음을 두 자모로 나눔
 bool split(const QChar &c, const QStringList &table, QChar *a, QChar *b)
 {
     foreach (const QString &t, table)
@@ -40,11 +42,13 @@ bool split(const QChar &c, const QStringList &table, QChar *a, QChar *b)
     return false;
 }
 
+// 초성/중성/종성 번호로 완성형 한글 글자 만들기
 QChar compose(int cho, int jung, int jong)
 {
     return QChar(0xAC00 + (cho * 21 + jung) * 28 + jong);
 }
 
+// 완성형 한글 글자를 초성/중성/종성 번호로 나눔 (한글이 아니면 false)
 bool decompose(const QChar &c, int *cho, int *jung, int *jong)
 {
     int code = c.unicode() - 0xAC00;
@@ -79,11 +83,13 @@ private:
 
 }
 
+// 입력칸을 터치하면 키보드가 열리도록 연결
 void Keyboard::attach(QLineEdit *edit, Mode mode, const QString &title)
 {
     edit->installEventFilter(new Opener(edit, mode, title));
 }
 
+// 입력칸용 키보드를 띄우고, [확인]이면 입력한 글자를 입력칸에 넣음 (숫자는 입력칸 옆, 문자는 화면 아래)
 bool Keyboard::open(QLineEdit *edit, Mode mode, const QString &title)
 {
     Keyboard kb(edit->text(), mode, title, edit->window());
@@ -112,6 +118,7 @@ bool Keyboard::open(QLineEdit *edit, Mode mode, const QString &title)
     return true;
 }
 
+// 키보드 창 구성: 모드(한글/영문/숫자)에 맞춰 키 버튼 만들기
 Keyboard::Keyboard(const QString &text, Mode mode, const QString &title, QWidget *parent)
     : QDialog(parent), ui(new Ui::Keyboard), m_mode(mode), m_text(text), m_comp(false),
       m_kor(mode != English), m_shift(false), m_max(mode == Number ? 9 : 30)
@@ -162,6 +169,7 @@ Keyboard::~Keyboard()
     delete ui;
 }
 
+// 한/영, Shift 상태에 맞춰 키 글자 바꾸기
 void Keyboard::relabel()
 {
     const char **rows = m_kor ? KO[m_shift ? 1 : 0] : EN[m_shift ? 1 : 0];
@@ -175,12 +183,14 @@ void Keyboard::relabel()
     ui->btnLang->setText(m_kor ? "한 → 영" : "영 → 한");
 }
 
+// 입력 중인 글자를 표시 칸에 반영
 void Keyboard::refresh()
 {
     ui->edit->setText(m_text);
     ui->edit->setCursorPosition(m_text.size());
 }
 
+// 글자 하나 추가 (최대 길이까지), comp 는 한글 조합 중인지
 void Keyboard::append(const QChar &c, bool comp)
 {
     if (m_text.size() >= m_max)
@@ -189,12 +199,14 @@ void Keyboard::append(const QChar &c, bool comp)
     m_comp = comp;
 }
 
+// 마지막 글자를 바꿈 (한글 조합 중)
 void Keyboard::replaceLast(const QChar &c)
 {
     m_text[m_text.size() - 1] = c;
     m_comp = true;
 }
 
+// 글자 키를 누름: 한글 자모면 조합, 아니면 그대로 추가
 void Keyboard::onKey()
 {
     QChar c = qobject_cast<QPushButton *>(sender())->text().at(0);
@@ -210,6 +222,7 @@ void Keyboard::onKey()
     refresh();
 }
 
+// 한글 자모 입력: 앞 글자와 조합 (받침 붙이기, 겹받침, 이중모음, 받침을 다음 글자로 넘기기)
 void Keyboard::jamo(const QChar &j)
 {
     QChar last = (m_comp && !m_text.isEmpty()) ? m_text.at(m_text.size() - 1) : QChar();
@@ -266,6 +279,7 @@ void Keyboard::jamo(const QChar &j)
     append(j, true);
 }
 
+// 지우기: 조합 중인 한글은 자모 단위로, 아니면 한 글자씩 지움
 void Keyboard::onBack()
 {
     if (m_text.isEmpty())
@@ -286,6 +300,7 @@ void Keyboard::onBack()
     refresh();
 }
 
+// 입력 내용 모두 지우기
 void Keyboard::onClear()
 {
     m_text.clear();
@@ -293,18 +308,21 @@ void Keyboard::onClear()
     refresh();
 }
 
+// 띄어쓰기
 void Keyboard::onSpace()
 {
     append(' ', false);
     refresh();
 }
 
+// Shift (쌍자음/대문자) 켜고 끄기
 void Keyboard::onShift()
 {
     m_shift = !m_shift;
     relabel();
 }
 
+// 한글 ↔ 영문 전환
 void Keyboard::onLang()
 {
     m_kor = !m_kor;

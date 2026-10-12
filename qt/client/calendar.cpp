@@ -2,6 +2,7 @@
 #include "ui_calendar.h"
 #include "util.h"
 
+// 달력 창 초기화: 연/월 이동 버튼 연결, 일별은 날짜를 누르면 바로 닫힘
 Calendar::Calendar(const QDate &date, bool month, QWidget *parent)
     : QDialog(parent), ui(new Ui::Calendar), m_month(month)
 {
@@ -27,6 +28,7 @@ Calendar::~Calendar()
     delete ui;
 }
 
+// 고른 날짜 (월별이면 그 달의 1일)
 QDate Calendar::date() const
 {
     if (m_month)
@@ -34,6 +36,7 @@ QDate Calendar::date() const
     return ui->cal->selectedDate();
 }
 
+// 위쪽 연/월 표시 갱신
 void Calendar::updateTitle()
 {
     ui->lblYear->setText(QString("%1년").arg(ui->cal->yearShown()));

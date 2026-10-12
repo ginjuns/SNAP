@@ -1,3 +1,5 @@
+// 회원 화면: 상품 목록과 장바구니 담기 (member.cpp 참고)
+
 #ifndef MEMBER_H
 #define MEMBER_H
 

@@ -5,11 +5,13 @@
 
 static QString host = "127.0.0.1";
 
+// 접속할 서버 IP 설정
 void Net::setHost(const QString &ip)
 {
     host = ip;
 }
 
+// 서버에 명령을 보내고 응답을 기다림. 성공하면 data 를 out 에, 실패하면 오류 문구를 err 에
 bool Net::call(const QString &cmd, const QVariantMap &args, QVariant *out, QString *err)
 {
     QTcpSocket sock;

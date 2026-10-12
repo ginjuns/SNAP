@@ -17,10 +17,38 @@ const int HITS = 5;
 const int MAX_TICKS = 400;
 
 /*
- * OpenCV 4.5.4의 FaceDetectorYN은 2023mar 모델을 지원하지 않는다.
- * (detect() 시 "Layer with requested id=-1 not found" 예외)
- * 2023mar 모델은 OpenCV 4.8 이상에서만 사용 가능.
+ * 인식 구역
+ *
+ * 뒤에 서 있는 사람이 인식되지 않도록 카메라 화면 가운데의
+ * 구역 안에 얼굴 중심이 있고, 충분히 가까이 있는(크게 보이는)
+ * 얼굴만 인식한다. 값은 화면 크기에 대한 비율.
+ *
+ * - ZONE_W, ZONE_H : 인식 구역의 가로/세로 (화면 가운데 기준)
+ * - MIN_FACE_W     : 얼굴 너비가 화면 너비의 이 비율보다 작으면
+ *                    멀리 있는 사람으로 보고 무시
+ *                    (뒤에 사람이 계속 인식되면 값을 키운다)
  */
+const double ZONE_W = 0.5;
+const double ZONE_H = 0.8;
+const double MIN_FACE_W = 0.15;
+
+enum FaceState
+{
+    FACE_NONE,      // 얼굴 없음
+    FACE_OUTSIDE,   // 구역 밖의 얼굴만 있음
+    FACE_TOO_FAR,   // 구역 안이지만 너무 멀리 있음
+    FACE_OK
+};
+
+// 카메라 화면 가운데의 인식 구역 사각형
+cv::Rect zoneRect(const cv::Size &size)
+{
+    int w = cvRound(size.width * ZONE_W);
+    int h = cvRound(size.height * ZONE_H);
+
+    return cv::Rect((size.width - w) / 2, (size.height - h) / 2, w, h);
+}
+
 const char *YUNET_MODEL =
     "/home/jun/Smart_Face_Kiosk/qt/client/models/face_detection_yunet_2022mar.onnx";
 
@@ -41,14 +69,10 @@ std::vector<RegisteredFace> registeredFaces;
 int lastId = 0;
 
 
-/*
- * YuNet + SFace 모델 로드
- */
+
+// YuNet + SFace 모델 로드
 bool loadModels(QString *err)
 {
-    /*
-     * YuNet
-     */
     if (detector.empty())
     {
         try
@@ -80,11 +104,6 @@ bool loadModels(QString *err)
             return false;
         }
     }
-
-
-    /*
-     * SFace
-     */
     if (recognizer.empty())
     {
         try
@@ -136,18 +155,16 @@ bool loadModels(QString *err)
 bool detectFace(
     const cv::Mat &img,
     cv::Mat *bestFace,
-    cv::Rect *bestBox)
+    cv::Rect *bestBox,
+    bool useZone = false,
+    FaceState *state = 0,
+    std::vector<cv::Rect> *ignored = 0)
 {
+    if (state)
+        *state = FACE_NONE;
+
     if (detector.empty() || img.empty())
         return false;
-
-
-    /*
-     * 현재 프레임의 실제 크기를 YuNet에 전달한다.
-     *
-     * FaceDetectorYN이 내부적으로 필요한 크기로
-     * 입력 이미지를 처리한다.
-     */
     try
     {
         detector->setInputSize(img.size());
@@ -179,41 +196,60 @@ bool detectFace(
 
     /*
      * 여러 얼굴이 발견되면
-     * confidence가 가장 높은 얼굴을 선택한다.
+     * - 카메라 화면(useZone): 인식 구역 안의 충분히 큰 얼굴 중 가장 큰 얼굴
+     *   (키오스크 바로 앞에 선 사람)
+     * - 등록 사진: confidence가 가장 높은 얼굴
      */
-    int bestIndex = 0;
+    cv::Rect zone = zoneRect(img.size());
+    int minWidth = cvRound(img.cols * MIN_FACE_W);
+    bool tooFar = false;
 
-    float bestScore =
-        faces.at<float>(0, 14);
+    int bestIndex = -1;
+    float bestValue = 0;
 
-    for (int i = 1; i < faces.rows; ++i)
+    for (int i = 0; i < faces.rows; ++i)
     {
-        float score =
-            faces.at<float>(i, 14);
+        float value = faces.at<float>(i, 14);
 
-        if (score > bestScore)
+        if (useZone)
         {
-            bestScore = score;
+            cv::Rect r(cvRound(faces.at<float>(i, 0)), cvRound(faces.at<float>(i, 1)),
+                       cvRound(faces.at<float>(i, 2)), cvRound(faces.at<float>(i, 3)));
+            cv::Point center(r.x + r.width / 2, r.y + r.height / 2);
+
+            if (!zone.contains(center) || r.width < minWidth)
+            {
+                if (zone.contains(center))
+                    tooFar = true;
+                if (ignored)
+                    ignored->push_back(r & cv::Rect(0, 0, img.cols, img.rows));
+                continue;
+            }
+            value = float(r.width);
+        }
+
+        if (bestIndex < 0 || value > bestValue)
+        {
+            bestValue = value;
             bestIndex = i;
         }
     }
 
+    if (bestIndex < 0)
+    {
+        if (state)
+            *state = tooFar ? FACE_TOO_FAR : FACE_OUTSIDE;
+        return false;
+    }
 
-    /*
-     * FaceRecognizerSF::alignCrop()에서 사용할
-     * 1행 15열 detection 데이터를 그대로 복사한다.
-     */
+    if (state)
+        *state = FACE_OK;
     cv::Mat face =
         faces.row(bestIndex).clone();
 
 
     if (bestFace)
         *bestFace = face;
-
-
-    /*
-     * 화면에 그릴 얼굴 영역
-     */
     if (bestBox)
     {
         int x =
@@ -236,10 +272,6 @@ bool detectFace(
             h
         );
 
-
-        /*
-         * 이미지 범위를 벗어나지 않도록 보정
-         */
         box &=
             cv::Rect(
                 0,
@@ -255,14 +287,14 @@ bool detectFace(
     return true;
 }
 
-
-/*
- * 얼굴 이미지 → SFace 특징 벡터
- */
+// 얼굴 이미지 → SFace 특징 벡터
 bool extractFeature(
     const cv::Mat &img,
     cv::Mat *feature,
-    cv::Rect *box)
+    cv::Rect *box,
+    bool useZone = false,
+    FaceState *state = 0,
+    std::vector<cv::Rect> *ignored = 0)
 {
     if (recognizer.empty())
         return false;
@@ -270,14 +302,13 @@ bool extractFeature(
 
     cv::Mat face;
 
-
-    /*
-     * YuNet으로 얼굴 검출
-     */
     if (!detectFace(
             img,
             &face,
-            box))
+            box,
+            useZone,
+            state,
+            ignored))
     {
         return false;
     }
@@ -288,20 +319,11 @@ bool extractFeature(
 
     try
     {
-        /*
-         * YuNet의 5개 landmark를 이용하여
-         * SFace 입력 형태로 얼굴 정렬
-         */
         recognizer->alignCrop(
             img,
             face,
             aligned
         );
-
-
-        /*
-         * 정렬된 얼굴에서 특징 벡터 추출
-         */
         recognizer->feature(
             aligned,
             *feature
@@ -318,10 +340,7 @@ bool extractFeature(
         !feature->empty();
 }
 
-
-/*
- * DB에 등록된 얼굴들을 메모리에 학습
- */
+// DB에 등록된 얼굴들을 메모리에 학습
 bool train(QString *err)
 {
     if (!loadModels(err))
@@ -330,11 +349,6 @@ bool train(QString *err)
 
     QVariant data;
 
-
-    /*
-     * 마지막으로 가져온 얼굴 데이터 이후의
-     * 새로운 얼굴 데이터만 가져온다.
-     */
     if (!Net::call(
             "FACES",
             QVariantMap{{"afterId", lastId}},
@@ -360,10 +374,6 @@ bool train(QString *err)
         int userId =
             m.value("userId").toInt();
 
-
-        /*
-         * DB에 Base64로 저장된 이미지 복원
-         */
         QByteArray bytes =
             QByteArray::fromBase64(
                 m.value("image")
@@ -388,10 +398,6 @@ bool train(QString *err)
         if (img.empty())
             continue;
 
-
-        /*
-         * 너무 큰 이미지는 축소
-         */
         if (img.cols > 800)
         {
             cv::resize(
@@ -407,19 +413,11 @@ bool train(QString *err)
 
         cv::Mat feature;
 
-
-        /*
-         * 얼굴 검출 + 정렬 + 특징 추출
-         */
         if (!extractFeature(
                 img,
                 &feature,
                 0))
         {
-            /*
-             * 얼굴만 잘라 저장된 사진은 YuNet이
-             * 검출하지 못할 수 있으므로 여백을 붙여 재시도
-             */
             int pad =
                 std::max(img.cols, img.rows) / 4;
 
@@ -482,7 +480,9 @@ bool recognizeFace(
     const cv::Mat &img,
     int *userId,
     double *score,
-    cv::Rect *box)
+    cv::Rect *box,
+    FaceState *state,
+    std::vector<cv::Rect> *ignored)
 {
     cv::Mat feature;
 
@@ -493,7 +493,10 @@ bool recognizeFace(
     if (!extractFeature(
             img,
             &feature,
-            box))
+            box,
+            true,
+            state,
+            ignored))
     {
         return false;
     }
@@ -501,11 +504,6 @@ bool recognizeFace(
 
     double bestScore = -1.0;
     int bestUserId = -1;
-
-
-    /*
-     * 등록된 모든 얼굴과 비교
-     */
     for (size_t i = 0;
          i < registeredFaces.size();
          ++i)
@@ -535,12 +533,6 @@ bool recognizeFace(
 
     if (userId)
         *userId = bestUserId;
-
-
-    /*
-     * cosine similarity가
-     * 기준값 이상이면 인식 성공
-     */
     return
         bestUserId >= 0 &&
         bestScore >= MIN_COSINE;
@@ -548,10 +540,7 @@ bool recognizeFace(
 
 }
 
-
-/*
- * 카메라 구조체
- */
+// 카메라 구조체
 struct Face::Cam
 {
     cv::VideoCapture cap;
@@ -569,6 +558,7 @@ struct Face::Cam
 #endif
 
 
+// 얼굴인식 창 초기화: 등록 얼굴을 불러오고 카메라를 열어 50ms 마다 tick 실행
 Face::Face(
     const QString &title,
     QWidget *parent,
@@ -621,11 +611,6 @@ Face::Face(
 
     QString err;
 
-
-    /*
-     * DB의 얼굴 정보를 불러와
-     * SFace 특징 벡터 생성
-     */
     if (!train(&err))
     {
         ui->lblStatus->setText(err);
@@ -634,10 +619,6 @@ Face::Face(
     {
         m_cam = new Cam;
 
-
-        /*
-         * 기본 카메라 열기
-         */
         if (m_cam->cap.open(0))
         {
             m_timer->start(50);
@@ -663,16 +644,14 @@ Face::Face(
 }
 
 
+// 카메라 닫기
 Face::~Face()
 {
     delete m_cam;
     delete ui;
 }
 
-
-/*
- * 카메라 프레임 처리
- */
+// 카메라 프레임 처리
 void Face::tick()
 {
 #ifdef USE_OPENCV
@@ -684,10 +663,6 @@ void Face::tick()
     {
         return;
     }
-
-    /*
-     * 최대 인식 시간 초과
-     */
     if (++m_ticks > MAX_TICKS)
     {
         m_timer->stop();
@@ -717,22 +692,29 @@ void Face::tick()
 
     int label = -1;
     double score = 0.0;
-
-    /*
-     * 얼굴 인식
-     */
+    FaceState state = FACE_NONE;
+    std::vector<cv::Rect> ignored;
     bool known =
         recognizeFace(
             img,
             &label,
             &score,
-            &faceBox
+            &faceBox,
+            &state,
+            &ignored
         );
+    cv::Rect zone = zoneRect(img.size());
+    cv::Mat dark = img.clone();
+    dark *= 0.4;
+    img(zone).copyTo(dark(zone));
+    img = dark;
+    cv::rectangle(img, zone, cv::Scalar(255, 255, 255), 3);
 
-    /*
-     * 얼굴 검출 영역 표시
-     */
-    if (faceBox.width > 0 &&
+    for (size_t i = 0; i < ignored.size(); ++i)
+        cv::rectangle(img, ignored[i], cv::Scalar(150, 150, 150), 1);
+
+    if (state == FACE_OK &&
+        faceBox.width > 0 &&
         faceBox.height > 0)
     {
         cv::Scalar color =
@@ -748,9 +730,6 @@ void Face::tick()
         );
     }
 
-    /*
-     * 같은 회원이 연속으로 인식되었는지 확인
-     */
     if (known &&
         label == m_last)
     {
@@ -767,9 +746,6 @@ void Face::tick()
         m_hits = 0;
     }
 
-    /*
-     * 상태 표시
-     */
     if (known)
     {
         ui->lblStatus->setText(
@@ -780,10 +756,22 @@ void Face::tick()
             .arg(HITS)
         );
     }
-    else
+    else if (state == FACE_OK)
     {
         ui->lblStatus->setText(
             "등록되지 않은 얼굴입니다."
+        );
+    }
+    else if (state == FACE_TOO_FAR)
+    {
+        ui->lblStatus->setText(
+            "카메라에 조금 더 가까이 와 주세요."
+        );
+    }
+    else
+    {
+        ui->lblStatus->setText(
+            "흰색 사각형 안에 얼굴을 맞춰 주세요."
         );
     }
 
@@ -813,9 +801,6 @@ void Face::tick()
         )
     );
 
-    /*
-     * 5번 연속 인식되면 로그인 성공
-     */
     if (m_hits >= HITS)
     {
         m_timer->stop();
@@ -829,6 +814,7 @@ void Face::tick()
 }
 
 
+// [비밀번호로 로그인]: 카메라를 멈추고 비밀번호 로그인 창, 취소하면 다시 얼굴인식
 void Face::pwLogin()
 {
     bool running =

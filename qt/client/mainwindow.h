@@ -1,3 +1,5 @@
+// 메인 화면: 첫 화면/회원/관리자 화면 전환과 절전 모드 (mainwindow.cpp 참고)
+
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 

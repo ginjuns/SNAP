@@ -1,3 +1,5 @@
+// AI 호출: Groq/Gemini 에 질문하고 답 받기 (ai.cpp 참고)
+
 #ifndef AI_H
 #define AI_H
 

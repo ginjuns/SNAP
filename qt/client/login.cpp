@@ -5,6 +5,7 @@
 #include "popup.h"
 #include "util.h"
 
+// 로그인 창 초기화, 열리자마자 아이디 입력 키보드를 띄움
 Login::Login(QWidget *parent)
     : QDialog(parent), ui(new Ui::Login), m_id(-1)
 {
@@ -25,6 +26,7 @@ Login::~Login()
     delete ui;
 }
 
+// 아이디 → 비밀번호 순서로 키보드를 띄우고 다 입력하면 바로 로그인
 void Login::input()
 {
     if (Keyboard::open(ui->editId, Keyboard::English, "아이디") && !ui->editId->text().isEmpty()
@@ -32,6 +34,7 @@ void Login::input()
         login();
 }
 
+// 서버에 비밀번호 로그인 요청, 성공하면 회원 id 를 저장하고 닫음
 void Login::login()
 {
     if (ui->editId->text().isEmpty() || ui->editPw->text().isEmpty()) {

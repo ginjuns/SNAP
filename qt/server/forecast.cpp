@@ -1,6 +1,7 @@
 #include "forecast.h"
 #include <cmath>
 
+// 일별 판매량에서 요일별 패턴과 직선 추세를 구해 앞으로 days 일의 판매량과 범위(약 80%) 예측
 Forecast predict(const QVector<int> &daily, int firstWeekday, int days)
 {
     Forecast f;
@@ -56,6 +57,7 @@ Forecast predict(const QVector<int> &daily, int firstWeekday, int days)
     }
     return f;
 }
+// 지금 재고가 며칠 뒤에 떨어지는지 (예측 기간 안에 안 떨어지면 -1)
 int daysLeft(int stock, const Forecast &f)
 {
     if (stock <= 0)
@@ -68,6 +70,7 @@ int daysLeft(int stock, const Forecast &f)
     }
     return -1;
 }
+// leadDays 일 동안 팔릴 양의 1.2배에서 지금 재고를 뺀 발주 추천 수량
 int orderQty(int stock, const Forecast &f, int leadDays)
 {
     double need = 0;

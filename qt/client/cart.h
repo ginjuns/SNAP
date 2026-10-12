@@ -1,3 +1,5 @@
+// 장바구니 / 결제 화면: 수량 변경, 카드·얼굴인식 결제 (cart.cpp 참고)
+
 #ifndef CART_H
 #define CART_H
 

@@ -1,3 +1,5 @@
+// 판매 예측 계산: 예측 판매량, 품절 예상일, 발주 수량 (forecast.cpp 참고)
+
 #ifndef FORECAST_H
 #define FORECAST_H
 

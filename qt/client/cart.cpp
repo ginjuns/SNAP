@@ -6,6 +6,7 @@
 #include "popup.h"
 #include "util.h"
 
+// 장바구니 창 초기화: 표/버튼 설정, ESP32 진열대 변경·카드 태그 신호 연결
 Cart::Cart(const QVariantMap &user, QList<Item> *items, QWidget *parent)
     : QDialog(parent), ui(new Ui::Cart), m_user(user), m_items(items)
 {
@@ -36,6 +37,7 @@ Cart::~Cart()
     delete ui;
 }
 
+// 장바구니 총 금액
 int Cart::total() const
 {
     int sum = 0;
@@ -44,6 +46,7 @@ int Cart::total() const
     return sum;
 }
 
+// 표에 넣을 칸 생성
 static QTableWidgetItem *cell(const QString &text, bool num = false)
 {
     QTableWidgetItem *c = new QTableWidgetItem(text);
@@ -51,6 +54,7 @@ static QTableWidgetItem *cell(const QString &text, bool num = false)
     return c;
 }
 
+// 장바구니 표 다시 그리기 (품절 표시, [-][+] 버튼, 합계)
 void Cart::refresh()
 {
     ui->table->setRowCount(m_items->size());
@@ -85,6 +89,7 @@ void Cart::refresh()
     ui->lblTotal->setText("합계: " + won(total()));
 }
 
+// [-]/[+] 버튼: 수량 변경, 0개가 되면 장바구니에서 뺌
 void Cart::change()
 {
     int row = sender()->property("row").toInt();
@@ -103,6 +108,7 @@ void Cart::change()
     QMetaObject::invokeMethod(this, "refresh", Qt::QueuedConnection);
 }
 
+// 장바구니 비우기
 void Cart::clearAll()
 {
     if (m_items->isEmpty())
@@ -113,6 +119,7 @@ void Cart::clearAll()
     refresh();
 }
 
+// 장바구니에 품절 상품이 있으면 안내하고 false
 bool Cart::checkSoldOut()
 {
     QStringList names;
@@ -126,6 +133,7 @@ bool Cart::checkSoldOut()
     return false;
 }
 
+// 서버에 결제 요청, 성공하면 ESP32 부저 / 카드 결제 실패면 CARD_FAIL
 bool Cart::pay(int userId, const QString &method, QVariantMap *out, const QString &cardUid)
 {
     if (m_items->isEmpty()) {
@@ -158,6 +166,7 @@ bool Cart::pay(int userId, const QString &method, QVariantMap *out, const QStrin
     return true;
 }
 
+// 카드 결제: 리더기를 켜고 카드가 태그될 때까지 기다려 결제, 실패하면 다른 카드 대기
 void Cart::payCard()
 {
     if (m_items->isEmpty() || !checkSoldOut())
@@ -186,6 +195,7 @@ void Cart::payCard()
     accept();
 }
 
+// 얼굴인식 결제: 얼굴을 다시 확인하고 잔액을 보여 준 뒤 충전 잔액에서 결제
 void Cart::payFace()
 {
     if (m_user.value("pwLogin").toBool())

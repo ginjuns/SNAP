@@ -8,6 +8,7 @@
 static const int COLS = 3;
 static const int IMG_SIZE = 180;
 
+// 회원 화면 초기화: 버튼 연결, 진열대 상태가 바뀌면 상품 목록 다시 그리기
 Member::Member(QWidget *parent)
     : QWidget(parent), ui(new Ui::Member), m_down(0)
 {
@@ -25,6 +26,7 @@ Member::~Member()
     delete ui;
 }
 
+// 회원 로그인 시 호출: 장바구니를 비우고 환영 문구, 상품 목록 표시
 void Member::start(const QVariantMap &user)
 {
     m_user = user;
@@ -35,6 +37,7 @@ void Member::start(const QVariantMap &user)
     updateBar();
 }
 
+// 서버에서 상품 목록을 받아와 화면에 그림
 void Member::load()
 {
     QVariant data;
@@ -92,6 +95,7 @@ void Member::build()
     ui->scroll->setWidget(grid);
 }
 
+// 상품 카드의 눌림 표시를 켜고 끔
 static void setDown(QWidget *card, bool down)
 {
     card->setProperty("down", down);
@@ -99,6 +103,7 @@ static void setDown(QWidget *card, bool down)
     card->style()->polish(card);
 }
 
+// 상품 카드 터치 처리: 끌어서 스크롤한 경우는 무시하고, 탭이면 장바구니에 담기
 bool Member::eventFilter(QObject *obj, QEvent *e)
 {
     QWidget *card = qobject_cast<QWidget *>(obj);
@@ -124,6 +129,7 @@ bool Member::eventFilter(QObject *obj, QEvent *e)
     return QWidget::eventFilter(obj, e);
 }
 
+// i 번째 상품을 장바구니에 1개 담기 (재고 수량까지만)
 void Member::add(int i)
 {
     QVariantMap p = m_list.value(i).toMap();
@@ -149,6 +155,7 @@ void Member::add(int i)
     updateBar();
 }
 
+// 아래 장바구니 바의 총 수량/총 금액 갱신
 void Member::updateBar()
 {
     int qty = 0, sum = 0;
@@ -160,6 +167,7 @@ void Member::updateBar()
     ui->lblSum->setText("총 금액 " + won(sum));
 }
 
+// 장바구니 창 열기, 결제가 끝나면 첫 화면으로 돌아감
 void Member::openCart()
 {
     Cart dlg(m_user, &m_cart, this);

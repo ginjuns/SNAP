@@ -1,3 +1,5 @@
+// MySQL DB 처리: 회원/상품/결제/매출 (db.cpp 참고)
+
 #ifndef DB_H
 #define DB_H
 

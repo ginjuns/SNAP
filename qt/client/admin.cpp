@@ -9,6 +9,7 @@
 #include "popup.h"
 #include "util.h"
 
+// 표에 넣을 칸 생성
 static QTableWidgetItem *cell(const QString &text, bool num = false)
 {
     QTableWidgetItem *c = new QTableWidgetItem(text);
@@ -21,6 +22,7 @@ static const char *NO_IMAGE = "사진 없음\n\n터치하여 추가";
 
 enum Icon { Plus, Pencil, Reset, Trash };
 
+// 상품 관리 버튼 아이콘을 직접 그려서 만듦
 static QIcon makeIcon(Icon type)
 {
     QPixmap pix(64, 64);
@@ -66,12 +68,14 @@ static QIcon makeIcon(Icon type)
     return QIcon(pix);
 }
 
+// 버튼에 아이콘을 화면 배율에 맞춰 붙임
 static void setIcon(QPushButton *btn, Icon type)
 {
     btn->setIcon(makeIcon(type));
     btn->setIconSize(QSize(px(32), px(32)));
 }
 
+// 관리자 화면 초기화: 입력칸 키보드, 버튼/표/콤보박스 설정과 시그널 연결
 Admin::Admin(QWidget *parent)
     : QWidget(parent), ui(new Ui::Admin), m_imgChanged(false)
 {
@@ -169,7 +173,7 @@ void Admin::start(const QVariantMap &user)
     ui->textReport->clear();
     ui->lblReportInfo->setText("기간을 고르고 [AI 리포트 생성]을 누르세요.");
 
-    // AI 상담: 대화 내용과 추천 질문 지우기 (맨 앞의 spacer 는 남긴다)
+    // AI 상담: 대화 내용과 추천 질문 지우기
     for (int i = ui->layoutChat->count() - 1; i >= 0; --i) {
         QLayoutItem *item = ui->layoutChat->itemAt(i);
         if (item->widget()) {
@@ -193,6 +197,7 @@ void Admin::start(const QVariantMap &user)
     onCategory();
 }
 
+// 상품 입력칸과 사진을 비움
 void Admin::reset()
 {
     ui->tableProduct->clearSelection();
@@ -206,6 +211,7 @@ void Admin::reset()
     ui->lblImage->setText(NO_IMAGE);
 }
 
+// 사진 영역 터치 → 사진 선택, 날짜 칸 터치 → 달력 열기
 bool Admin::eventFilter(QObject *obj, QEvent *e)
 {
     if (obj == ui->lblImage && e->type() == QEvent::MouseButtonRelease) {
@@ -222,6 +228,7 @@ bool Admin::eventFilter(QObject *obj, QEvent *e)
     return QWidget::eventFilter(obj, e);
 }
 
+// 달력 창에서 날짜(월별이면 월)를 골라 매출 날짜로 설정
 void Admin::pickDate()
 {
     Calendar dlg(ui->date->date(), monthly(), this);
@@ -229,6 +236,7 @@ void Admin::pickDate()
         ui->date->setDate(dlg.date());
 }
 
+// 상품 사진 파일을 골라 300px 이하 PNG 로 줄여 둠
 void Admin::pickImage()
 {
     QFileDialog dlg(this, "상품 이미지 선택",
@@ -258,12 +266,14 @@ void Admin::pickImage()
     ui->lblImage->setPixmap(QPixmap::fromImage(img).scaled(ui->lblImage->size(), Qt::KeepAspectRatio));
 }
 
+// 상품 목록에서 선택한 행 번호 (없으면 -1)
 int Admin::row() const
 {
     QList<QTableWidgetItem *> items = ui->tableProduct->selectedItems();
     return items.isEmpty() ? -1 : items.first()->row();
 }
 
+// 입력칸에서 상품명/가격/재고를 읽음, 빈 칸이 있으면 안내하고 false
 bool Admin::readForm(QString *name, int *price, int *stock)
 {
     *name = ui->editName->text().trimmed();
@@ -276,6 +286,7 @@ bool Admin::readForm(QString *name, int *price, int *stock)
     return true;
 }
 
+// 상품 추가
 void Admin::add()
 {
     QString name;
@@ -296,6 +307,7 @@ void Admin::add()
     loadProducts();
 }
 
+// 선택한 상품 수정, 사진은 바꿨을 때만 보냄
 void Admin::edit()
 {
     int r = row();
@@ -324,6 +336,7 @@ void Admin::edit()
     loadProducts();
 }
 
+// 선택한 상품 삭제, 매출 기록은 남음
 void Admin::del()
 {
     int r = row();
@@ -346,6 +359,7 @@ void Admin::del()
     loadProducts();
 }
 
+// 목록에서 상품을 고르면 입력칸과 사진에 그 상품 정보를 채움
 void Admin::onSelect()
 {
     int r = row();
@@ -368,6 +382,7 @@ void Admin::onSelect()
     }
 }
 
+// 서버에서 상품 목록을 받아 상품 관리 표에 표시
 void Admin::loadProducts()
 {
     QVariant data;
@@ -393,27 +408,32 @@ void Admin::loadProducts()
     }
 }
 
+// 매출 확인이 월별 보기인지
 bool Admin::monthly() const
 {
     return ui->comboUnit->currentIndex() == 1;
 }
 
+// 일별/월별을 바꾸면 날짜 표시 형식을 바꾸고 매출 다시 조회
 void Admin::onUnit()
 {
     ui->date->setDisplayFormat(monthly() ? "yyyy년 MM월" : "yyyy-MM-dd");
     loadSales();
 }
 
+// 이전 날(월)로 이동
 void Admin::prev()
 {
     ui->date->setDate(monthly() ? ui->date->date().addMonths(-1) : ui->date->date().addDays(-1));
 }
 
+// 다음 날(월)로 이동
 void Admin::next()
 {
     ui->date->setDate(monthly() ? ui->date->date().addMonths(1) : ui->date->date().addDays(1));
 }
 
+// 매출 조회: 그래프, 합계 줄, 시간대(날짜)별 상품 판매 표 갱신
 void Admin::loadSales()
 {
     bool mon = monthly();
@@ -513,6 +533,7 @@ void Admin::loadSales()
                             .arg(won(cardSum + faceSum)).arg(won(cardSum)).arg(won(faceSum)).arg(qtySum));
 }
 
+// 오늘 날짜로 이동 (이미 오늘이면 다시 조회)
 void Admin::today()
 {
     if (ui->date->date() == QDate::currentDate())
@@ -544,6 +565,7 @@ static const Question QUESTIONS[] = {
     {"전략", "바쁜 시간대 대비 방법은?", 0},
 };
 
+// 레이아웃 안의 위젯을 모두 지움
 static void clearLayout(QLayout *layout)
 {
     while (QLayoutItem *item = layout->takeAt(0)) {
@@ -553,6 +575,7 @@ static void clearLayout(QLayout *layout)
     }
 }
 
+// AI 질문/판매 예측에서 고를 회원 목록과 상품 목록 준비
 void Admin::loadTargets()
 {
     QVariant data;
@@ -568,6 +591,7 @@ void Admin::loadTargets()
     }
 }
 
+// AI 리포트 생성 (오늘/이번 주/이번 달)
 void Admin::makeReport()
 {
     static const char *PERIODS[] = {"day", "week", "month"};
@@ -590,6 +614,7 @@ void Admin::makeReport()
     ui->lblReportInfo->setText(QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm 생성"));
 }
 
+// AI 상담 질문 분류를 바꾸면 질문 버튼과 대상(상품/회원) 선택 목록을 다시 만듦
 void Admin::onCategory()
 {
     clearLayout(ui->layoutQuestions);
@@ -615,6 +640,7 @@ void Admin::onCategory()
     ui->comboTarget->setVisible(target != 0);
 }
 
+// 질문 버튼을 누르면 AI 에게 질문하고 대화창에 답과 추천 질문 표시
 void Admin::ask()
 {
     QPushButton *btn = qobject_cast<QPushButton *>(sender());
@@ -647,6 +673,7 @@ void Admin::ask()
     setFollowUps(res.value("followUps").toStringList());
 }
 
+// AI 상담 대화창에 말풍선 추가
 QLabel *Admin::addBubble(const QString &text, bool mine)
 {
     QLabel *lbl = new QLabel(text);
@@ -668,6 +695,7 @@ QLabel *Admin::addBubble(const QString &text, bool mine)
     return lbl;
 }
 
+// AI 가 추천한 이어서 물어볼 질문을 버튼으로 표시
 void Admin::setFollowUps(const QStringList &list)
 {
     clearLayout(ui->layoutFollow);
@@ -679,6 +707,7 @@ void Admin::setFollowUps(const QStringList &list)
     }
 }
 
+// 판매 예측: 예측 그래프와 품절 예상일·발주 추천 표 갱신
 void Admin::forecast()
 {
     int days = ui->comboDays->currentIndex() == 0 ? 7 : 14;

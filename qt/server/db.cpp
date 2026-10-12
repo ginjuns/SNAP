@@ -5,12 +5,14 @@
 #include <QDateTime>
 #include <QSettings>
 
+// 쿼리 오류 메시지를 err 에 넣고 false
 static bool fail(const QSqlQuery &q, QString *err)
 {
     *err = q.lastError().text();
     return false;
 }
 
+// 트랜잭션을 되돌리고 err 에 메시지를 넣은 뒤 false
 static bool rollback(const QString &msg, QString *err)
 {
     QSqlDatabase::database().rollback();
@@ -18,6 +20,7 @@ static bool rollback(const QString &msg, QString *err)
     return false;
 }
 
+// 같은 이름의 상품이 있는지 (except 번 상품은 제외, 수정할 때 사용)
 static bool exists(const QString &name, int except, bool *found, QString *err)
 {
     QSqlQuery q;
@@ -30,6 +33,7 @@ static bool exists(const QString &name, int except, bool *found, QString *err)
     return true;
 }
 
+// 진열대 번호 검사, 0(선택 안 함)이면 DB 에 NULL 로 저장
 static bool shelfValue(int shelf, QVariant *v, QString *err)
 {
     if (shelf < 0 || shelf > SHELF_COUNT) {
@@ -40,6 +44,7 @@ static bool shelfValue(int shelf, QVariant *v, QString *err)
     return true;
 }
 
+// server.ini 의 [mysql] 로 DB 접속, 필요한 테이블/칸이 있는지 확인
 bool DB::open(const QSettings &ini, QString *err)
 {
     if (!QSqlDatabase::isDriverAvailable("QMYSQL")) {
@@ -102,6 +107,7 @@ bool DB::open(const QSettings &ini, QString *err)
     return true;
 }
 
+// 회원가입: 아이디 중복 확인 후 회원과 얼굴 사진을 한 트랜잭션으로 저장
 bool DB::join(const QString &name0, const QString &id0, const QString &pw, const QString &role,
               const QList<QByteArray> &faces, QVariant *out, QString *err)
 {
@@ -153,6 +159,7 @@ bool DB::join(const QString &name0, const QString &id0, const QString &pw, const
     return true;
 }
 
+// after 번 이후에 등록된 얼굴 사진 목록 (키오스크가 새로 가입한 얼굴만 받아 감)
 bool DB::faces(int after, QVariant *out, QString *err)
 {
     QSqlQuery q;
@@ -172,6 +179,7 @@ bool DB::faces(int after, QVariant *out, QString *err)
     return true;
 }
 
+// 아이디/비밀번호 확인, 맞으면 회원 id
 bool DB::login(const QString &id, const QString &pw, QVariant *out, QString *err)
 {
     QSqlQuery q;
@@ -187,6 +195,7 @@ bool DB::login(const QString &id, const QString &pw, QVariant *out, QString *err
     return user(q.value(0).toInt(), out, err);
 }
 
+// 회원 정보 (이름, 권한, 잔액)
 bool DB::user(int id, QVariant *out, QString *err)
 {
     QSqlQuery q;
@@ -207,6 +216,7 @@ bool DB::user(int id, QVariant *out, QString *err)
     return true;
 }
 
+// 상품 목록 (사진은 Base64)
 bool DB::products(QVariant *out, QString *err)
 {
     QSqlQuery q;
@@ -227,6 +237,7 @@ bool DB::products(QVariant *out, QString *err)
     return true;
 }
 
+// 상품 추가 (같은 이름 금지)
 bool DB::addProduct(const QString &name0, int price, int stock, int shelf, const QByteArray &img, QString *err)
 {
     QString name = name0.trimmed();
@@ -255,6 +266,7 @@ bool DB::addProduct(const QString &name0, int price, int stock, int shelf, const
     return q.exec() || fail(q, err);
 }
 
+// 상품 수정, f 에 들어 있는 항목만 바꿈
 bool DB::editProduct(int id, const QVariantMap &f, QString *err)
 {
     QSqlQuery q;
@@ -325,6 +337,7 @@ bool DB::editProduct(int id, const QVariantMap &f, QString *err)
     return q.exec() || fail(q, err);
 }
 
+// 상품 삭제 (매출 기록의 상품은 NULL 로 남음)
 bool DB::delProduct(int id, QString *err)
 {
     QSqlQuery q;
@@ -339,6 +352,7 @@ bool DB::delProduct(int id, QString *err)
     return true;
 }
 
+// 잔액 차감 (회원 users 또는 카드 cards), 잔액이 부족하면 되돌리고 오류
 static bool charge(const QString &table, const QString &key, const QVariant &id, int total,
                    QVariantMap *res, QString *err)
 {
@@ -364,6 +378,7 @@ static bool charge(const QString &table, const QString &key, const QVariant &id,
     return true;
 }
 
+// 결제: 재고 확인·차감, 회원/카드 잔액 차감, 매출 기록을 한 트랜잭션으로 처리
 bool DB::pay(int userId, const QString &method, const QString &cardUid, const QVariantList &items,
              QVariant *out, QString *err)
 {
@@ -431,6 +446,7 @@ bool DB::pay(int userId, const QString &method, const QString &cardUid, const QV
     return true;
 }
 
+// 매출 조회: 시간대(일별)/날짜(월별)별 카드·얼굴인식 합계와 상세 내역
 bool DB::sales(const QString &unit, const QString &date, QVariant *out, QString *err)
 {
     bool mon = (unit == "month");
@@ -489,6 +505,7 @@ bool DB::sales(const QString &unit, const QString &date, QVariant *out, QString 
     return true;
 }
 
+// from~to 기간을 바인딩해 쿼리 실행
 static bool range(QSqlQuery &q, const QString &sql, const QDateTime &from, const QDateTime &to)
 {
     q.prepare(sql);
@@ -497,6 +514,7 @@ static bool range(QSqlQuery &q, const QString &sql, const QDateTime &from, const
     return q.exec();
 }
 
+// 일반 회원 목록 (AI 상담에서 회원 선택용)
 bool DB::members(QVariant *out, QString *err)
 {
     QSqlQuery q;
@@ -513,6 +531,7 @@ bool DB::members(QVariant *out, QString *err)
     return true;
 }
 
+// 기간의 매출 요약: 합계/수량/주문 수, 상품별, 시간대별, 구매자별 (AI 리포트용)
 bool DB::summary(const QDateTime &from, const QDateTime &to, QVariantMap *out, QString *err)
 {
     QSqlQuery q;
@@ -574,6 +593,7 @@ bool DB::summary(const QDateTime &from, const QDateTime &to, QVariantMap *out, Q
     return true;
 }
 
+// from 부터 days 일 동안의 일별 판매 수량 (상품 0 이면 전체)
 bool DB::daily(int productId, const QDate &from, int days, QVector<int> *qty, QString *err)
 {
     QSqlQuery q;
@@ -595,6 +615,7 @@ bool DB::daily(int productId, const QDate &from, int days, QVector<int> *qty, QS
     return true;
 }
 
+// 회원의 최근 days 일 상품별 구매 기록 (AI 의 회원 구매 성향 분석용)
 bool DB::purchases(int userId, int days, QVariantList *out, QString *err)
 {
     QSqlQuery q;

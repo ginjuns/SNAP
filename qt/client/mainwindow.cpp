@@ -8,11 +8,13 @@
 #include "popup.h"
 #include "util.h"
 
+// Wayland 세션인지 확인 (모니터 끄는 방법이 X11 과 다름)
 static bool wayland()
 {
     return qgetenv("XDG_SESSION_TYPE") == "wayland";
 }
 
+// 모니터 켜기/끄기 (X11: xset, Wayland: Mutter DBus)
 static void screenPower(bool on)
 {
     if (wayland()) {
@@ -26,6 +28,7 @@ static void screenPower(bool on)
     }
 }
 
+// 화면 구성: 회원/관리자 화면을 스택에 넣고, 화면보호기 끄기, ESP32 사람 감지 연결 후 절전 상태로 시작
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), ui(new Ui::MainWindow), m_sleep(false)
 {
@@ -52,12 +55,14 @@ MainWindow::MainWindow(QWidget *parent)
     sleep();
 }
 
+// 종료할 때 모니터를 다시 켜 둠
 MainWindow::~MainWindow()
 {
     screenPower(true);
     delete ui;
 }
 
+// 얼굴인식 또는 비밀번호로 로그인한 뒤 권한에 따라 관리자/회원 화면으로 이동
 void MainWindow::login()
 {
     Face face("얼굴인식 로그인", this, true);
@@ -84,12 +89,14 @@ void MainWindow::login()
     }
 }
 
+// 로그아웃: 첫 화면으로 돌아감 (절전 중이면 그대로)
 void MainWindow::home()
 {
     if (!m_sleep)
         ui->stack->setCurrentWidget(ui->pageLogin);
 }
 
+// ESP32 사람 감지 신호: 사람이 오면 깨우고, 떠나면 절전
 void MainWindow::onPresence(bool on)
 {
     if (on)
@@ -98,6 +105,7 @@ void MainWindow::onPresence(bool on)
         sleep();
 }
 
+// 절전 모드: 열린 팝업을 모두 닫고 절전 화면으로 바꾼 뒤 모니터 끄기
 void MainWindow::sleep()
 {
     m_sleep = true;
@@ -107,6 +115,7 @@ void MainWindow::sleep()
     screenPower(false);
 }
 
+// 절전 해제: 첫 화면으로 돌아가고 모니터 켜기
 void MainWindow::wake()
 {
     if (!m_sleep)
@@ -117,6 +126,7 @@ void MainWindow::wake()
     screenPower(true);
 }
 
+// 절전 화면을 터치하면 깨우기
 bool MainWindow::eventFilter(QObject *obj, QEvent *e)
 {
     if (obj == ui->pageSleep && e->type() == QEvent::MouseButtonRelease) {

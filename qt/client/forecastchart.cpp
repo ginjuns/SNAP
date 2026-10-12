@@ -5,6 +5,7 @@ ForecastChart::ForecastChart(QWidget *parent)
     : QWidget(parent)
 {
 }
+// 지난 판매량, 예측 판매량, 제목을 받아 다시 그림
 void ForecastChart::setData(const QVariantList &past, const QVariantList &future, const QString &title)
 {
     m_past = past;
@@ -12,6 +13,7 @@ void ForecastChart::setData(const QVariantList &past, const QVariantList &future
     m_title = title;
     update();
 }
+// 지난 판매량은 막대, 예측은 선과 예측 범위 띠로 그림
 void ForecastChart::paintEvent(QPaintEvent *)
 {
     const QColor INK("#0b0b0b"), GRAY("#898781"), GRID("#e1e0d9"), BAR("#2a78d6"), PRED("#eb6834");

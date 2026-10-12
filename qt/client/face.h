@@ -1,3 +1,5 @@
+// 얼굴인식 화면: 카메라로 회원 얼굴을 찾아 로그인/결제 확인 (face.cpp 참고)
+
 #ifndef FACE_H
 #define FACE_H
 

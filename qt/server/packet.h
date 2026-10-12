@@ -1,3 +1,10 @@
+/*
+ * 통신 공통 규격
+ *
+ * - 포트 번호(앱 9000, ESP32 8000), 최대 메시지 크기, 진열대 개수
+ * - pack/unpack: JSON 객체 ↔ 한 줄('\n' 으로 끝나는) 메시지 변환
+ */
+
 #ifndef PACKET_H
 #define PACKET_H
 

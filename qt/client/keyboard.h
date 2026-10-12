@@ -1,3 +1,5 @@
+// 화면 키보드: 한글 조합 입력, 입력칸 터치 시 자동으로 열림 (keyboard.cpp 참고)
+
 #ifndef KEYBOARD_H
 #define KEYBOARD_H
 

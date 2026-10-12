@@ -1,3 +1,7 @@
+# 키오스크 프로그램(KioskClient) 빌드 설정
+# - 화면(client/) + 내장 서버(server/) 소스를 함께 빌드
+# - CONFIG += opencv 이면 얼굴인식(OpenCV) 포함
+
 lessThan(QT_MAJOR_VERSION, 5): error("Qt 5 이상이 필요합니다")
 
 QT       += core gui widgets network sql

@@ -3,6 +3,7 @@
 #include "net.h"
 #include "util.h"
 
+// 프로그램 시작: 화면 배율/스타일 설정, 내장 서버·ESP32 서버 실행 후 메인 화면 표시
 int main(int argc, char *argv[])
 {
     qunsetenv("QT_SCALE_FACTOR");

@@ -18,6 +18,7 @@ const QColor FACE("#eb6834");
 const double GAP = 2;
 const double RADIUS = 4;
 
+// 위쪽 모서리만 둥근 막대 모양
 QPainterPath roundTop(const QRectF &r)
 {
     double rad = qMin(RADIUS, qMin(r.width() / 2, r.height()));
@@ -32,6 +33,7 @@ QPainterPath roundTop(const QRectF &r)
     return path;
 }
 
+// 화면 배율에 맞춘 픽셀 크기 글꼴
 QFont pxFont(const QFont &base, int size, bool bold = false)
 {
     QFont f(base);
@@ -47,6 +49,7 @@ Chart::Chart(QWidget *parent)
 {
 }
 
+// 막대 데이터와 제목을 받아 y 축 최대값/눈금 간격 계산 후 다시 그림
 void Chart::setData(const QVariantList &bars, const QString &title)
 {
     m_title = title;
@@ -71,11 +74,13 @@ void Chart::setData(const QVariantList &bars, const QString &title)
     update();
 }
 
+// 막대를 그리는 영역
 QRectF Chart::area() const
 {
     return QRectF(80, 64, width() - 80 - 24, height() - 64 - 40);
 }
 
+// 터치한 위치의 막대 번호 (없으면 -1)
 int Chart::barAt(const QPoint &pos) const
 {
     QRectF a = area();
@@ -85,6 +90,7 @@ int Chart::barAt(const QPoint &pos) const
     return (i >= 0 && i < m_bars.size()) ? i : -1;
 }
 
+// 제목, 범례, 눈금, 카드/얼굴인식 쌓은 막대, 최고 매출 값 그리기
 void Chart::paintEvent(QPaintEvent *)
 {
     QPainter p(this);
@@ -180,16 +186,19 @@ void Chart::paintEvent(QPaintEvent *)
     }
 }
 
+// 막대를 터치하면 금액 말풍선 표시
 void Chart::mousePressEvent(QMouseEvent *e)
 {
     showTip(e);
 }
 
+// 끌면서 다른 막대로 옮기면 말풍선도 따라감
 void Chart::mouseMoveEvent(QMouseEvent *e)
 {
     showTip(e);
 }
 
+// 선택한 막대를 강조하고 기간/카드/얼굴인식/합계 금액 말풍선 표시
 void Chart::showTip(QMouseEvent *e)
 {
     int i = barAt(e->pos());
@@ -210,6 +219,7 @@ void Chart::showTip(QMouseEvent *e)
                        this);
 }
 
+// 화면 밖으로 나가면 강조와 말풍선 숨김
 void Chart::leaveEvent(QEvent *)
 {
     m_hover = -1;

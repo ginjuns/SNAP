@@ -1,3 +1,5 @@
+// 비밀번호 로그인 창 (login.cpp 참고)
+
 #ifndef LOGIN_H
 #define LOGIN_H
 
