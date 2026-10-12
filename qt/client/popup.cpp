@@ -50,13 +50,15 @@ int popup(QDialog *dlg, bool full)
     bg.raise();
 
     dlg->setParent(&bg, Qt::Widget);
-    dlg->setAutoFillBackground(true);
+    if (!dlg->property("card").toBool())   // 메시지 카드는 둥근 모서리 밖을 비워 둠
+        dlg->setAutoFillBackground(true);
     dlg->show();
 
     if (full) {
         dlg->setGeometry(bg.rect());
     } else {
-        dlg->resize(dlg->size().boundedTo(bg.size()));
+        // .ui 의 기본 크기는 화면 배율이 반영되지 않으므로, 내용에 필요한 크기만큼은 키운 뒤 화면 안으로 제한
+        dlg->resize(dlg->size().expandedTo(dlg->sizeHint()).boundedTo(bg.size()));
         QPoint p = moved ? bg.mapFromGlobal(pos) : bg.rect().center() - dlg->rect().center();
         p.setX(qBound(0, p.x(), bg.width() - dlg->width()));
         p.setY(qBound(0, p.y(), bg.height() - dlg->height()));
@@ -69,18 +71,66 @@ int popup(QDialog *dlg, bool full)
     return ret;
 }
 
-// 메시지 창 공통 처리 (제목 강조, 취소 버튼 한글화, 신호가 오면 자동으로 닫힘)
-static int msg(QMessageBox::Icon icon, QWidget *parent, const QString &title, const QString &text,
-               QMessageBox::StandardButtons buttons, QObject *src = 0, const char *signal = 0)
+// 메시지 창 공통 처리: SNAP 디자인 카드 (동그란 아이콘 + 제목 + 내용 + 큰 버튼)
+//  kind: 'i' 안내, 'w' 경고, 'q' 확인(예/아니오), 'c' 기다림(신호가 오면 자동으로 닫힘)
+static int msg(char kind, QWidget *parent, const QString &title, const QString &text,
+               const QString &okText, const QString &cancelText, QObject *src = 0, const char *signal = 0)
 {
-    QMessageBox box(icon, title, title, buttons, parent);
-    box.setInformativeText(text);
-    box.setStyleSheet(css("QLabel#qt_msgbox_label { font-size: 20px; font-weight: bold; }"));
-    if (box.button(QMessageBox::Cancel))
-        box.button(QMessageBox::Cancel)->setText("취소");
+    QDialog dlg(parent);
+    dlg.setObjectName("msgBox");
+    dlg.setProperty("card", true);   // popup() 이 사각 배경을 칠하지 않도록 (둥근 카드 모서리)
+    dlg.setWindowTitle(title);
+    QVBoxLayout *outer = new QVBoxLayout(&dlg);
+    outer->setContentsMargins(0, 0, 0, 0);
+    QFrame *card = new QFrame;
+    card->setObjectName("msgCard");
+    outer->addWidget(card);
+
+    QVBoxLayout *v = new QVBoxLayout(card);
+    v->setContentsMargins(px(40), px(36), px(40), px(32));
+    v->setSpacing(px(14));
+
+    const char *symbol = kind == 'w' ? "!" : kind == 'q' ? "?" : kind == 'c' ? "…" : "✓";
+    QLabel *icon = new QLabel(QString::fromUtf8(symbol));
+    icon->setObjectName(kind == 'w' ? "msgIconWarn" : "msgIcon");
+    icon->setFixedSize(px(72), px(72));
+    icon->setAlignment(Qt::AlignCenter);
+    v->addWidget(icon, 0, Qt::AlignHCenter);
+
+    QLabel *lblTitle = new QLabel(title);
+    lblTitle->setObjectName("msgTitle");
+    lblTitle->setAlignment(Qt::AlignCenter);
+    lblTitle->setWordWrap(true);
+    v->addWidget(lblTitle);
+
+    QLabel *lblText = new QLabel(text);
+    lblText->setObjectName("msgText");
+    lblText->setAlignment(Qt::AlignCenter);
+    lblText->setWordWrap(true);
+    v->addWidget(lblText);
+    v->addSpacing(px(10));
+
+    QHBoxLayout *buttons = new QHBoxLayout;
+    buttons->setSpacing(px(12));
+    if (!cancelText.isEmpty()) {
+        QPushButton *cancel = new QPushButton(cancelText);
+        cancel->setObjectName("msgCancel");
+        QObject::connect(cancel, SIGNAL(clicked()), &dlg, SLOT(reject()));
+        buttons->addWidget(cancel);
+    }
+    if (!okText.isEmpty()) {
+        QPushButton *ok = new QPushButton(okText);
+        ok->setObjectName("btnOk");   // 공통 스타일의 초록 강조 버튼
+        ok->setDefault(true);
+        QObject::connect(ok, SIGNAL(clicked()), &dlg, SLOT(accept()));
+        buttons->addWidget(ok);
+    }
+    v->addLayout(buttons);
+
+    dlg.setFixedWidth(px(600));
     if (src)
-        QObject::connect(src, signal, &box, SLOT(accept()));
-    return popup(&box);
+        QObject::connect(src, signal, &dlg, SLOT(accept()));
+    return popup(&dlg);
 }
 
 namespace Msg {
@@ -88,25 +138,25 @@ namespace Msg {
 // 안내 메시지
 void info(QWidget *parent, const QString &title, const QString &text)
 {
-    msg(QMessageBox::Information, parent, title, text, QMessageBox::Ok);
+    msg('i', parent, title, text, "확인", QString());
 }
 
 // 경고 메시지
 void warn(QWidget *parent, const QString &title, const QString &text)
 {
-    msg(QMessageBox::Warning, parent, title, text, QMessageBox::Ok);
+    msg('w', parent, title, text, "확인", QString());
 }
 
 // 예/아니오 확인, 예면 true
 bool ask(QWidget *parent, const QString &title, const QString &text)
 {
-    return msg(QMessageBox::Question, parent, title, text, QMessageBox::Yes | QMessageBox::No) == QMessageBox::Yes;
+    return msg('q', parent, title, text, "예", "아니오") == QDialog::Accepted;
 }
 
 // signal 이 올 때까지 기다리는 메시지 (예: 카드 태그 대기), 취소하면 false
 bool wait(QWidget *parent, const QString &title, const QString &text, QObject *src, const char *signal)
 {
-    return msg(QMessageBox::Information, parent, title, text, QMessageBox::Cancel, src, signal) == QDialog::Accepted;
+    return msg('c', parent, title, text, QString(), "취소", src, signal) == QDialog::Accepted;
 }
 
 }

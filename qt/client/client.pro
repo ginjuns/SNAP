@@ -59,6 +59,8 @@ FORMS += mainwindow.ui \
         login.ui \
         keyboard.ui
 
+RESOURCES += resources.qrc
+
 DISTFILES += ../../db/kiosk.sql ../server/server.ini.example
 
 opencv {

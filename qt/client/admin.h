@@ -52,6 +52,7 @@ private:
     void loadTargets();
     QLabel *addBubble(const QString &text, bool mine);
     void setFollowUps(const QStringList &list);
+    void flushChat();
 
     Ui::Admin *ui;
     QByteArray m_img;

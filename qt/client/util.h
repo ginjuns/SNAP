@@ -66,6 +66,22 @@ inline void touchScroll(QAbstractScrollArea *area)
         v->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
         v->setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
     }
+    // 표: 줄 높이를 화면 배율에 맞추고, 머리글은 스타일의 굵은 글꼴로 폭을 계산하게 함 (글자 잘림 방지)
+    if (QTableView *t = qobject_cast<QTableView *>(area)) {
+        t->verticalHeader()->setDefaultSectionSize(px(40));
+        QHeaderView *h = t->horizontalHeader();
+        QFont f = h->font();
+        f.setBold(true);
+        f.setPixelSize(px(16));
+        h->setFont(f);
+        // 열 폭이 내용(예: "-")에 맞춰 줄어도 머리글 글자("얼굴인식")는 다 보이도록 최소 폭 지정
+        QFontMetrics fm(f);
+        int w = px(60);
+        for (int c = 0; t->model() && c < t->model()->columnCount(); ++c)
+            w = qMax(w, fm.width(t->model()->headerData(c, Qt::Horizontal).toString()) + px(32));
+        h->setMinimumSectionSize(w);
+        h->setMinimumHeight(fm.height() + px(20));   // 머리글 글자 아랫부분이 잘리지 않게 (위아래 여백 포함)
+    }
     QScroller::grabGesture(area->viewport(), QScroller::LeftMouseButtonGesture);
     QScroller *s = QScroller::scroller(area->viewport());
     QScrollerProperties sp = s->scrollerProperties();
@@ -122,7 +138,7 @@ inline QString appStyle()
 
         "QTableWidget, QTextBrowser { background: white; border: 1px solid LINE; border-radius: 6px;"
         "  gridline-color: #e2f4e2; selection-background-color: MINT; selection-color: INK; }"
-        "QHeaderView::section { background: MINT; color: DEEP; font-weight: bold; padding: 6px;"
+        "QHeaderView::section { background: MINT; color: DEEP; font-weight: bold; padding: 6px 14px;"
         "  border: none; border-right: 1px solid LINE; border-bottom: 1px solid LINE; }"
         "QTableCornerButton::section { background: MINT; border: none; }"
 
@@ -140,9 +156,32 @@ inline QString appStyle()
         "QScrollBar::handle:horizontal { background: LINE; min-width: 60px; border-radius: 8px; margin: 4px; }"
         "QScrollBar::add-line, QScrollBar::sub-line { width: 0px; height: 0px; }"
         "QScrollBar::add-page, QScrollBar::sub-page { background: none; }"
-        "QToolTip { background: white; color: INK; border: 1px solid LINE; }";
+        "QToolTip { background: white; color: INK; border: 1px solid LINE; }"
+
+        // 가로 화면 구성 요소
+        "QFrame#topBar { background: MINT; border-bottom: 2px solid LINE; }"
+        "Cart { background: white; border-left: 2px solid LINE; }"
+        "QFrame#sideMenu { background: MINT; border-right: 2px solid LINE; }"
+        "QPushButton[menu=\"true\"] { text-align: left; padding: 0 16px; min-height: 52px; border: none;"
+        "  border-radius: 10px; background: transparent; font-size: 17px; }"
+        "QPushButton[menu=\"true\"]:checked { background: GREEN; color: white; font-weight: bold; }"
+        "QLabel#lblKpiTotal, QLabel#lblKpiCard, QLabel#lblKpiFace, QLabel#lblKpiQty {"
+        "  background: white; border: 2px solid LINE; border-radius: 12px; padding: 6px 16px; }"
+        "QFrame#statusBox { background: white; border: 2px solid LINE; border-radius: 14px; }"
+        "QProgressBar { background: #e2f4e2; border: none; border-radius: 7px; min-height: 14px; max-height: 14px; }"
+        "QProgressBar::chunk { background: GREEN; border-radius: 7px; }"
+
+        // 메시지 창 (popup.cpp 의 Msg::info / warn / ask / wait)
+        "QDialog#msgBox { background: transparent; }"
+        "QFrame#msgCard { background: white; border: 2px solid LINE; border-radius: 20px; }"
+        "QLabel#msgIcon { background: MINT; color: GREEN; border-radius: 36px; font-size: 40px; font-weight: bold; }"
+        "QLabel#msgIconWarn { background: #fde8e8; color: RED; border-radius: 36px; font-size: 40px; font-weight: bold; }"
+        "QLabel#msgTitle { font-size: 26px; font-weight: bold; color: DEEP; }"
+        "QLabel#msgText { font-size: 20px; color: INK; }"
+        "QDialog#msgBox QPushButton { min-height: 64px; font-size: 20px; border-radius: 14px; }";
     s.replace("MINT", Theme::MINT).replace("LIGHT", Theme::LIGHT).replace("LINE", Theme::LINE)
-        .replace("GREEN", Theme::GREEN).replace("DEEP", Theme::DEEP).replace("INK", Theme::INK);
+        .replace("GREEN", Theme::GREEN).replace("DEEP", Theme::DEEP).replace("INK", Theme::INK)
+        .replace("RED", Theme::RED);
     return css(s);
 }
 

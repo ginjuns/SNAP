@@ -6,29 +6,34 @@
 #include "popup.h"
 #include "util.h"
 
-// 장바구니 창 초기화: 표/버튼 설정, ESP32 진열대 변경·카드 태그 신호 연결
-Cart::Cart(const QVariantMap &user, QList<Item> *items, QWidget *parent)
-    : QDialog(parent), ui(new Ui::Cart), m_user(user), m_items(items)
+// 장바구니 패널 초기화: 표/버튼 설정, ESP32 진열대 변경·카드 태그 신호 연결
+Cart::Cart(QWidget *parent)
+    : QWidget(parent), ui(new Ui::Cart), m_items(0)
 {
     ui->setupUi(this);
-    scaleUi(this);
-    resize(px(680), px(900));
-
-    stretch(ui->table);
+    setAttribute(Qt::WA_StyledBackground);   // 공통 스타일의 패널 배경/테두리 적용
+    // 크기 조정(scaleUi)은 이 패널을 품은 회원 화면이 한 번에 해 줌 (여기서 또 하면 두 번 커짐)
+    QHeaderView *h = ui->table->horizontalHeader();
+    h->setSectionResizeMode(QHeaderView::ResizeToContents);
+    h->setSectionResizeMode(0, QHeaderView::Stretch);
     touchScroll(ui->table);
-    ui->table->verticalHeader()->setDefaultSectionSize(px(48));
-    ui->lblBalance->setText(QString("(충전 잔액 %1)").arg(won(m_user.value("balance").toInt())));
-
+    ui->table->verticalHeader()->setDefaultSectionSize(px(56));
     connect(ui->btnClear, SIGNAL(clicked()), SLOT(clearAll()));
-    connect(ui->btnBack, SIGNAL(clicked()), SLOT(reject()));
     connect(ui->btnCard, SIGNAL(clicked()), SLOT(payCard()));
     connect(ui->btnFace, SIGNAL(clicked()), SLOT(payFace()));
-    ui->btnFace->setVisible(!m_user.value("pwLogin").toBool());
     if (Esp::get()) {
         connect(Esp::get(), SIGNAL(shelfChanged(QVariantList)), SLOT(refresh()));
         connect(Esp::get(), SIGNAL(card(QString)), SLOT(onCard(QString)));
     }
+}
 
+// 회원이 로그인하면 호출: 회원 정보와 장바구니 목록을 연결하고 표시
+void Cart::setUser(const QVariantMap &user, QList<Item> *items)
+{
+    m_user = user;
+    m_items = items;
+    ui->lblBalance->setText(QString("충전 잔액 %1").arg(won(m_user.value("balance").toInt())));
+    ui->btnFace->setVisible(!m_user.value("pwLogin").toBool());
     refresh();
 }
 
@@ -41,6 +46,8 @@ Cart::~Cart()
 int Cart::total() const
 {
     int sum = 0;
+    if (!m_items)
+        return 0;
     foreach (const Item &it, *m_items)
         sum += it.price * it.qty;
     return sum;
@@ -54,39 +61,48 @@ static QTableWidgetItem *cell(const QString &text, bool num = false)
     return c;
 }
 
-// 장바구니 표 다시 그리기 (품절 표시, [-][+] 버튼, 합계)
+// 장바구니 표 다시 그리기 (상품 | 금액 | [−] 수량 [+]), 품절 표시, 합계
 void Cart::refresh()
 {
+    if (!m_items)
+        return;
+    int qty = 0;
     ui->table->setRowCount(m_items->size());
     for (int i = 0; i < m_items->size(); ++i) {
         const Item &it = m_items->at(i);
         bool soldOut = Esp::shelfEmpty(it.shelf);
         QTableWidgetItem *name = cell(soldOut ? it.name + " (품절)" : it.name);
         if (soldOut)
-            name->setForeground(QColor("#d32f2f"));
+            name->setForeground(QColor(Theme::RED));
         ui->table->setItem(i, 0, name);
-        ui->table->setItem(i, 1, cell(won(it.price), true));
-        ui->table->setItem(i, 2, cell(QString("%1개").arg(it.qty), true));
-        ui->table->setItem(i, 3, cell(won(it.price * it.qty), true));
+        ui->table->setItem(i, 1, cell(won(it.price * it.qty), true));
 
         QWidget *box = new QWidget;
         QHBoxLayout *h = new QHBoxLayout(box);
         h->setContentsMargins(px(4), px(2), px(4), px(2));
-        h->setSpacing(px(6));
-        const char *text[2] = { "−", "+" };
+        h->setSpacing(px(4));
         for (int k = 0; k < 2; ++k) {
-            QPushButton *b = new QPushButton(text[k]);
-            b->setFixedSize(px(44), px(38));
+            QPushButton *b = new QPushButton(k == 0 ? "−" : "+");
+            b->setFixedSize(px(44), px(44));
             b->setStyleSheet(css("min-height: 0; padding: 0; font-size: 20px; font-weight: bold;"));
             b->setProperty("row", i);
             b->setProperty("delta", k == 0 ? -1 : 1);
             b->setEnabled(k == 0 || (!soldOut && it.qty < it.stock));
             connect(b, SIGNAL(clicked()), SLOT(change()));
+            if (k == 1) {
+                QLabel *n = new QLabel(QString::number(it.qty));
+                n->setAlignment(Qt::AlignCenter);
+                n->setMinimumWidth(px(28));
+                n->setStyleSheet(css("font-size: 17px; font-weight: bold;"));
+                h->addWidget(n);
+            }
             h->addWidget(b);
         }
-        ui->table->setCellWidget(i, 4, box);
+        ui->table->setCellWidget(i, 2, box);
+        qty += it.qty;
     }
-    ui->lblTotal->setText("합계: " + won(total()));
+    ui->lblCount->setText(QString("총 %L1개").arg(qty));
+    ui->lblTotal->setText(won(total()));
 }
 
 // [-]/[+] 버튼: 수량 변경, 0개가 되면 장바구니에서 뺌
@@ -192,7 +208,7 @@ void Cart::payCard()
               QString("%1 카드 결제가 완료되었습니다.\n카드 잔액: %2\n\n처음 화면으로 돌아갑니다.")
                   .arg(won(r.value("total").toInt()))
                   .arg(won(r.value("balance").toInt())));
-    accept();
+    emit paid();
 }
 
 // 얼굴인식 결제: 얼굴을 다시 확인하고 잔액을 보여 준 뒤 충전 잔액에서 결제
@@ -234,5 +250,5 @@ void Cart::payFace()
               QString("%1이(가) 차감되었습니다.\n남은 잔액: %2\n\n처음 화면으로 돌아갑니다.")
                   .arg(won(r.value("total").toInt()))
                   .arg(won(r.value("balance").toInt())));
-    accept();
+    emit paid();
 }

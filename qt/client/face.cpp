@@ -14,7 +14,7 @@ namespace {
 
 const double MIN_COSINE = 0.363;
 const int HITS = 5;
-const int MAX_TICKS = 400;
+const int MAX_TICKS = 600;
 
 /*
  * 인식 구역
@@ -619,9 +619,29 @@ Face::Face(
     {
         m_cam = new Cam;
 
-        if (m_cam->cap.open(0))
+        /*
+         * 카메라를 640x480 / MJPG / 30fps 로 연다.
+         * 그냥 open(0) 하면 카메라의 최대 해상도(C920: 2560x1472)를 압축 없이 받아
+         * 초당 2~5프레임밖에 안 나와 화면이 끊긴다.
+         * V4L2 로 못 열면 예전 방식(open(0))으로 연다.
+         */
+        bool opened = m_cam->cap.open(0, cv::CAP_V4L2);
+        if (opened)
         {
-            m_timer->start(50);
+            m_cam->cap.set(cv::CAP_PROP_FOURCC, cv::VideoWriter::fourcc('M', 'J', 'P', 'G'));
+            m_cam->cap.set(cv::CAP_PROP_FRAME_WIDTH, 640);
+            m_cam->cap.set(cv::CAP_PROP_FRAME_HEIGHT, 480);
+            m_cam->cap.set(cv::CAP_PROP_FPS, 30);
+            m_cam->cap.set(cv::CAP_PROP_BUFFERSIZE, 1);
+        }
+        else
+        {
+            opened = m_cam->cap.open(0);
+        }
+
+        if (opened)
+        {
+            m_timer->start(33);
         }
         else
         {
@@ -746,6 +766,10 @@ void Face::tick()
         m_hits = 0;
     }
 
+    // 오른쪽 진행 막대: 연속 인식 횟수 (HITS 번이면 성공)
+    ui->barHits->setMaximum(HITS);
+    ui->barHits->setValue(qMin(m_hits, HITS));
+
     if (known)
     {
         ui->lblStatus->setText(
@@ -837,7 +861,7 @@ void Face::pwLogin()
     {
         m_ticks = 0;
 
-        m_timer->start(50);
+        m_timer->start(33);
     }
 }
 

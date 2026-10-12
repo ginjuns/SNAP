@@ -1,7 +1,7 @@
 #ifndef CART_H
 #define CART_H
 
-#include <QDialog>
+#include <QWidget>
 #include <QList>
 #include <QVariant>
 
@@ -19,17 +19,24 @@ namespace Ui {
 class Cart;
 }
 
-class Cart : public QDialog
+// 회원 화면 오른쪽에 붙어 있는 장바구니 패널 (가로 화면)
+class Cart : public QWidget
 {
     Q_OBJECT
 public:
-    Cart(const QVariantMap &user, QList<Item> *items, QWidget *parent = 0);
+    explicit Cart(QWidget *parent = 0);
     ~Cart();
+    void setUser(const QVariantMap &user, QList<Item> *items);
+
+signals:
+    void paid();   // 결제가 끝나면 (회원 화면이 처음 화면으로 돌아감)
+
+public slots:
+    void refresh();
 
 private slots:
     void clearAll();
     void change();
-    void refresh();
     void payCard();
     void payFace();
     void onCard(const QString &uid) { m_cardUid = uid; }
@@ -41,7 +48,7 @@ private:
 
     Ui::Cart *ui;
     QVariantMap m_user;
-    QList<Item> *m_items;
+    QList<Item> *m_items;   // 회원 화면(Member)이 가진 장바구니 목록
     QString m_cardUid;   // 마지막으로 태그된 카드 UID
 };
 

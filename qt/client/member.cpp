@@ -5,10 +5,10 @@
 #include "popup.h"
 #include "util.h"
 
-static const int COLS = 3;
-static const int IMG_SIZE = 180;
+static const int COLS = 4;        // 가로 화면: 상품 4열
+static const int IMG_SIZE = 150;
 
-// 회원 화면 초기화: 버튼 연결, 진열대 상태가 바뀌면 상품 목록 다시 그리기
+// 회원 화면 초기화: 버튼 연결, 결제가 끝나면 처음 화면으로, 진열대 상태가 바뀌면 상품 목록 다시 그리기
 Member::Member(QWidget *parent)
     : QWidget(parent), ui(new Ui::Member), m_down(0)
 {
@@ -16,8 +16,10 @@ Member::Member(QWidget *parent)
     setAttribute(Qt::WA_StyledBackground);   // 공통 스타일의 화면 배경색 적용
     scaleUi(this);
     touchScroll(ui->scroll);
+    ui->lblLogo->setPixmap(QPixmap(":/images/snap_logo.png")
+                               .scaled(px(44), px(44), Qt::KeepAspectRatio, Qt::SmoothTransformation));
     connect(ui->btnHome, SIGNAL(clicked()), SIGNAL(done()));
-    connect(ui->btnCart, SIGNAL(clicked()), SLOT(openCart()));
+    connect(ui->cart, SIGNAL(paid()), SIGNAL(done()));
     if (Esp::get())
         connect(Esp::get(), SIGNAL(shelfChanged(QVariantList)), SLOT(build()));
 }
@@ -34,8 +36,8 @@ void Member::start(const QVariantMap &user)
     m_cart.clear();
     ui->lblWelcome->setText(QString("%1님 환영합니다").arg(user.value("name").toString()));
     ui->lblMsg->clear();
+    ui->cart->setUser(user, &m_cart);
     load();
-    updateBar();
 }
 
 // 서버에서 상품 목록을 받아와 화면에 그림
@@ -146,36 +148,12 @@ void Member::add(int i)
             }
             ++m_cart[k].qty;
             ui->lblMsg->setText(QString("'%1'을(를) 담았습니다. (%2개)").arg(name).arg(m_cart[k].qty));
-            updateBar();
+            ui->cart->refresh();
             return;
         }
     }
     Item it = { id, name, p.value("price").toInt(), 1, stock, p.value("shelf").toInt() };
     m_cart << it;
     ui->lblMsg->setText(QString("'%1'을(를) 담았습니다.").arg(name));
-    updateBar();
-}
-
-// 아래 장바구니 바의 총 수량/총 금액 갱신
-void Member::updateBar()
-{
-    int qty = 0, sum = 0;
-    foreach (const Item &it, m_cart) {
-        qty += it.qty;
-        sum += it.price * it.qty;
-    }
-    ui->lblQty->setText(QString("총 수량 %L1개").arg(qty));
-    ui->lblSum->setText("총 금액 " + won(sum));
-}
-
-// 장바구니 창 열기, 결제가 끝나면 첫 화면으로 돌아감
-void Member::openCart()
-{
-    Cart dlg(m_user, &m_cart, this);
-    if (popup(&dlg) == QDialog::Accepted) {
-        emit done();
-        return;
-    }
-    ui->lblMsg->clear();
-    updateBar();
+    ui->cart->refresh();
 }

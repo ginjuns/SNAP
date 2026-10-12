@@ -25,13 +25,11 @@ protected:
     bool eventFilter(QObject *obj, QEvent *e);
 
 private slots:
-    void openCart();
     void build();
 
 private:
     void load();
     void add(int i);
-    void updateBar();
 
     Ui::Member *ui;
     QVariantMap m_user;

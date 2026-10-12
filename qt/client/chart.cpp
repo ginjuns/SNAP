@@ -77,14 +77,14 @@ void Chart::setData(const QVariantList &bars, const QString &title)
 // 막대를 그리는 영역
 QRectF Chart::area() const
 {
-    return QRectF(80, 64, width() - 80 - 24, height() - 64 - 40);
+    return QRectF(px(80), px(76), width() - px(80 + 24), height() - px(76 + 40));
 }
 
 // 터치한 위치의 막대 번호 (없으면 -1)
 int Chart::barAt(const QPoint &pos) const
 {
     QRectF a = area();
-    if (m_bars.isEmpty() || !a.adjusted(0, -20, 0, 30).contains(pos))
+    if (m_bars.isEmpty() || !a.adjusted(0, -px(20), 0, px(30)).contains(pos))
         return -1;
     int i = int((pos.x() - a.left()) / (a.width() / m_bars.size()));
     return (i >= 0 && i < m_bars.size()) ? i : -1;
@@ -99,20 +99,20 @@ void Chart::paintEvent(QPaintEvent *)
 
     p.setPen(INK);
     p.setFont(pxFont(font(), 17, true));
-    p.drawText(QRectF(16, 10, width() - 32, 26), Qt::AlignLeft | Qt::AlignVCenter, m_title);
+    p.drawText(QRectF(px(16), px(10), width() - px(32), px(26)), Qt::AlignLeft | Qt::AlignVCenter, m_title);
 
     p.setFont(pxFont(font(), 13));
     const QString names[2] = { "카드", "얼굴인식" };
     const QColor colors[2] = { CARD, FACE };
-    double x = 16;
+    double x = px(16);
     for (int i = 0; i < 2; ++i) {
         p.setPen(Qt::NoPen);
         p.setBrush(colors[i]);
-        p.drawRoundedRect(QRectF(x, 42, 12, 12), 2, 2);
+        p.drawRoundedRect(QRectF(x, px(42), px(12), px(12)), 2, 2);
         p.setPen(INK2);
         double w = p.fontMetrics().width(names[i]);
-        p.drawText(QRectF(x + 18, 38, w + 4, 20), Qt::AlignLeft | Qt::AlignVCenter, names[i]);
-        x += 18 + w + 20;
+        p.drawText(QRectF(x + px(18), px(38), w + 4, px(20)), Qt::AlignLeft | Qt::AlignVCenter, names[i]);
+        x += px(18) + w + px(20);
     }
 
     QRectF a = area();
@@ -128,14 +128,14 @@ void Chart::paintEvent(QPaintEvent *)
         p.setPen(QPen(v == 0 ? LINE : GRID, 1));
         p.drawLine(QPointF(a.left(), y), QPointF(a.right(), y));
         p.setPen(GRAY);
-        p.drawText(QRectF(0, y - 10, a.left() - 10, 20), Qt::AlignRight | Qt::AlignVCenter,
+        p.drawText(QRectF(0, y - px(10), a.left() - px(10), px(20)), Qt::AlignRight | Qt::AlignVCenter,
                    QString("%L1").arg(qint64(v)));
     }
 
     int n = m_bars.size();
     double slot = a.width() / n;
-    double bw = qMin(48.0, slot * 0.6);
-    int every = qMax(1, int(std::ceil(n * 64.0 / a.width())));
+    double bw = qMin(double(px(48)), slot * 0.6);
+    int every = qMax(1, int(std::ceil(n * px(64) / a.width())));
 
     int peak = 0;
     for (int i = 1; i < n; ++i)
@@ -175,13 +175,13 @@ void Chart::paintEvent(QPaintEvent *)
             p.setPen(INK2);
             p.setFont(pxFont(font(), 12, true));
             double top = a.bottom() - h1 - h2 - (both ? GAP : 0);
-            p.drawText(QRectF(cx - 60, top - 20, 120, 18), Qt::AlignCenter, won(b.card + b.face));
+            p.drawText(QRectF(cx - px(60), top - px(20), px(120), px(18)), Qt::AlignCenter, won(b.card + b.face));
         }
 
         if (i % every == 0) {
             p.setPen(GRAY);
             p.setFont(pxFont(font(), 12));
-            p.drawText(QRectF(cx - 40, a.bottom() + 6, 80, 20), Qt::AlignHCenter | Qt::AlignTop, b.label);
+            p.drawText(QRectF(cx - px(40), a.bottom() + px(6), px(80), px(20)), Qt::AlignHCenter | Qt::AlignTop, b.label);
         }
     }
 }

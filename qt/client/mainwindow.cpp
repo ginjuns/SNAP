@@ -34,7 +34,9 @@ MainWindow::MainWindow(QWidget *parent)
 {
     ui->setupUi(this);
     scaleUi(this);
-    resize(px(720), px(1280));
+    resize(px(1280), px(720));
+    ui->lblTitle->setPixmap(QPixmap(":/images/snap_logo.png")
+                                .scaled(px(260), px(260), Qt::KeepAspectRatio, Qt::SmoothTransformation));
     connect(ui->btnLogin, SIGNAL(clicked()), SLOT(login()));
 
     m_member = new Member;

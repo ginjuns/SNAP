@@ -122,12 +122,26 @@ Admin::Admin(QWidget *parent)
     connect(ui->btnNext, SIGNAL(clicked()), SLOT(next()));
     connect(ui->btnToday, SIGNAL(clicked()), SLOT(today()));
 
-    stretch(ui->tableDetail);
-    ui->tableDetail->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+    // 숫자 칸(시간/카드/얼굴인식/합계)은 내용 크기만큼, 남는 폭은 상품 칸이 사용 (가로 화면에서 잘리지 않게)
+    ui->tableDetail->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
+    ui->tableDetail->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
+    // 표가 좌우로 움직이지 않게: 가로 스크롤바는 끄고, 세로 스크롤바는 항상 보이게 해서
+    // 줄이 많아져도 표 폭이 바뀌지 않도록 함 (폭이 줄면 그만큼 좌우로 밀리던 문제)
+    ui->tableDetail->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    ui->tableDetail->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
     touchScroll(ui->tableDetail);
+    // 가로 화면: 왼쪽 세로 메뉴 버튼을 누르면 오른쪽 화면(stack)을 바꿈
+    ui->lblLogo->setPixmap(QPixmap(":/images/snap_logo.png")
+                               .scaled(px(40), px(40), Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    QList<QPushButton *> menu;
+    menu << ui->btnMenuProduct << ui->btnMenuSales << ui->btnMenuReport << ui->btnMenuChat << ui->btnMenuForecast;
+    for (int i = 0; i < menu.size(); ++i)
+        connect(menu[i], &QPushButton::clicked, this, [this, i]() { ui->stack->setCurrentIndex(i); });
+
     ui->splitter->setHandleWidth(px(16));
     ui->splitter->setStretchFactor(0, 1);
     ui->splitter->setStretchFactor(1, 1);
+    ui->splitter->setSizes(QList<int>() << px(420) << px(580));   // 그래프(왼쪽) 4 : 표(오른쪽) 6
 
     connect(ui->btnReport, SIGNAL(clicked()), SLOT(makeReport()));
     ui->dateReport->setDate(QDate::currentDate());
@@ -143,7 +157,9 @@ Admin::Admin(QWidget *parent)
     }
     // AI 리포트도 손가락으로 끌어서 스크롤 (글자 선택은 끔: 끌기가 선택으로 잡히지 않게)
     ui->textReport->setTextInteractionFlags(Qt::NoTextInteraction);
+    ui->textKpi->setTextInteractionFlags(Qt::NoTextInteraction);
     touchScroll(ui->textReport);
+    touchScroll(ui->textKpi);
     touchScroll(ui->scrollChat);
     touchScroll(ui->tableForecast);
     stretch(ui->tableForecast);
@@ -157,9 +173,9 @@ Admin::~Admin()
 // 관리자가 로그인할 때마다 이전 관리자가 보던 화면을 모두 처음 상태로 되돌린다.
 void Admin::start(const QVariantMap &user)
 {
-    ui->lblWelcome->setText(QString("SNAP 관리자 - %1").arg(user.value("name").toString()));
-    ui->tabWidget->setCurrentIndex(0);
-    ui->tabAiSub->setCurrentIndex(0);
+    ui->lblWelcome->setText(user.value("name").toString());   // 왼쪽 메뉴 "SNAP 관리자" 아래 이름
+    ui->btnMenuProduct->setChecked(true);
+    ui->stack->setCurrentIndex(0);
 
     reset();
     loadProducts();
@@ -182,6 +198,7 @@ void Admin::start(const QVariantMap &user)
     ui->dateReport->setDate(QDate::currentDate());
     onReportUnit();
     ui->textReport->clear();
+    ui->textKpi->clear();
 
     // AI 상담: 대화 내용과 추천 질문 지우기
     for (int i = ui->layoutChat->count() - 1; i >= 0; --i) {
@@ -556,8 +573,23 @@ void Admin::loadSales()
                                                              << "카드" << "얼굴인식" << "합계");
     ui->lblDetail->setText(mon ? "날짜별 상품 판매" : "시간대별 상품 판매");
 
-    ui->lblSum->setText(QString("합계 %1   |   카드 %2   |   얼굴인식 %3   |   판매수량 %L4개")
-                            .arg(won(cardSum + faceSum)).arg(won(cardSum)).arg(won(faceSum)).arg(qtySum));
+    // 내용이 표 폭보다 넓으면 모든 칸을 표 폭에 나눠 맞춤 (가로 스크롤 없이 한 화면에 보이게)
+    QHeaderView *hd = ui->tableDetail->horizontalHeader();
+    hd->setSectionResizeMode(QHeaderView::Interactive);
+    ui->tableDetail->resizeColumnsToContents();   // 내용에 필요한 폭을 먼저 재 봄
+    int need = hd->length();
+    hd->setSectionResizeMode(QHeaderView::ResizeToContents);
+    hd->setSectionResizeMode(1, QHeaderView::Stretch);
+    if (need > ui->tableDetail->viewport()->width())
+        hd->setSectionResizeMode(QHeaderView::Stretch);
+
+    // 요약 카드: 작은 제목 + 큰 값
+    QString kpi = "<span style='font-size:%1px; color:#3d6b4c'>%2</span><br>"
+                   "<span style='font-size:%3px; font-weight:bold; color:#14532d'>%4</span>";
+    ui->lblKpiTotal->setText(kpi.arg(px(14)).arg("합계").arg(px(24)).arg(won(cardSum + faceSum)));
+    ui->lblKpiCard->setText(kpi.arg(px(14)).arg("카드").arg(px(24)).arg(won(cardSum)));
+    ui->lblKpiFace->setText(kpi.arg(px(14)).arg("얼굴인식").arg(px(24)).arg(won(faceSum)));
+    ui->lblKpiQty->setText(kpi.arg(px(14)).arg("판매수량").arg(px(24)).arg(QString("%L1개").arg(qtySum)));
 }
 
 // 오늘 날짜로 이동 (이미 오늘이면 다시 조회)
@@ -639,7 +671,8 @@ void Admin::makeReport()
         return;
     }
     QVariantMap res = data.toMap();
-    ui->textReport->setHtml(res.value("html").toString());
+    ui->textKpi->setHtml(res.value("kpiHtml").toString());
+    ui->textReport->setHtml(res.value("aiHtml").toString());
     ui->lblReportInfo->setText(QString("%1  ·  %2 생성")
                                    .arg(res.value("title").toString(),
                                         QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm")));
@@ -689,19 +722,34 @@ void Admin::ask()
 
     addBubble(text, true);
     QLabel *wait = addBubble("AI가 분석 중...", false);
-    qApp->processEvents();
+    flushChat();   // AI 답을 기다리는 동안 화면이 멈추므로, 그 전에 배치/스크롤을 끝내 둠
 
     QVariant data;
     QString err;
     bool ok = Net::call("AI_ASK", args, &data, &err);
-    delete wait;
+    ui->layoutChat->removeWidget(wait);
+    wait->hide();
+    wait->deleteLater();
     if (!ok) {
         addBubble("오류: " + err, false);
-        return;
+    } else {
+        QVariantMap res = data.toMap();
+        addBubble(res.value("answer").toString(), false);
+        setFollowUps(res.value("followUps").toStringList());
     }
-    QVariantMap res = data.toMap();
-    addBubble(res.value("answer").toString(), false);
-    setFollowUps(res.value("followUps").toStringList());
+    flushChat();
+}
+
+// 대화창 배치를 바로 끝내고 맨 아래로 스크롤 (배치가 밀린 채로 그려져 말풍선이 겹쳐 보이던 문제)
+void Admin::flushChat()
+{
+    for (int i = 0; i < 3; ++i) {
+        ui->layoutChat->activate();
+        QCoreApplication::sendPostedEvents(0, QEvent::LayoutRequest);
+    }
+    QScrollBar *bar = ui->scrollChat->verticalScrollBar();
+    bar->setValue(bar->maximum());
+    ui->scrollChat->viewport()->repaint();
 }
 
 // AI 상담 대화창에 말풍선 추가
@@ -712,10 +760,14 @@ QLabel *Admin::addBubble(const QString &text, bool mine)
     lbl->setStyleSheet(css(mine ? "background: #1f7a43; color: white; border-radius: 12px; padding: 10px; font-size: 17px;"
                                 : "background: #cdffcd; color: #17301f; border-radius: 12px; padding: 10px; font-size: 17px;"));
 
-    lbl->ensurePolished();
-    int pad = px(10) * 2 + 4;
+    // 크기는 실제로 그려질 글자(배율이 적용된 17px)로 계산 (글자가 잘리거나 엉뚱하게 줄바꿈되지 않게)
+    QFont f = lbl->font();
+    f.setPixelSize(px(17));
+    lbl->setFont(f);
+    QFontMetrics fm(f);
+    int pad = px(10) * 2 + px(6);
     int maxWidth = qMax(px(300), ui->scrollChat->viewport()->width() * 3 / 4);
-    QRect r = lbl->fontMetrics().boundingRect(QRect(0, 0, maxWidth - pad, 100000), Qt::TextWordWrap, text);
+    QRect r = fm.boundingRect(QRect(0, 0, maxWidth - pad, 100000), Qt::TextWordWrap, text);
     lbl->setFixedSize(r.width() + pad, r.height() + pad);
     ui->layoutChat->addWidget(lbl, 0, mine ? Qt::AlignRight : Qt::AlignLeft);
 
@@ -764,7 +816,7 @@ void Admin::forecast()
         ui->tableForecast->setItem(i, 1, cell(QString("%L1개").arg(m.value("stock").toInt()), true));
         ui->tableForecast->setItem(i, 2, cell(QString::number(m.value("avg").toDouble(), 'f', 1) + "개", true));
         ui->tableForecast->setItem(i, 3, cell(QString("%L1개").arg(qRound(m.value("predicted").toDouble())), true));
-        ui->tableForecast->setItem(i, 4, cell(left < 0 ? "-" : left == 0 ? "품절" : QString("%1일 후").arg(left)));
+        ui->tableForecast->setItem(i, 4, cell(left < 0 ? "-" : left == 0 ? "품절" : QString("%1일 후").arg(left), true));
         ui->tableForecast->setItem(i, 5, cell(order ? QString("%L1개").arg(order) : "-", true));
         if (left >= 0 && left <= 3) {
             ++danger;

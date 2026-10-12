@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version='1.0' encoding='UTF-8'?>
 <ui version="4.0">
  <class>Admin</class>
  <widget class="QWidget" name="Admin">
@@ -6,114 +6,80 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>720</width>
-    <height>1280</height>
+    <width>1280</width>
+    <height>720</height>
    </rect>
   </property>
-  <layout class="QVBoxLayout" name="verticalLayout">
-   <item>
-    <layout class="QHBoxLayout" name="horizontalLayout">
-     <item>
-      <widget class="QLabel" name="lblWelcome">
-       <property name="styleSheet">
-        <string notr="true">font-size: 22px; font-weight: bold;</string>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <spacer name="horizontalSpacer">
-       <property name="orientation">
-        <enum>Qt::Horizontal</enum>
-       </property>
-       <property name="sizeHint" stdset="0">
-        <size>
-         <width>0</width>
-         <height>0</height>
-        </size>
-       </property>
-      </spacer>
-     </item>
-     <item>
-      <widget class="QPushButton" name="btnLogout">
+  <layout class="QHBoxLayout" name="layoutRoot"><property name="spacing"><number>0</number></property><property name="leftMargin"><number>0</number></property><property name="topMargin"><number>0</number></property><property name="rightMargin"><number>0</number></property><property name="bottomMargin"><number>0</number></property><item><widget class="QFrame" name="sideMenu"><property name="minimumSize"><size><width>220</width><height>0</height></size></property><property name="maximumSize"><size><width>220</width><height>16777215</height></size></property><layout class="QVBoxLayout" name="layoutMenu"><property name="spacing"><number>8</number></property><property name="leftMargin"><number>14</number></property><property name="topMargin"><number>14</number></property><property name="rightMargin"><number>14</number></property><property name="bottomMargin"><number>14</number></property><item><layout class="QHBoxLayout" name="layoutBrand"><property name="spacing"><number>10</number></property><item><widget class="QLabel" name="lblLogo"><property name="minimumSize"><size><width>40</width><height>40</height></size></property><property name="maximumSize"><size><width>40</width><height>40</height></size></property></widget></item><item><layout class="QVBoxLayout" name="layoutBrandText"><property name="spacing"><number>0</number></property><item><widget class="QLabel" name="lblBrand"><property name="styleSheet"><string notr="true">font-size: 20px; font-weight: bold; color: #14532d;</string></property><property name="text"><string>SNAP 관리자</string></property></widget></item><item><widget class="QLabel" name="lblWelcome">
+       <property name="styleSheet"><string notr="true">font-size: 13px; color: #3d6b4c;</string></property></widget>
+     </item></layout></item></layout></item><item><widget class="QPushButton" name="btnMenuProduct"><property name="text"><string>상품 관리</string></property><property name="checkable"><bool>true</bool></property><property name="checked"><bool>true</bool></property><property name="autoExclusive"><bool>true</bool></property><property name="menu" stdset="0"><bool>true</bool></property></widget></item><item><widget class="QPushButton" name="btnMenuSales"><property name="text"><string>매출 확인</string></property><property name="checkable"><bool>true</bool></property><property name="checked"><bool>false</bool></property><property name="autoExclusive"><bool>true</bool></property><property name="menu" stdset="0"><bool>true</bool></property></widget></item><item><widget class="QPushButton" name="btnMenuReport"><property name="text"><string>AI 리포트</string></property><property name="checkable"><bool>true</bool></property><property name="checked"><bool>false</bool></property><property name="autoExclusive"><bool>true</bool></property><property name="menu" stdset="0"><bool>true</bool></property></widget></item><item><widget class="QPushButton" name="btnMenuChat"><property name="text"><string>AI 상담</string></property><property name="checkable"><bool>true</bool></property><property name="checked"><bool>false</bool></property><property name="autoExclusive"><bool>true</bool></property><property name="menu" stdset="0"><bool>true</bool></property></widget></item><item><widget class="QPushButton" name="btnMenuForecast"><property name="text"><string>판매 예측</string></property><property name="checkable"><bool>true</bool></property><property name="checked"><bool>false</bool></property><property name="autoExclusive"><bool>true</bool></property><property name="menu" stdset="0"><bool>true</bool></property></widget></item><item><spacer name="spacerMenu"><property name="orientation"><enum>Qt::Vertical</enum></property><property name="sizeHint" stdset="0"><size><width>0</width><height>0</height></size></property></spacer></item><item><widget class="QPushButton" name="btnLogout">
        <property name="text">
         <string>로그아웃</string>
        </property>
       </widget>
-     </item>
-    </layout>
-   </item>
-   <item>
-    <widget class="QTabWidget" name="tabWidget">
-     <property name="currentIndex">
-      <number>0</number>
-     </property>
-     <widget class="QWidget" name="tabProduct">
-      <attribute name="title">
-       <string>상품 관리</string>
-      </attribute>
-      <layout class="QVBoxLayout" name="verticalLayout_2" stretch="0,1">
-       <item>
-        <layout class="QFormLayout" name="formLayout">
-         <item row="0" column="0">
+     </item></layout></widget></item><item><widget class="QStackedWidget" name="stack"><property name="currentIndex"><number>0</number></property><widget class="QWidget" name="tabProduct">
+      <layout class="QHBoxLayout" name="verticalLayout_2" stretch="0,1">
+       <property name="spacing"><number>20</number></property><property name="leftMargin"><number>20</number></property><property name="topMargin"><number>20</number></property><property name="rightMargin"><number>20</number></property><property name="bottomMargin"><number>20</number></property><item><widget class="QWidget" name="formBox"><property name="minimumSize"><size><width>400</width><height>0</height></size></property><property name="maximumSize"><size><width>400</width><height>16777215</height></size></property><layout class="QVBoxLayout" name="layoutFormBox"><property name="leftMargin"><number>0</number></property><property name="topMargin"><number>0</number></property><property name="rightMargin"><number>0</number></property><property name="bottomMargin"><number>0</number></property><item><widget class="QLabel" name="lblFormTitle"><property name="styleSheet"><string notr="true">font-size: 20px; font-weight: bold; color: #14532d;</string></property><property name="text"><string>상품 정보</string></property></widget></item><item><layout class="QFormLayout" name="formLayout">
+         <item column="0" row="0">
           <widget class="QLabel" name="lblName">
            <property name="text">
             <string>상품명</string>
            </property>
           </widget>
          </item>
-         <item row="0" column="1">
+         <item column="1" row="0">
           <widget class="QLineEdit" name="editName">
            <property name="placeholderText">
             <string>터치하여 입력</string>
            </property>
           </widget>
          </item>
-         <item row="1" column="0">
+         <item column="0" row="1">
           <widget class="QLabel" name="lblPrice">
            <property name="text">
             <string>가격(원)</string>
            </property>
           </widget>
          </item>
-         <item row="1" column="1">
+         <item column="1" row="1">
           <widget class="QLineEdit" name="editPrice">
            <property name="placeholderText">
             <string>터치하여 입력</string>
            </property>
           </widget>
          </item>
-         <item row="2" column="0">
+         <item column="0" row="2">
           <widget class="QLabel" name="lblStock">
            <property name="text">
             <string>재고(개)</string>
            </property>
           </widget>
          </item>
-         <item row="2" column="1">
+         <item column="1" row="2">
           <widget class="QLineEdit" name="editStock">
            <property name="placeholderText">
             <string>터치하여 입력</string>
            </property>
           </widget>
          </item>
-         <item row="3" column="0">
+         <item column="0" row="3">
           <widget class="QLabel" name="lblShelf">
            <property name="text">
             <string>진열대</string>
            </property>
           </widget>
          </item>
-         <item row="3" column="1">
-          <widget class="QComboBox" name="comboShelf"/>
+         <item column="1" row="3">
+          <widget class="QComboBox" name="comboShelf" />
          </item>
-         <item row="4" column="0">
+         <item column="0" row="4">
           <widget class="QLabel" name="lblPhoto">
            <property name="text">
             <string>사진</string>
            </property>
           </widget>
          </item>
-         <item row="4" column="1">
+         <item column="1" row="4">
           <widget class="QLabel" name="lblImage">
            <property name="minimumSize">
             <size>
@@ -138,7 +104,7 @@
            </property>
           </widget>
          </item>
-         <item row="5" column="1">
+         <item column="1" row="5">
           <layout class="QHBoxLayout" name="horizontalLayout_2">
            <item>
             <widget class="QPushButton" name="btnAdd">
@@ -207,9 +173,7 @@
           </layout>
          </item>
         </layout>
-       </item>
-       <item>
-        <widget class="QTableWidget" name="tableProduct">
+       </item><item><spacer name="spacerForm"><property name="orientation"><enum>Qt::Vertical</enum></property><property name="sizeHint" stdset="0"><size><width>0</width><height>0</height></size></property></spacer></item></layout></widget></item><item><layout class="QVBoxLayout" name="layoutProductList" stretch="0,1"><property name="leftMargin"><number>0</number></property><property name="topMargin"><number>0</number></property><property name="rightMargin"><number>0</number></property><property name="bottomMargin"><number>0</number></property><item><widget class="QLabel" name="lblListTitle"><property name="styleSheet"><string notr="true">font-size: 20px; font-weight: bold; color: #14532d;</string></property><property name="text"><string>상품 목록</string></property></widget></item><item><widget class="QTableWidget" name="tableProduct">
          <property name="editTriggers">
           <set>QAbstractItemView::NoEditTriggers</set>
          </property>
@@ -243,18 +207,11 @@
           </property>
          </column>
         </widget>
-       </item>
-      </layout>
+       </item></layout></item></layout>
      </widget>
      <widget class="QWidget" name="tabSales">
-      <attribute name="title">
-       <string>매출 확인</string>
-      </attribute>
-      <layout class="QVBoxLayout" name="verticalLayout_3" stretch="0,0,0,1">
-       <item>
-        <layout class="QHBoxLayout" name="horizontalLayout_3">
-         <item>
-          <widget class="QComboBox" name="comboUnit">
+      <layout class="QVBoxLayout" name="verticalLayout_3" stretch="0,0,1">
+       <property name="leftMargin"><number>20</number></property><property name="topMargin"><number>20</number></property><property name="rightMargin"><number>20</number></property><property name="bottomMargin"><number>20</number></property><item><layout class="QHBoxLayout" name="layoutSalesTop"><property name="spacing"><number>10</number></property><item><widget class="QComboBox" name="comboUnit">
            <item>
             <property name="text">
              <string>일별 (날짜 선택)</string>
@@ -266,40 +223,12 @@
             </property>
            </item>
           </widget>
-         </item>
-         <item>
-          <spacer name="horizontalSpacer_2">
-           <property name="orientation">
-            <enum>Qt::Horizontal</enum>
-           </property>
-           <property name="sizeHint" stdset="0">
-            <size>
-             <width>0</width>
-             <height>0</height>
-            </size>
-           </property>
-          </spacer>
-         </item>
-         <item>
-          <widget class="QPushButton" name="btnToday">
-           <property name="text">
-            <string>오늘</string>
-           </property>
-          </widget>
-         </item>
-        </layout>
-       </item>
-       <item>
-        <layout class="QHBoxLayout" name="horizontalLayout_4" stretch="0,1,0">
-         <item>
-          <widget class="QPushButton" name="btnPrev">
+         </item><item><widget class="QPushButton" name="btnPrev">
            <property name="text">
             <string>◀ 이전</string>
            </property>
           </widget>
-         </item>
-         <item>
-          <widget class="QDateEdit" name="date">
+         </item><item><widget class="QDateEdit" name="date">
            <property name="minimumSize">
             <size>
              <width>170</width>
@@ -319,27 +248,20 @@
             <string>yyyy-MM-dd</string>
            </property>
           </widget>
-         </item>
-         <item>
-          <widget class="QPushButton" name="btnNext">
+         </item><item><widget class="QPushButton" name="btnNext">
            <property name="text">
             <string>다음 ▶</string>
            </property>
           </widget>
-         </item>
-        </layout>
-       </item>
-       <item>
-        <widget class="QLabel" name="lblSum">
-         <property name="styleSheet">
-          <string notr="true">font-size: 18px; font-weight: bold;</string>
-         </property>
-        </widget>
-       </item>
-       <item>
+         </item><item><widget class="QPushButton" name="btnToday">
+           <property name="text">
+            <string>오늘</string>
+           </property>
+          </widget>
+         </item><item><spacer name="spacerSalesTop"><property name="orientation"><enum>Qt::Horizontal</enum></property><property name="sizeHint" stdset="0"><size><width>0</width><height>0</height></size></property></spacer></item></layout></item><item><layout class="QHBoxLayout" name="layoutKpi"><property name="spacing"><number>12</number></property><item><widget class="QLabel" name="lblKpiTotal"><property name="text"><string>합계</string></property><property name="minimumSize"><size><width>0</width><height>72</height></size></property></widget></item><item><widget class="QLabel" name="lblKpiCard"><property name="text"><string>카드</string></property><property name="minimumSize"><size><width>0</width><height>72</height></size></property></widget></item><item><widget class="QLabel" name="lblKpiFace"><property name="text"><string>얼굴인식</string></property><property name="minimumSize"><size><width>0</width><height>72</height></size></property></widget></item><item><widget class="QLabel" name="lblKpiQty"><property name="text"><string>판매수량</string></property><property name="minimumSize"><size><width>0</width><height>72</height></size></property></widget></item></layout></item><item>
         <widget class="QSplitter" name="splitter">
          <property name="orientation">
-          <enum>Qt::Vertical</enum>
+          <enum>Qt::Horizontal</enum>
          </property>
          <widget class="Chart" name="chart">
           <property name="minimumSize">
@@ -417,34 +339,9 @@
        </item>
       </layout>
      </widget>
-     <widget class="QWidget" name="tabAi">
-      <attribute name="title">
-       <string>AI 판매 분석</string>
-      </attribute>
-      <layout class="QVBoxLayout" name="layoutAi">
-       <property name="leftMargin">
-        <number>0</number>
-       </property>
-       <property name="topMargin">
-        <number>0</number>
-       </property>
-       <property name="rightMargin">
-        <number>0</number>
-       </property>
-       <property name="bottomMargin">
-        <number>0</number>
-       </property>
-       <item>
-        <widget class="QTabWidget" name="tabAiSub">
-         <property name="currentIndex">
-          <number>0</number>
-         </property>
-         <widget class="QWidget" name="tabReport">
-          <attribute name="title">
-           <string>AI 리포트</string>
-          </attribute>
+     <widget class="QWidget" name="tabReport">
           <layout class="QVBoxLayout" name="layoutReport" stretch="0,0,1">
-           <item>
+           <property name="leftMargin"><number>20</number></property><property name="topMargin"><number>20</number></property><property name="rightMargin"><number>20</number></property><property name="bottomMargin"><number>20</number></property><item>
             <layout class="QHBoxLayout" name="layoutReportTop">
              <item>
               <widget class="QComboBox" name="comboPeriod">
@@ -519,21 +416,16 @@
              </property>
             </widget>
            </item>
-           <item>
-            <widget class="QTextBrowser" name="textReport">
+           <item><layout class="QHBoxLayout" name="layoutReportBody"><property name="spacing"><number>16</number></property><item><widget class="QTextBrowser" name="textKpi"><property name="minimumSize"><size><width>440</width><height>0</height></size></property><property name="maximumSize"><size><width>460</width><height>16777215</height></size></property><property name="styleSheet"><string notr="true">font-size: 16px;</string></property></widget></item><item><widget class="QTextBrowser" name="textReport">
              <property name="styleSheet">
               <string notr="true">font-size: 18px;</string>
              </property>
             </widget>
-           </item>
-          </layout>
+           </item></layout></item></layout>
          </widget>
          <widget class="QWidget" name="tabChat">
-          <attribute name="title">
-           <string>AI 상담</string>
-          </attribute>
           <layout class="QVBoxLayout" name="layoutChatTab" stretch="1,0,0,0,0">
-           <item>
+           <property name="leftMargin"><number>20</number></property><property name="topMargin"><number>20</number></property><property name="rightMargin"><number>20</number></property><property name="bottomMargin"><number>20</number></property><item>
             <widget class="QScrollArea" name="scrollChat">
              <property name="widgetResizable">
               <bool>true</bool>
@@ -625,7 +517,7 @@
               </widget>
              </item>
              <item>
-              <widget class="QComboBox" name="comboTarget"/>
+              <widget class="QComboBox" name="comboTarget" />
              </item>
             </layout>
            </item>
@@ -650,14 +542,11 @@
           </layout>
          </widget>
          <widget class="QWidget" name="tabForecast">
-          <attribute name="title">
-           <string>AI 판매 예측</string>
-          </attribute>
           <layout class="QVBoxLayout" name="layoutForecast" stretch="0,0,0,1">
-           <item>
+           <property name="leftMargin"><number>20</number></property><property name="topMargin"><number>20</number></property><property name="rightMargin"><number>20</number></property><property name="bottomMargin"><number>20</number></property><item>
             <layout class="QHBoxLayout" name="layoutForecastTop" stretch="1,0,0">
              <item>
-              <widget class="QComboBox" name="comboProduct"/>
+              <widget class="QComboBox" name="comboProduct" />
              </item>
              <item>
               <widget class="QComboBox" name="comboDays">
@@ -744,14 +633,7 @@
            </item>
           </layout>
          </widget>
-        </widget>
-       </item>
-      </layout>
-     </widget>
-    </widget>
-   </item>
-  </layout>
- </widget>
+        </widget></item></layout></widget>
  <customwidgets>
   <customwidget>
    <class>Chart</class>
@@ -764,6 +646,6 @@
    <header>forecastchart.h</header>
   </customwidget>
  </customwidgets>
- <resources/>
- <connections/>
+ <resources />
+ <connections />
 </ui>

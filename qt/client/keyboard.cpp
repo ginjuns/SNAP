@@ -107,7 +107,8 @@ bool Keyboard::open(QLineEdit *edit, Mode mode, const QString &title)
         kb.move(x, y);
     } else {
         QWidget *top = edit->window();
-        int h = top->height() / 3;
+        // 가로 화면은 높이가 낮아서 화면의 45% 를 키보드로, 키 배치에 더 필요하면 그만큼 (화면 높이까지)
+        int h = qMin(top->height(), qMax(top->height() * 9 / 20, kb.sizeHint().height()));
         kb.resize(top->width(), h);
         kb.move(top->mapToGlobal(QPoint(0, top->height() - h)));
     }

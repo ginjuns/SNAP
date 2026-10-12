@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>720</width>
-    <height>1280</height>
+    <width>1280</width>
+    <height>720</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -33,119 +33,178 @@
        <property name="styleSheet">
         <string notr="true">QWidget#pageLogin { background: #cdffcd; }</string>
        </property>
-       <layout class="QVBoxLayout" name="verticalLayout_2">
+       <layout class="QHBoxLayout" name="layoutLogin" stretch="1,1">
+        <property name="spacing">
+         <number>0</number>
+        </property>
+        <property name="leftMargin">
+         <number>0</number>
+        </property>
+        <property name="topMargin">
+         <number>0</number>
+        </property>
+        <property name="rightMargin">
+         <number>0</number>
+        </property>
+        <property name="bottomMargin">
+         <number>0</number>
+        </property>
         <item>
-         <spacer name="verticalSpacer">
-          <property name="orientation">
-           <enum>Qt::Vertical</enum>
-          </property>
-          <property name="sizeHint" stdset="0">
-           <size>
-            <width>0</width>
-            <height>0</height>
-           </size>
-          </property>
-         </spacer>
-        </item>
-        <item>
-         <widget class="QLabel" name="lblTitle">
+         <widget class="QFrame" name="loginLeft">
           <property name="styleSheet">
-           <string notr="true">font-size: 120px; font-weight: bold; color: #14532d;</string>
+           <string notr="true">QFrame#loginLeft { border-right: 2px solid #a8dca8; }</string>
           </property>
-          <property name="text">
-           <string>SNAP</string>
-          </property>
-          <property name="alignment">
-           <set>Qt::AlignCenter</set>
-          </property>
+          <layout class="QVBoxLayout" name="layoutLoginLeft">
+           <property name="spacing">
+            <number>8</number>
+           </property>
+           <item>
+            <spacer name="spacerLeftTop">
+             <property name="orientation">
+              <enum>Qt::Vertical</enum>
+             </property>
+             <property name="sizeHint" stdset="0">
+              <size>
+               <width>0</width>
+               <height>0</height>
+              </size>
+             </property>
+            </spacer>
+           </item>
+           <item>
+            <widget class="QLabel" name="lblTitle">
+             <property name="alignment">
+              <set>Qt::AlignCenter</set>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QLabel" name="lblSub">
+             <property name="styleSheet">
+              <string notr="true">font-size: 64px; font-weight: bold; color: #14532d; margin-top: 16px;</string>
+             </property>
+             <property name="text">
+              <string>SNAP</string>
+             </property>
+             <property name="alignment">
+              <set>Qt::AlignCenter</set>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QLabel" name="lblFullName">
+             <property name="styleSheet">
+              <string notr="true">font-size: 18px; color: #3f8f5c;</string>
+             </property>
+             <property name="text">
+              <string>Smart No-touch Automated Payment</string>
+             </property>
+             <property name="alignment">
+              <set>Qt::AlignCenter</set>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <spacer name="spacerLeftBottom">
+             <property name="orientation">
+              <enum>Qt::Vertical</enum>
+             </property>
+             <property name="sizeHint" stdset="0">
+              <size>
+               <width>0</width>
+               <height>0</height>
+              </size>
+             </property>
+            </spacer>
+           </item>
+          </layout>
          </widget>
         </item>
         <item>
-         <widget class="QLabel" name="lblSub">
-          <property name="styleSheet">
-           <string notr="true">font-size: 22px; font-weight: bold; color: #1f7a43;</string>
+         <layout class="QVBoxLayout" name="layoutLoginRight">
+          <property name="spacing">
+           <number>28</number>
           </property>
-          <property name="text">
-           <string>Smart No-touch Automated Payment</string>
+          <property name="leftMargin">
+           <number>96</number>
           </property>
-          <property name="alignment">
-           <set>Qt::AlignCenter</set>
+          <property name="rightMargin">
+           <number>96</number>
           </property>
-         </widget>
-        </item>
-        <item>
-         <spacer name="verticalSpacer_4">
-          <property name="orientation">
-           <enum>Qt::Vertical</enum>
-          </property>
-          <property name="sizeType">
-           <enum>QSizePolicy::Fixed</enum>
-          </property>
-          <property name="sizeHint" stdset="0">
-           <size>
-            <width>0</width>
-            <height>60</height>
-           </size>
-          </property>
-         </spacer>
-        </item>
-        <item>
-         <widget class="QLabel" name="lblGuide">
-          <property name="styleSheet">
-           <string notr="true">font-size: 20px; color: #17301f;</string>
-          </property>
-          <property name="text">
-           <string>아래 버튼을 누르고 카메라를 바라봐 주세요.</string>
-          </property>
-          <property name="alignment">
-           <set>Qt::AlignCenter</set>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <spacer name="verticalSpacer_2">
-          <property name="orientation">
-           <enum>Qt::Vertical</enum>
-          </property>
-          <property name="sizeType">
-           <enum>QSizePolicy::Fixed</enum>
-          </property>
-          <property name="sizeHint" stdset="0">
-           <size>
-            <width>0</width>
-            <height>40</height>
-           </size>
-          </property>
-         </spacer>
-        </item>
-        <item alignment="Qt::AlignHCenter">
-         <widget class="QPushButton" name="btnLogin">
-          <property name="minimumSize">
-           <size>
-            <width>420</width>
-            <height>110</height>
-           </size>
-          </property>
-          <property name="styleSheet">
-           <string notr="true">font-size: 28px; min-height: 110px; min-width: 420px; border-radius: 30px;</string>
-          </property>
-          <property name="text">
-           <string>얼굴인식으로 시작하기</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <spacer name="verticalSpacer_3">
-          <property name="orientation">
-           <enum>Qt::Vertical</enum>
-          </property>
-          <property name="sizeHint" stdset="0">
-           <size>
-            <width>0</width>
-            <height>0</height>
-           </size>
-          </property>
-         </spacer>
+          <item>
+           <spacer name="spacerRightTop">
+            <property name="orientation">
+             <enum>Qt::Vertical</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>0</width>
+              <height>0</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+          <item>
+           <widget class="QLabel" name="lblHeadline">
+            <property name="styleSheet">
+             <string notr="true">font-size: 36px; font-weight: bold; color: #14532d;</string>
+            </property>
+            <property name="text">
+             <string>얼굴만 보여 주면
+결제까지 끝.</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="lblGuide">
+            <property name="styleSheet">
+             <string notr="true">font-size: 20px; color: #17301f;</string>
+            </property>
+            <property name="text">
+             <string>아래 버튼을 누르고 카메라를 바라봐 주세요.</string>
+            </property>
+            <property name="wordWrap">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="btnLogin">
+            <property name="styleSheet">
+             <string notr="true">font-size: 30px; min-height: 110px; border-radius: 30px;</string>
+            </property>
+            <property name="text">
+             <string>얼굴인식으로 시작하기</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="lblHint">
+            <property name="styleSheet">
+             <string notr="true">font-size: 16px; color: #3d6b4c;</string>
+            </property>
+            <property name="text">
+             <string>다음 화면에서 비밀번호 로그인도 할 수 있습니다.</string>
+            </property>
+            <property name="wordWrap">
+             <bool>true</bool>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <spacer name="spacerRightBottom">
+            <property name="orientation">
+             <enum>Qt::Vertical</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>0</width>
+              <height>0</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+         </layout>
         </item>
        </layout>
       </widget>

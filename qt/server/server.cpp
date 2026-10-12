@@ -200,6 +200,7 @@ static QString bullets(const QJsonArray &list, bool numbered = false)
 //  - 숫자(핵심 지표, 상품별 판매, 재고)는 서버가 계산해서 표로 보여 주고
 //  - AI(Groq)는 그 숫자를 근거로 한 줄 요약, 잘된 점, 살펴볼 점, 재고·발주, 할 일만 작성
 //  - AI 가 실패해도 숫자 표는 그대로 보여 줌
+//  - 가로 화면용으로 kpiHtml(왼쪽 숫자) / aiHtml(오른쪽 AI 분석)을 나눠서 돌려줌
 static bool aiReport(DB *db, const QString &unit, const QString &date, QVariant *out, QString *err)
 {
     QDate d = QDate::fromString(date, "yyyy-MM-dd");
@@ -346,19 +347,24 @@ static bool aiReport(DB *db, const QString &unit, const QString &date, QVariant 
         "actions: 관리자가 바로 할 수 있는 구체적인 일 3개 (예: 진열 위치 변경, 발주, 바쁜 시간대 대비). "
         "매출이 0이면 판매가 없었다고만 쓰고 원인을 지어내지 마세요.";
     QString answer, aiErr;
+    // ---- 오른쪽: AI 분석 (한 줄 요약 + 2x2 칸: 잘된 점 / 살펴볼 점 / 재고·발주 / 할 일) ----
+    QString ai;
     if (AI::ask(system, toJson(data), schema, &answer, &aiErr)) {
         QJsonObject a = QJsonDocument::fromJson(answer.toUtf8()).object();
-        html += "<h3>한눈에 보기</h3><p><b>" + a.value("summary").toString().toHtmlEscaped() + "</b></p>";
-        html += "<h3>잘된 점</h3>" + bullets(a.value("good").toArray());
-        html += "<h3>살펴볼 점</h3>" + bullets(a.value("watch").toArray());
-        html += "<h3>재고·발주</h3>" + bullets(a.value("stock").toArray());
-        html += "<h3>할 일</h3>" + bullets(a.value("actions").toArray(), true);
+        QString cell = "<td width=50% valign=top style='padding:6px 10px'><h3 style='color:%1'>%2</h3>%3</td>";
+        ai += "<table width=100% cellpadding=12 style='background:#cdffcd'><tr><td><b style='font-size:large; color:#14532d'>"
+              + a.value("summary").toString().toHtmlEscaped() + "</b></td></tr></table>";
+        ai += "<table width=100% cellspacing=0><tr>"
+              + cell.arg("#1f7a43", "잘된 점", bullets(a.value("good").toArray()))
+              + cell.arg("#c62828", "살펴볼 점", bullets(a.value("watch").toArray())) + "</tr><tr>"
+              + cell.arg("#14532d", "재고·발주", bullets(a.value("stock").toArray()))
+              + cell.arg("#14532d", "할 일", bullets(a.value("actions").toArray(), true)) + "</tr></table>";
     } else {
-        html += "<h3>AI 분석</h3><p style='color:#c62828'>AI 분석을 받지 못해 숫자만 보여 드립니다.<br>"
-                + aiErr.toHtmlEscaped().replace("\n", "<br>") + "</p>";
+        ai += "<h3>AI 분석</h3><p style='color:#c62828'>AI 분석을 받지 못해 숫자만 보여 드립니다.<br>"
+              + aiErr.toHtmlEscaped().replace("\n", "<br>") + "</p>";
     }
 
-    // ---- 상품별 판매 표 ----
+    // ---- 왼쪽(핵심 지표 아래): 상품별 판매 표 ----
     html += "<h3>상품별 판매</h3>";
     if (productHtml.isEmpty()) {
         html += "<p style='color:#888'>이 기간에 판매된 상품이 없습니다.</p>";
@@ -374,7 +380,9 @@ static bool aiReport(DB *db, const QString &unit, const QString &date, QVariant 
         html += QString("<p><b>가장 바쁜 시간대:</b> %1 (%2)</p>").arg(peak, won(peakAmount));
 
     QVariantMap res;
-    res["html"] = html;
+    res["kpiHtml"] = html;   // 왼쪽: 숫자 (프로그램이 계산)
+    res["aiHtml"] = ai;      // 오른쪽: AI 분석
+    res["html"] = html + ai;
     res["title"] = name;
     *out = res;
     return true;

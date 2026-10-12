@@ -11,7 +11,7 @@ int main(int argc, char *argv[])
 
     QStringList args = app.arguments();
     QSize size = app.primaryScreen()->size();
-    uiScale() = qMin(size.width() / 720.0, size.height() / 1280.0);
+    uiScale() = qMin(size.width() / 1280.0, size.height() / 720.0);   // 가로 1280x720 기준
     int i = args.indexOf("--scale");
     if (i >= 0 && i + 1 < args.size() && args.at(i + 1).toDouble() > 0)
         uiScale() = args.at(i + 1).toDouble();
@@ -19,6 +19,7 @@ int main(int argc, char *argv[])
     QLocale::setDefault(QLocale(QLocale::Korean, QLocale::SouthKorea));
 
     app.setStyleSheet(appStyle());
+    app.setWindowIcon(QIcon(":/images/snap_logo.png"));
 
 
     ServerThread server;
