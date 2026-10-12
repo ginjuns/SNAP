@@ -1,5 +1,3 @@
-// 매출 막대 그래프 위젯 (chart.cpp 참고)
-
 #ifndef CHART_H
 #define CHART_H
 

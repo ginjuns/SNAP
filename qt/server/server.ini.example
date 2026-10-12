@@ -9,16 +9,13 @@ database=kiosk
 user=kiosk
 password=kiosk1234
 
-; AI 판매 분석
-; 1순위 Groq (console.groq.com 에서 발급한 무료 API 키). 한도는 모델마다 따로라서
-;   groq_model 이 한도 초과/혼잡이면 groq_fallback_model 로 넘어갑니다.
-; 2순위 Gemini (선택, aistudio.google.com 의 API 키). 비워 두면 쓰지 않습니다.
+; AI 판매 분석 (Groq 만 사용)
+; groq_key 는 console.groq.com/keys 에서 발급한 API 키.
+; 한도는 모델마다 따로라서 groq_model 이 한도 초과/혼잡이면 groq_fallback_model 로 넘어갑니다.
 [ai]
 groq_key=
 groq_model=openai/gpt-oss-120b
 groq_fallback_model=openai/gpt-oss-20b
-gemini_key=
-gemini_model=gemini-3.5-flash-lite
 
 ; 관리자 회원가입 코드
 ; 안드로이드 앱에서 회원가입할 때 이 코드를 입력해야 관리자로 가입됩니다.

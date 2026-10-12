@@ -129,6 +129,10 @@ Admin::Admin(QWidget *parent)
     ui->splitter->setStretchFactor(1, 1);
 
     connect(ui->btnReport, SIGNAL(clicked()), SLOT(makeReport()));
+    ui->dateReport->setDate(QDate::currentDate());
+    ui->dateReport->setMaximumDate(QDate::currentDate());
+    ui->dateReport->findChild<QLineEdit *>()->installEventFilter(this);
+    connect(ui->comboPeriod, SIGNAL(currentIndexChanged(int)), SLOT(onReportUnit()));
     connect(ui->comboCategory, SIGNAL(currentIndexChanged(int)), SLOT(onCategory()));
     connect(ui->btnForecast, SIGNAL(clicked()), SLOT(forecast()));
     foreach (QComboBox *c, QList<QComboBox *>() << ui->comboPeriod << ui->comboCategory << ui->comboTarget
@@ -136,6 +140,9 @@ Admin::Admin(QWidget *parent)
         c->setView(new QListView);
         c->setStyleSheet(css("QComboBox QAbstractItemView::item { min-height: 48px; }"));
     }
+    // AI 리포트도 손가락으로 끌어서 스크롤 (글자 선택은 끔: 끌기가 선택으로 잡히지 않게)
+    ui->textReport->setTextInteractionFlags(Qt::NoTextInteraction);
+    touchScroll(ui->textReport);
     touchScroll(ui->scrollChat);
     touchScroll(ui->tableForecast);
     stretch(ui->tableForecast);
@@ -168,10 +175,12 @@ void Admin::start(const QVariantMap &user)
     loadSales();
     ui->tableDetail->scrollToTop();
 
-    // AI 리포트
+    // AI 리포트: 일별 / 오늘
     ui->comboPeriod->setCurrentIndex(0);
+    ui->dateReport->setMaximumDate(QDate::currentDate());
+    ui->dateReport->setDate(QDate::currentDate());
+    onReportUnit();
     ui->textReport->clear();
-    ui->lblReportInfo->setText("기간을 고르고 [AI 리포트 생성]을 누르세요.");
 
     // AI 상담: 대화 내용과 추천 질문 지우기
     for (int i = ui->layoutChat->count() - 1; i >= 0; --i) {
@@ -218,9 +227,10 @@ bool Admin::eventFilter(QObject *obj, QEvent *e)
         pickImage();
         return true;
     }
-    if (obj->parent() == ui->date) {
+    QDateEdit *edit = obj->parent() == ui->date ? ui->date : obj->parent() == ui->dateReport ? ui->dateReport : 0;
+    if (edit) {
         if (e->type() == QEvent::MouseButtonRelease)
-            pickDate();
+            pickDate(edit);
         if (e->type() == QEvent::MouseButtonPress || e->type() == QEvent::MouseButtonRelease
             || e->type() == QEvent::MouseButtonDblClick)
             return true;
@@ -228,12 +238,28 @@ bool Admin::eventFilter(QObject *obj, QEvent *e)
     return QWidget::eventFilter(obj, e);
 }
 
-// 달력 창에서 날짜(월별이면 월)를 골라 매출 날짜로 설정
-void Admin::pickDate()
+// 달력 창에서 날짜(월별이면 월)를 골라 매출 확인 / AI 리포트 날짜 칸에 넣음
+void Admin::pickDate(QDateEdit *edit)
 {
-    Calendar dlg(ui->date->date(), monthly(), this);
+    bool month = edit == ui->date ? monthly() : ui->comboPeriod->currentIndex() == 2;
+    Calendar dlg(edit->date(), month, this);
     if (popup(&dlg) == QDialog::Accepted)
-        ui->date->setDate(dlg.date());
+        edit->setDate(qMin(dlg.date(), edit->maximumDate()));
+    if (edit == ui->dateReport)
+        onReportUnit();
+}
+
+// AI 리포트의 일별/주별/월별이나 날짜를 바꾸면 날짜 표시 형식과 기간 안내 문구 갱신
+void Admin::onReportUnit()
+{
+    int unit = ui->comboPeriod->currentIndex();
+    QDate d = ui->dateReport->date();
+    ui->dateReport->setDisplayFormat(unit == 2 ? "yyyy년 MM월" : "yyyy-MM-dd");
+    QString period = unit == 0 ? QLocale().toString(d, "yyyy년 M월 d일 (ddd)")
+                   : unit == 1 ? QString("%1 ~ %2").arg(d.addDays(1 - d.dayOfWeek()).toString("yyyy-MM-dd"),
+                                                       d.addDays(7 - d.dayOfWeek()).toString("yyyy-MM-dd"))
+                               : d.toString("yyyy년 M월");
+    ui->lblReportInfo->setText(QString("기간: %1  ·  [AI 리포트 생성]을 누르세요.").arg(period));
 }
 
 // 상품 사진 파일을 골라 300px 이하 PNG 로 줄여 둠
@@ -483,8 +509,8 @@ void Admin::loadSales()
     foreach (const QVariant &v, res.value("details").toList()) {
         QVariantMap m = v.toMap();
         QString when = m.value("soldAt").toString();
-        QString key = mon ? when.mid(5, 5) : when.mid(11, 2);   // "MM-dd" 또는 "HH"
-        Sold &s = groups[key][m.value("product").toString()];   // 처음이면 0으로 만들어진다
+        QString key = mon ? when.mid(5, 5) : when.mid(11, 2);
+        Sold &s = groups[key][m.value("product").toString()];
         int qty = m.value("qty").toInt();
         int amount = m.value("amount").toInt();
         if (m.value("method").toString() == "face") {
@@ -497,7 +523,7 @@ void Admin::loadSales()
         qtySum += qty;
     }
 
-    QList<QStringList> rows;   // 최근 시간대(날짜)부터, 그 안에서는 많이 팔린 상품부터
+    QList<QStringList> rows;
     QMapIterator<QString, QMap<QString, Sold> > g(groups);
     g.toBack();
     while (g.hasPrevious()) {
@@ -591,18 +617,19 @@ void Admin::loadTargets()
     }
 }
 
-// AI 리포트 생성 (오늘/이번 주/이번 달)
+// AI 리포트 생성: 고른 날짜의 일별/주별/월별 리포트를 받아 표시
 void Admin::makeReport()
 {
-    static const char *PERIODS[] = {"day", "week", "month"};
+    static const char *UNITS[] = {"day", "week", "month"};
 
     ui->btnReport->setEnabled(false);
-    ui->lblReportInfo->setText("AI가 분석 중입니다...");
+    ui->lblReportInfo->setText("AI가 분석 중입니다... (최대 1분)");
     qApp->processEvents();
 
     QVariant data;
     QString err;
-    QVariantMap args{{"period", PERIODS[ui->comboPeriod->currentIndex()]}};
+    QVariantMap args{{"unit", UNITS[ui->comboPeriod->currentIndex()]},
+                     {"date", ui->dateReport->date().toString("yyyy-MM-dd")}};
     bool ok = Net::call("AI_REPORT", args, &data, &err);
     ui->btnReport->setEnabled(true);
     if (!ok) {
@@ -610,8 +637,11 @@ void Admin::makeReport()
         Msg::warn(this, "AI 리포트", err);
         return;
     }
-    ui->textReport->setHtml(data.toString());
-    ui->lblReportInfo->setText(QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm 생성"));
+    QVariantMap res = data.toMap();
+    ui->textReport->setHtml(res.value("html").toString());
+    ui->lblReportInfo->setText(QString("%1  ·  %2 생성")
+                                   .arg(res.value("title").toString(),
+                                        QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm")));
 }
 
 // AI 상담 질문 분류를 바꾸면 질문 버튼과 대상(상품/회원) 선택 목록을 다시 만듦

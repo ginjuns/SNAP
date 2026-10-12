@@ -537,7 +537,7 @@ bool DB::summary(const QDateTime &from, const QDateTime &to, QVariantMap *out, Q
     QSqlQuery q;
     QVariantMap res;
     if (!range(q, "SELECT COALESCE(SUM(amount), 0), COALESCE(SUM(qty), 0), COUNT(DISTINCT sold_at),"
-                  " COALESCE(SUM(CASE WHEN method = 'card' THEN amount END), 0)"
+                  " COALESCE(SUM(CASE WHEN method = 'card' THEN amount END), 0), COUNT(DISTINCT user_id)"
                   " FROM sales WHERE sold_at >= ? AND sold_at < ?", from, to) || !q.next())
         return fail(q, err);
     res["from"] = from.toString("yyyy-MM-dd HH:mm");
@@ -547,6 +547,7 @@ bool DB::summary(const QDateTime &from, const QDateTime &to, QVariantMap *out, Q
     res["orders"] = q.value(2).toInt();
     res["card"] = q.value(3).toInt();
     res["face"] = q.value(0).toInt() - q.value(3).toInt();
+    res["customers"] = q.value(4).toInt();
 
     if (!range(q, "SELECT product_name, SUM(qty), SUM(amount) FROM sales"
                   " WHERE sold_at >= ? AND sold_at < ? GROUP BY product_name ORDER BY SUM(qty) DESC", from, to))

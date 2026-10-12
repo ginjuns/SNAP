@@ -8,6 +8,7 @@ namespace Ui {
 class Admin;
 }
 class QLabel;
+class QDateEdit;
 
 class Admin : public QWidget
 {
@@ -40,9 +41,10 @@ private slots:
     void onCategory();
     void ask();
     void forecast();
+    void onReportUnit();
 
 private:
-    void pickDate();
+    void pickDate(QDateEdit *edit);
     int row() const;
     bool readForm(QString *name, int *price, int *stock);
     bool monthly() const;

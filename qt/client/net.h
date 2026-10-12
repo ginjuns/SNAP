@@ -1,5 +1,3 @@
-// 서버 통신(Net::call)과 금액 표시(won) (net.cpp 참고)
-
 #ifndef NET_H
 #define NET_H
 

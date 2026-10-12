@@ -1,5 +1,3 @@
-// 날짜/월 선택 창 (calendar.cpp 참고)
-
 #ifndef CALENDAR_H
 #define CALENDAR_H
 

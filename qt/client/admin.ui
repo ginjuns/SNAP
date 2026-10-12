@@ -450,19 +450,41 @@
               <widget class="QComboBox" name="comboPeriod">
                <item>
                 <property name="text">
-                 <string>오늘</string>
+                 <string>일별</string>
                 </property>
                </item>
                <item>
                 <property name="text">
-                 <string>이번 주</string>
+                 <string>주별</string>
                 </property>
                </item>
                <item>
                 <property name="text">
-                 <string>이번 달</string>
+                 <string>월별</string>
                 </property>
                </item>
+              </widget>
+             </item>
+             <item>
+              <widget class="QDateEdit" name="dateReport">
+               <property name="minimumSize">
+                <size>
+                 <width>170</width>
+                 <height>0</height>
+                </size>
+               </property>
+               <property name="alignment">
+                <set>Qt::AlignCenter</set>
+               </property>
+               <property name="readOnly">
+                <bool>true</bool>
+               </property>
+               <property name="buttonSymbols">
+                <enum>QAbstractSpinBox::NoButtons</enum>
+               </property>
+               <property name="displayFormat">
+                <string>yyyy-MM-dd</string>
+               </property>
               </widget>
              </item>
              <item>
@@ -493,7 +515,7 @@
               <string notr="true">color: #888;</string>
              </property>
              <property name="text">
-              <string>기간을 고르고 [AI 리포트 생성]을 누르세요.</string>
+              <string>일별/주별/월별과 날짜를 고르고 [AI 리포트 생성]을 누르세요.</string>
              </property>
             </widget>
            </item>

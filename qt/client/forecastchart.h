@@ -1,5 +1,3 @@
-// 판매 예측 그래프 위젯 (forecastchart.cpp 참고)
-
 #ifndef FORECASTCHART_H
 #define FORECASTCHART_H
 

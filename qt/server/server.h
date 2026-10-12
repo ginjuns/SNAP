@@ -1,5 +1,3 @@
-// 키오스크 서버(9000번), 서버 실행 스레드, ESP32 연결(8000번) (server.cpp 참고)
-
 #ifndef SERVER_H
 #define SERVER_H
 

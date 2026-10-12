@@ -10,6 +10,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QJsonArray>
+#include <QSet>
 #include <QSettings>
 #include <QStringList>
 #include <QTcpSocket>
@@ -164,45 +165,220 @@ static bool aiForecast(DB *db, int productId, int days, QVariant *out, QString *
     return true;
 }
 
-// AI_REPORT: 이번 기간과 이전 같은 기간 매출, 재고 예측을 AI 에 보내 리포트(HTML) 작성
-static bool aiReport(DB *db, const QString &period, QVariant *out, QString *err)
+// 이전 기간 대비 변화율 문구 (+12% / -5% / 이전 0이면 "-")
+static QString change(double cur, double old)
 {
-    QDate today = QDate::currentDate();
-    QDate from = today, prev = today.addDays(-1);
-    QString name = "오늘";
-    if (period == "week") {
-        from = today.addDays(1 - today.dayOfWeek());
+    if (old <= 0)
+        return cur > 0 ? QString("신규") : QString("-");
+    int pct = qRound((cur - old) * 100.0 / old);
+    return QString("%1%2%").arg(pct > 0 ? "+" : "").arg(pct);
+}
+
+// 변화율 칸 HTML (증가는 초록, 감소는 빨강)
+static QString changeCell(double cur, double old)
+{
+    QString text = change(cur, old);
+    QString color = text.startsWith('+') || text == "신규" ? "#1b7f3b" : text.startsWith('-') && text != "-" ? "#c62828" : "#888";
+    return QString("<td align=right style='color:%1'>%2</td>").arg(color, text);
+}
+
+static QString won(int v)
+{
+    return QString("%L1원").arg(v);
+}
+
+// AI 답의 문장 목록을 <ul> 로
+static QString bullets(const QJsonArray &list, bool numbered = false)
+{
+    if (list.isEmpty())
+        return "<p style='color:#888'>없음</p>";
+    QString html = numbered ? "<ol>" : "<ul>";
+    foreach (const QJsonValue &v, list)
+        html += "<li>" + v.toString().toHtmlEscaped() + "</li>";
+    return html + (numbered ? "</ol>" : "</ul>");
+}
+
+// AI_REPORT: 고른 날짜의 일/주/월 매출 리포트
+//  - 숫자(핵심 지표, 상품별 판매, 재고)는 서버가 계산해서 표로 보여 주고
+//  - AI(Groq)는 그 숫자를 근거로 한 줄 요약, 잘된 점, 살펴볼 점, 재고·발주, 할 일만 작성
+//  - AI 가 실패해도 숫자 표는 그대로 보여 줌
+static bool aiReport(DB *db, const QString &unit, const QString &date, QVariant *out, QString *err)
+{
+    QDate d = QDate::fromString(date, "yyyy-MM-dd");
+    if (!d.isValid())
+        d = QDate::currentDate();
+
+    // 기간: 일별은 그날, 주별은 그 주 월~일, 월별은 그 달. 이전 기간은 바로 앞 같은 단위
+    QDate from = d, end = d.addDays(1), prev = d.addDays(-1);
+    QString name = QLocale().toString(d, "yyyy년 M월 d일 (ddd)"), prevName = "전날";
+    if (unit == "week") {
+        from = d.addDays(1 - d.dayOfWeek());
+        end = from.addDays(7);
         prev = from.addDays(-7);
-        name = "이번 주";
-    } else if (period == "month") {
-        from = QDate(today.year(), today.month(), 1);
+        name = QString("%1 ~ %2 주간").arg(from.toString("yyyy년 M월 d일"), end.addDays(-1).toString("M월 d일"));
+        prevName = "지난주";
+    } else if (unit == "month") {
+        from = QDate(d.year(), d.month(), 1);
+        end = from.addMonths(1);
         prev = from.addMonths(-1);
-        name = "이번 달";
+        name = from.toString("yyyy년 M월");
+        prevName = "지난달";
     }
     QDateTime now = QDateTime::currentDateTime();
-    QDateTime prevTo = QDateTime(prev).addSecs(QDateTime(from).secsTo(now));
+    if (QDateTime(from) > now) {
+        *err = "아직 오지 않은 기간은 리포트를 만들 수 없습니다.";
+        return false;
+    }
+    // 진행 중인 기간(오늘, 이번 주, 이번 달)은 지금까지만, 이전 기간도 같은 경과 시간만큼만 비교
+    bool partial = QDateTime(end) > now;
+    QDateTime to = partial ? now : QDateTime(end);
+    QDateTime prevTo = partial ? QDateTime(prev).addSecs(QDateTime(from).secsTo(now)) : QDateTime(from);
+    if (partial)
+        prevName += " 같은 시각까지";
 
     QVariantMap cur, old;
-    QVariantList rows;
-    if (!db->summary(QDateTime(from), now, &cur, err) || !db->summary(QDateTime(prev), prevTo, &old, err)
-        || !stockRows(db, 0, 7, &rows, err))
+    QVariant productList;
+    QVariantList stock;
+    if (!db->summary(QDateTime(from), to, &cur, err) || !db->summary(QDateTime(prev), prevTo, &old, err)
+        || !db->products(&productList, err) || !stockRows(db, 0, 7, &stock, err))
         return false;
 
+    int total = cur.value("total").toInt(), oldTotal = old.value("total").toInt();
+    int orders = cur.value("orders").toInt(), oldOrders = old.value("orders").toInt();
+    int avg = orders ? total / orders : 0, oldAvg = oldOrders ? oldTotal / oldOrders : 0;
+
+    // ---- 핵심 지표 표 ----
+    QString html = QString("<h3>%1 매출 리포트</h3>").arg(name.toHtmlEscaped());
+    html += QString("<p style='color:#888'>비교 기준: %1</p>").arg(prevName);
+    html += "<table width=100% cellspacing=0 cellpadding=6 border=1 style='border-color:#ddd'>"
+            "<tr style='background:#f0efea'><th align=left>항목</th><th align=right>이번</th>"
+            "<th align=right>" + prevName.section(' ', 0, 0) + "</th><th align=right>변화</th></tr>";
+    struct Kpi { const char *label; int cur, old; bool money; };
+    Kpi kpis[] = {
+        {"매출", total, oldTotal, true},
+        {"결제 건수", orders, oldOrders, false},
+        {"객단가 (1건 평균)", avg, oldAvg, true},
+        {"판매 수량", cur.value("qty").toInt(), old.value("qty").toInt(), false},
+        {"구매 회원 수", cur.value("customers").toInt(), old.value("customers").toInt(), false},
+        {"카드 매출", cur.value("card").toInt(), old.value("card").toInt(), true},
+        {"얼굴인식 매출", cur.value("face").toInt(), old.value("face").toInt(), true},
+    };
+    for (const Kpi &k : kpis) {
+        html += QString("<tr><td>%1</td><td align=right><b>%2</b></td><td align=right>%3</td>%4</tr>")
+                    .arg(k.label)
+                    .arg(k.money ? won(k.cur) : QString("%L1").arg(k.cur))
+                    .arg(k.money ? won(k.old) : QString("%L1").arg(k.old))
+                    .arg(changeCell(k.cur, k.old));
+    }
+    html += "</table>";
+
+    // ---- 상품별 비교 (AI 에도 같은 숫자를 넘김) ----
+    QMap<QString, int> oldQty;
+    foreach (const QVariant &v, old.value("products").toList())
+        oldQty[v.toMap().value("name").toString()] = v.toMap().value("qty").toInt();
+    QVariantList productRows;
+    QSet<QString> sold;
+    QString productHtml;
+    foreach (const QVariant &v, cur.value("products").toList()) {
+        QVariantMap m = v.toMap();
+        QString pname = m.value("name").toString();
+        int qty = m.value("qty").toInt();
+        sold << pname;
+        QVariantMap r;
+        r["상품"] = pname;
+        r["수량"] = qty;
+        r["매출"] = m.value("amount");
+        r["이전 수량"] = oldQty.value(pname);
+        r["변화"] = change(qty, oldQty.value(pname));
+        productRows << r;
+        productHtml += QString("<tr><td>%1</td><td align=right>%L2개</td><td align=right>%3</td>"
+                               "<td align=right>%L4개</td>%5</tr>")
+                           .arg(pname.toHtmlEscaped()).arg(qty).arg(won(m.value("amount").toInt()))
+                           .arg(oldQty.value(pname)).arg(changeCell(qty, oldQty.value(pname)));
+    }
+    QStringList unsold;
+    foreach (const QVariant &v, productList.toList()) {
+        QString pname = v.toMap().value("name").toString();
+        if (!sold.contains(pname))
+            unsold << pname;
+    }
+
+    // 매출이 가장 많은 시간대
+    QString peak;
+    int peakAmount = 0;
+    foreach (const QVariant &v, cur.value("hours").toList()) {
+        QVariantMap m = v.toMap();
+        if (m.value("amount").toInt() > peakAmount) {
+            peakAmount = m.value("amount").toInt();
+            peak = QString("%1시").arg(m.value("hour").toInt());
+        }
+    }
+
+    // ---- AI 분석 ----
     QVariantMap data;
     data["기간"] = name;
-    data["현재"] = cur;
-    data["이전 같은 기간"] = old;
-    data["재고 예측(7일)"] = rows;
+    data["비교 기준"] = prevName;
+    data["진행 중인 기간"] = partial;
+    data["핵심 지표"] = QVariantMap{
+        {"매출", total}, {"매출 변화", change(total, oldTotal)},
+        {"결제 건수", orders}, {"결제 건수 변화", change(orders, oldOrders)},
+        {"객단가", avg}, {"객단가 변화", change(avg, oldAvg)},
+        {"카드 매출", cur.value("card")}, {"얼굴인식 매출", cur.value("face")},
+        {"구매 회원 수", cur.value("customers")}, {"가장 바쁜 시간대", peak}};
+    data["상품별 판매"] = productRows;
+    data["판매 없는 상품"] = unsold;
+    data["시간대별 매출"] = cur.value("hours");
+    data["재고 예측(현재 재고 기준 7일)"] = stock;
 
-    QString system = "당신은 무인 키오스크 매장의 매출 분석가입니다. "
-                     "주어진 JSON 데이터의 숫자만 사용하고, 데이터에 없는 내용은 추측하지 마세요. "
-                     "한국어로 '요약'(3줄), '잘한 점', '개선 제안'(2개), '재고 알림' 순서로 짧게 작성하세요. "
-                     "제목은 <h3>, 문단은 <p>, 목록은 <ul><li>, 강조는 <b> 태그만 쓴 HTML 조각으로만 답하고 "
-                     "```나 <html> 태그는 쓰지 마세요.";
-    QString answer;
-    if (!AI::ask(system, name + " 매출 리포트를 작성해 주세요.\n\n" + toJson(data), QJsonObject(), &answer, err))
-        return false;
-    *out = answer;
+    QJsonObject list{{"type", "array"}, {"items", QJsonObject{{"type", "string"}}}};
+    QJsonObject schema{
+        {"type", "object"},
+        {"properties", QJsonObject{{"summary", QJsonObject{{"type", "string"}}},
+                                   {"good", list}, {"watch", list}, {"stock", list}, {"actions", list}}},
+        {"required", QJsonArray{"summary", "good", "watch", "stock", "actions"}},
+        {"additionalProperties", false}};
+    QString system =
+        "당신은 무인 키오스크 매장의 매출을 관리자에게 보고하는 분석가입니다. "
+        "주어진 JSON 의 숫자와 변화율만 근거로 쓰고, 직접 계산하거나 데이터에 없는 내용을 추측하지 마세요. "
+        "모든 문장은 한국어 존댓말로 짧게(40자 안팎) 쓰고 숫자를 함께 적으세요. "
+        "summary: 이번 기간을 한 문장으로. "
+        "good: 잘된 점 1~3개 (늘어난 지표, 잘 팔린 상품). "
+        "watch: 살펴볼 점 1~3개 (줄어든 지표, 판매가 줄거나 없는 상품). "
+        "stock: 재고 예측에서 3일 안에 떨어지거나 발주가 필요한 상품과 추천 발주 수량 (없으면 빈 배열). "
+        "actions: 관리자가 바로 할 수 있는 구체적인 일 3개 (예: 진열 위치 변경, 발주, 바쁜 시간대 대비). "
+        "매출이 0이면 판매가 없었다고만 쓰고 원인을 지어내지 마세요.";
+    QString answer, aiErr;
+    if (AI::ask(system, toJson(data), schema, &answer, &aiErr)) {
+        QJsonObject a = QJsonDocument::fromJson(answer.toUtf8()).object();
+        html += "<h3>한눈에 보기</h3><p><b>" + a.value("summary").toString().toHtmlEscaped() + "</b></p>";
+        html += "<h3>잘된 점</h3>" + bullets(a.value("good").toArray());
+        html += "<h3>살펴볼 점</h3>" + bullets(a.value("watch").toArray());
+        html += "<h3>재고·발주</h3>" + bullets(a.value("stock").toArray());
+        html += "<h3>할 일</h3>" + bullets(a.value("actions").toArray(), true);
+    } else {
+        html += "<h3>AI 분석</h3><p style='color:#c62828'>AI 분석을 받지 못해 숫자만 보여 드립니다.<br>"
+                + aiErr.toHtmlEscaped().replace("\n", "<br>") + "</p>";
+    }
+
+    // ---- 상품별 판매 표 ----
+    html += "<h3>상품별 판매</h3>";
+    if (productHtml.isEmpty()) {
+        html += "<p style='color:#888'>이 기간에 판매된 상품이 없습니다.</p>";
+    } else {
+        html += "<table width=100% cellspacing=0 cellpadding=6 border=1 style='border-color:#ddd'>"
+                "<tr style='background:#f0efea'><th align=left>상품</th><th align=right>수량</th>"
+                "<th align=right>매출</th><th align=right>이전</th><th align=right>변화</th></tr>"
+                + productHtml + "</table>";
+    }
+    if (!unsold.isEmpty())
+        html += "<p><b>판매 없음:</b> " + unsold.join(", ").toHtmlEscaped() + "</p>";
+    if (!peak.isEmpty())
+        html += QString("<p><b>가장 바쁜 시간대:</b> %1 (%2)</p>").arg(peak, won(peakAmount));
+
+    QVariantMap res;
+    res["html"] = html;
+    res["title"] = name;
+    *out = res;
     return true;
 }
 
@@ -365,7 +541,7 @@ QJsonObject Server::handle(const QJsonObject &req, const QString &peer)
     } else if (cmd == "MEMBERS") {
         ok = m_db->members(&data, &err);
     } else if (cmd == "AI_REPORT") {
-        ok = aiReport(m_db, req.value("period").toString(), &data, &err);
+        ok = aiReport(m_db, req.value("unit").toString(), req.value("date").toString(), &data, &err);
     } else if (cmd == "AI_ASK") {
         ok = aiAsk(m_db, req.value("question").toString(), req.value("productId").toInt(),
                    req.value("userId").toInt(), &data, &err);

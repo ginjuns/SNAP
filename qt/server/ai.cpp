@@ -15,73 +15,45 @@
 static const int DEADLINE = 70000;
 static const int ATTEMPT = 35000;
 
-struct Target
-{
-    bool gemini;
-    QString model;
-};
+static const char *GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 
 static QString groqKey;
-static QString geminiKey;
-static QList<Target> targets;
+static QStringList models;
 
-// server.ini 의 [ai] 를 읽어 시도할 모델 순서 결정
+// server.ini 의 [ai] 를 읽어 Groq 키와 시도할 모델 순서 결정 (기본 모델 → 예비 모델)
 void AI::setup(const QSettings &ini)
 {
-    groqKey = ini.value("ai/groq_key").toString();
-    geminiKey = ini.value("ai/gemini_key").toString();
-    targets.clear();
-    if (!groqKey.isEmpty()) {
-        Target main = {false, ini.value("ai/groq_model", "openai/gpt-oss-120b").toString()};
-        Target backup = {false, ini.value("ai/groq_fallback_model", "openai/gpt-oss-20b").toString()};
-        targets << main;
-        if (!backup.model.isEmpty() && backup.model != main.model)
-            targets << backup;
-    }
-    if (!geminiKey.isEmpty()) {
-        Target gemini = {true, ini.value("ai/gemini_model", "gemini-3.5-flash-lite").toString()};
-        targets << gemini;
-    }
+    groqKey = ini.value("ai/groq_key").toString().trimmed();
+    models.clear();
+    QString main = ini.value("ai/groq_model", "openai/gpt-oss-120b").toString().trimmed();
+    QString backup = ini.value("ai/groq_fallback_model", "openai/gpt-oss-20b").toString().trimmed();
+    if (!main.isEmpty())
+        models << main;
+    if (!backup.isEmpty() && backup != main)
+        models << backup;
 }
 
-// 모델 종류에 맞는 요청 본문 만들기, schema 가 있으면 JSON 형식으로 답하게 함
-static QJsonObject makeBody(const Target &t, const QString &system, const QString &prompt, const QJsonObject &schema)
+// Groq 요청 본문 만들기, schema 가 있으면 그 JSON 형식으로만 답하게 함
+static QJsonObject makeBody(const QString &model, const QString &system, const QString &prompt, const QJsonObject &schema)
 {
     QJsonObject body;
-    if (t.gemini) {
-        QJsonObject config;
-        if (!schema.isEmpty()) {
-            config["responseMimeType"] = "application/json";
-            config["responseJsonSchema"] = schema;
-        }
-        config["thinkingConfig"] = QJsonObject{{"thinkingLevel", "low"}};
-        body["systemInstruction"] = QJsonObject{{"parts", QJsonArray{QJsonObject{{"text", system}}}}};
-        body["contents"] = QJsonArray{QJsonObject{{"role", "user"}, {"parts", QJsonArray{QJsonObject{{"text", prompt}}}}}};
-        body["generationConfig"] = config;
-    } else {
-        body["model"] = t.model;
-        body["messages"] = QJsonArray{QJsonObject{{"role", "user"}, {"content", system + "\n\n" + prompt}}};
-        body["reasoning_effort"] = "low";
-        body["include_reasoning"] = false;
-        if (!schema.isEmpty())
-            body["response_format"] = QJsonObject{
-                {"type", "json_schema"},
-                {"json_schema", QJsonObject{{"name", "answer"}, {"strict", true}, {"schema", schema}}}};
-    }
+    body["model"] = model;
+    body["messages"] = QJsonArray{QJsonObject{{"role", "system"}, {"content", system}},
+                                  QJsonObject{{"role", "user"}, {"content", prompt}}};
+    body["reasoning_effort"] = "low";
+    body["include_reasoning"] = false;
+    if (!schema.isEmpty())
+        body["response_format"] = QJsonObject{
+            {"type", "json_schema"},
+            {"json_schema", QJsonObject{{"name", "answer"}, {"strict", true}, {"schema", schema}}}};
     return body;
 }
 
-// AI API 에 요청을 보내고 HTTP 상태 코드를 돌려줌 (시간 초과면 0)
-static int post(const Target &t, const QJsonObject &body, int timeout, QJsonObject *res, QString *err)
+// Groq API 에 요청을 보내고 HTTP 상태 코드를 돌려줌 (시간 초과면 0)
+static int post(const QJsonObject &body, int timeout, QJsonObject *res, QString *err)
 {
-    QNetworkRequest req;
-    if (t.gemini) {
-        req.setUrl(QUrl(QString("https://generativelanguage.googleapis.com/v1beta/models/%1:generateContent").arg(t.model)));
-        req.setRawHeader("x-goog-api-key", geminiKey.toUtf8());
-    } else {
-        req.setUrl(QUrl("https://api.groq.com/openai/v1/chat/completions"));
-        req.setRawHeader("Authorization", "Bearer " + groqKey.toUtf8());
-    }
+    QNetworkRequest req(QUrl(QString::fromLatin1(GROQ_URL)));
+    req.setRawHeader("Authorization", "Bearer " + groqKey.toUtf8());
     req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     QNetworkAccessManager net;
     QNetworkReply *rep = net.post(req, QJsonDocument(body).toJson(QJsonDocument::Compact));
@@ -99,7 +71,9 @@ static int post(const Target &t, const QJsonObject &body, int timeout, QJsonObje
     }
     *res = QJsonDocument::fromJson(rep->readAll()).object();
     int status = rep->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-    if (status == 429)
+    if (status == 401)
+        *err = "API 키가 올바르지 않습니다. server.ini 의 groq_key 를 확인하세요.";
+    else if (status == 429)
         *err = "사용량 한도 초과";
     else if (status == 500 || status == 502 || status == 503)
         *err = "서버 혼잡";
@@ -108,31 +82,13 @@ static int post(const Target &t, const QJsonObject &body, int timeout, QJsonObje
     return status;
 }
 
-// 응답에서 답 글자만 꺼냄 (빈 답/거절이면 오류)
-static bool readAnswer(const Target &t, const QJsonObject &res, QString *answer, QString *err)
+// 응답에서 답 글자만 꺼냄 (빈 답이면 오류)
+static bool readAnswer(const QJsonObject &res, QString *answer, QString *err)
 {
-    answer->clear();
-    QString reason;
-    if (t.gemini) {
-        QJsonArray candidates = res.value("candidates").toArray();
-        if (candidates.isEmpty()) {
-            *err = "답변 거절 (" + res.value("promptFeedback").toObject().value("blockReason").toString() + ")";
-            return false;
-        }
-        QJsonObject first = candidates.at(0).toObject();
-        foreach (const QJsonValue &v, first.value("content").toObject().value("parts").toArray()) {
-            QJsonObject part = v.toObject();
-            if (!part.value("thought").toBool())
-                *answer += part.value("text").toString();
-        }
-        reason = first.value("finishReason").toString();
-    } else {
-        QJsonObject first = res.value("choices").toArray().at(0).toObject();
-        *answer = first.value("message").toObject().value("content").toString();
-        reason = first.value("finish_reason").toString();
-    }
+    QJsonObject first = res.value("choices").toArray().at(0).toObject();
+    *answer = first.value("message").toObject().value("content").toString();
     if (answer->trimmed().isEmpty()) {
-        *err = "빈 답변 (" + reason + ")";
+        *err = "빈 답변 (" + first.value("finish_reason").toString() + ")";
         return false;
     }
     return true;
@@ -144,10 +100,10 @@ static bool retry(int status)
     return status == 0 || status == 500 || status == 502 || status == 503;
 }
 
-// AI 에 질문: 모델을 순서대로 시도하고(모델마다 최대 2번) 처음 성공한 답을 돌려줌
-bool AI::ask(const QString &system, const QString &prompt, const QJsonObject &schema,QString *answer, QString *err)
+// Groq 에 질문: 기본 모델 → 예비 모델 순서로 시도하고(모델마다 최대 2번) 처음 성공한 답을 돌려줌
+bool AI::ask(const QString &system, const QString &prompt, const QJsonObject &schema, QString *answer, QString *err)
 {
-    if (targets.isEmpty()) {
+    if (groqKey.isEmpty() || models.isEmpty()) {
         *err = "server.ini 의 [ai] groq_key 가 비어 있습니다.";
         return false;
     }
@@ -160,8 +116,8 @@ bool AI::ask(const QString &system, const QString &prompt, const QJsonObject &sc
     QElapsedTimer clock;
     clock.start();
     QStringList errors;
-    foreach (const Target &t, targets) {
-        QJsonObject body = makeBody(t, system, prompt, schema);
+    foreach (const QString &model, models) {
+        QJsonObject body = makeBody(model, system, prompt, schema);
         QString msg;
         for (int i = 0; i < 2; ++i) {
             if (i > 0)
@@ -172,13 +128,13 @@ bool AI::ask(const QString &system, const QString &prompt, const QJsonObject &sc
                 break;
             }
             QJsonObject res;
-            int status = post(t, body, qMin(left, ATTEMPT), &res, &msg);
-            if (status == 200 && readAnswer(t, res, answer, &msg))
+            int status = post(body, qMin(left, ATTEMPT), &res, &msg);
+            if (status == 200 && readAnswer(res, answer, &msg))
                 return true;
             if (!retry(status))
                 break;
         }
-        errors << QString("%1: %2").arg(t.model, msg);
+        errors << QString("%1: %2").arg(model, msg);
     }
     *err = "AI 답변을 받지 못했습니다. 잠시 후 다시 시도하세요.\n" + errors.join("\n");
     return false;

@@ -1,11 +1,3 @@
-/*
- * 화면 공통 도우미
- *
- * - uiScale/px/css/scaleUi: 모니터 크기에 맞춰 위젯, 글자, 스타일시트 크기 조정
- * - touchScroll: 손가락으로 끌어서 스크롤
- * - stretch: 표의 열을 가로로 꽉 채움
- */
-
 #ifndef UTIL_H
 #define UTIL_H
 
@@ -67,7 +59,7 @@ inline void scaleUi(QWidget *root)
     }
 }
 
-// 손가락으로 끌어서 스크롤되게 함 (끝에서 튕기는 효과 없음)
+// 손가락으로 끌어서 스크롤되게 함
 inline void touchScroll(QAbstractScrollArea *area)
 {
     if (QAbstractItemView *v = qobject_cast<QAbstractItemView *>(area)) {
