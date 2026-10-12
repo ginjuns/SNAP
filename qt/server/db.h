@@ -15,7 +15,7 @@ public:
 
     bool user(int id, QVariant *out, QString *err);
     bool login(const QString &id, const QString &pw, QVariant *out, QString *err);
-    bool join(const QString &name, const QString &id, const QString &pw,
+    bool join(const QString &name, const QString &id, const QString &pw, const QString &role,
               const QList<QByteArray> &faces, QVariant *out, QString *err);
     bool faces(int after, QVariant *out, QString *err);
     bool products(QVariant *out, QString *err);

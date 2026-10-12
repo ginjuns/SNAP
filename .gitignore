@@ -21,3 +21,6 @@ faces/
 
 # MySQL 접속 정보 (비밀번호 포함)
 server.ini
+
+# 얼굴인식 모델 (용량이 커서 git 에 올리지 않음)
+*.onnx

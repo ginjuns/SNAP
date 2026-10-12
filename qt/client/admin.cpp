@@ -118,9 +118,8 @@ Admin::Admin(QWidget *parent)
     connect(ui->btnToday, SIGNAL(clicked()), SLOT(today()));
 
     stretch(ui->tableDetail);
-    stretch(ui->tableBuyer);
+    ui->tableDetail->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
     touchScroll(ui->tableDetail);
-    touchScroll(ui->tableBuyer);
     ui->splitter->setHandleWidth(px(16));
     ui->splitter->setStretchFactor(0, 1);
     ui->splitter->setStretchFactor(1, 1);
@@ -143,16 +142,53 @@ Admin::~Admin()
     delete ui;
 }
 
+// 관리자가 로그인할 때마다 이전 관리자가 보던 화면을 모두 처음 상태로 되돌린다.
 void Admin::start(const QVariantMap &user)
 {
     ui->lblWelcome->setText(QString("관리자 모드 - %1").arg(user.value("name").toString()));
+    ui->tabWidget->setCurrentIndex(0);
+    ui->tabAiSub->setCurrentIndex(0);
+
     reset();
     loadProducts();
+    ui->tableProduct->scrollToTop();
 
+    // 매출 확인: 일별 / 오늘
+    ui->comboUnit->blockSignals(true);
+    ui->comboUnit->setCurrentIndex(0);
+    ui->comboUnit->blockSignals(false);
+    ui->date->setDisplayFormat("yyyy-MM-dd");
     ui->date->blockSignals(true);
     ui->date->setDate(QDate::currentDate());
     ui->date->blockSignals(false);
     loadSales();
+    ui->tableDetail->scrollToTop();
+
+    // AI 리포트
+    ui->comboPeriod->setCurrentIndex(0);
+    ui->textReport->clear();
+    ui->lblReportInfo->setText("기간을 고르고 [AI 리포트 생성]을 누르세요.");
+
+    // AI 상담: 대화 내용과 추천 질문 지우기 (맨 앞의 spacer 는 남긴다)
+    for (int i = ui->layoutChat->count() - 1; i >= 0; --i) {
+        QLayoutItem *item = ui->layoutChat->itemAt(i);
+        if (item->widget()) {
+            ui->layoutChat->takeAt(i);
+            item->widget()->deleteLater();
+            delete item;
+        }
+    }
+    setFollowUps(QStringList());
+    ui->comboCategory->blockSignals(true);
+    ui->comboCategory->setCurrentIndex(0);
+    ui->comboCategory->blockSignals(false);
+
+    // AI 판매 예측
+    ui->comboDays->setCurrentIndex(0);
+    ui->forecastChart->setData(QVariantList(), QVariantList(), QString());
+    ui->tableForecast->setRowCount(0);
+    ui->lblForecastSum->clear();
+
     loadTargets();
     onCategory();
 }
@@ -420,40 +456,58 @@ void Admin::loadSales()
     ui->chart->setData(bars, mon ? d.toString("yyyy년 M월") + " 일자별 매출"
                                  : d.toString("yyyy년 M월 d일") + " 시간대별 매출");
 
-    QVariantList list = res.value("details").toList();
-    QMap<QString, QPair<int, int> > sum;
+    // 일별은 시간대, 월별은 날짜마다 상품별로 묶어서 결제수단별 판매량을 보여 준다.
+    struct Sold { int cardQty, cardAmt, faceQty, faceAmt; };
+    QMap<QString, QMap<QString, Sold> > groups;   // 시간대(날짜) -> 상품 -> 판매량
     int qtySum = 0;
-    ui->tableDetail->setRowCount(list.size());
-    for (int i = 0; i < list.size(); ++i) {
-        QVariantMap m = list.at(i).toMap();
-        QString buyer = m.value("buyer").toString();
-        QString product = m.value("product").toString();
+    foreach (const QVariant &v, res.value("details").toList()) {
+        QVariantMap m = v.toMap();
+        QString when = m.value("soldAt").toString();
+        QString key = mon ? when.mid(5, 5) : when.mid(11, 2);   // "MM-dd" 또는 "HH"
+        Sold &s = groups[key][m.value("product").toString()];   // 처음이면 0으로 만들어진다
         int qty = m.value("qty").toInt();
         int amount = m.value("amount").toInt();
-        QString when = m.value("soldAt").toString();
-
-        ui->tableDetail->setItem(i, 0, cell(mon ? when.mid(5, 11) : when.mid(11)));
-        ui->tableDetail->setItem(i, 1, cell(buyer));
-        ui->tableDetail->setItem(i, 2, cell(product));
-        ui->tableDetail->setItem(i, 3, cell(QString("%L1개").arg(qty), true));
-        ui->tableDetail->setItem(i, 4, cell(won(amount), true));
-        ui->tableDetail->setItem(i, 5, cell(m.value("method").toString() == "face" ? "얼굴인식" : "카드"));
-
-        QPair<int, int> &s = sum[buyer + '\t' + product];
-        s.first += qty;
-        s.second += amount;
+        if (m.value("method").toString() == "face") {
+            s.faceQty += qty;
+            s.faceAmt += amount;
+        } else {
+            s.cardQty += qty;
+            s.cardAmt += amount;
+        }
         qtySum += qty;
     }
 
-    ui->tableBuyer->setRowCount(sum.size());
-    int r = 0;
-    for (QMap<QString, QPair<int, int> >::const_iterator it = sum.constBegin(); it != sum.constEnd(); ++it, ++r) {
-        QStringList names = it.key().split('\t');
-        ui->tableBuyer->setItem(r, 0, cell(names.value(0)));
-        ui->tableBuyer->setItem(r, 1, cell(names.value(1)));
-        ui->tableBuyer->setItem(r, 2, cell(QString("%L1개").arg(it.value().first), true));
-        ui->tableBuyer->setItem(r, 3, cell(won(it.value().second), true));
+    QList<QStringList> rows;   // 최근 시간대(날짜)부터, 그 안에서는 많이 팔린 상품부터
+    QMapIterator<QString, QMap<QString, Sold> > g(groups);
+    g.toBack();
+    while (g.hasPrevious()) {
+        g.previous();
+        QString label = mon ? QString("%1월 %2일").arg(g.key().left(2).toInt()).arg(g.key().mid(3).toInt())
+                            : QString("%1시").arg(g.key().toInt());
+        QList<QPair<int, QString> > order;
+        for (QMap<QString, Sold>::const_iterator it = g.value().constBegin(); it != g.value().constEnd(); ++it)
+            order << qMakePair(-(it.value().cardAmt + it.value().faceAmt), it.key());
+        std::sort(order.begin(), order.end());
+        for (int i = 0; i < order.size(); ++i) {
+            const Sold &s = g.value()[order[i].second];
+            QString card = s.cardQty ? QString("%L1개 / %2").arg(s.cardQty).arg(won(s.cardAmt)) : QString("-");
+            QString face = s.faceQty ? QString("%L1개 / %2").arg(s.faceQty).arg(won(s.faceAmt)) : QString("-");
+            QString total = QString("%L1개 / %2").arg(s.cardQty + s.faceQty).arg(won(s.cardAmt + s.faceAmt));
+            rows << (QStringList() << (i == 0 ? label : QString()) << order[i].second << card << face << total);
+        }
     }
+
+    ui->tableDetail->setRowCount(rows.size());
+    for (int i = 0; i < rows.size(); ++i) {
+        for (int c = 0; c < 5; ++c)
+            ui->tableDetail->setItem(i, c, cell(rows[i][c], c >= 2));
+        QFont bold = ui->tableDetail->item(i, 4)->font();
+        bold.setBold(true);
+        ui->tableDetail->item(i, 4)->setFont(bold);
+    }
+    ui->tableDetail->setHorizontalHeaderLabels(QStringList() << (mon ? "날짜" : "시간") << "상품"
+                                                             << "카드" << "얼굴인식" << "합계");
+    ui->lblDetail->setText(mon ? "날짜별 상품 판매" : "시간대별 상품 판매");
 
     ui->lblSum->setText(QString("합계 %1   |   카드 %2   |   얼굴인식 %3   |   판매수량 %L4개")
                             .arg(won(cardSum + faceSum)).arg(won(cardSum)).arg(won(faceSum)).arg(qtySum));

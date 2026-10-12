@@ -1,6 +1,7 @@
 #ifndef SERVER_H
 #define SERVER_H
 
+#include <QDateTime>
 #include <QHash>
 #include <QJsonObject>
 #include <QSemaphore>
@@ -17,16 +18,26 @@ class Server : public QTcpServer
 public:
     explicit Server(DB *db, QObject *parent = 0);
 
+    void setAdminCode(const QString &code) { m_adminCode = code; }
+
 private slots:
     void onConnect();
     void onRead();
     void onClose();
 
 private:
-    QJsonObject handle(const QJsonObject &req);
+    struct AdminTry {
+        int fails;
+        QDateTime lockedUntil;
+    };
+
+    QJsonObject handle(const QJsonObject &req, const QString &peer);
+    bool checkAdminCode(const QString &code, const QString &peer, QString *err);
 
     DB *m_db;
     QHash<QTcpSocket *, QByteArray> m_buf;
+    QString m_adminCode;
+    QHash<QString, AdminTry> m_adminTries;   // IP별 관리자 코드 오답 횟수
 };
 
 class ServerThread : public QThread

@@ -15,6 +15,8 @@
 #include <QTcpSocket>
 
 static const int MAX_IMG = 5 * 1024 * 1024;
+static const int ADMIN_MAX_FAILS = 5;      // 관리자 코드를 이만큼 틀리면
+static const int ADMIN_LOCK_SECS = 5 * 60; // 이 시간 동안 그 IP의 관리자 가입을 막는다
 
 static bool readImage(const QJsonObject &req, QByteArray *img, QString *err)
 {
@@ -49,7 +51,7 @@ void Server::onRead()
 
     QJsonObject req;
     while (unpack(buf, &req))
-        sock->write(pack(handle(req)));
+        sock->write(pack(handle(req, sock->peerAddress().toString())));
 
     if (buf.size() > MAX_SIZE) {
         QJsonObject res;
@@ -248,7 +250,41 @@ static bool aiAsk(DB *db, const QString &question, int productId, int userId, QV
     return true;
 }
 
-QJsonObject Server::handle(const QJsonObject &req)
+// 앱이 보낸 관리자 코드를 server.ini 의 admin/signup_code 와 비교한다.
+// 코드가 설정되지 않았으면 관리자 가입은 항상 거부.
+bool Server::checkAdminCode(const QString &code, const QString &peer, QString *err)
+{
+    QDateTime now = QDateTime::currentDateTime();
+    AdminTry &t = m_adminTries[peer];
+    if (t.lockedUntil.isValid() && now < t.lockedUntil) {
+        *err = QString("관리자 코드를 여러 번 틀렸습니다. %1분 후에 다시 시도하세요.")
+                   .arg((now.secsTo(t.lockedUntil) + 59) / 60);
+        return false;
+    }
+    if (m_adminCode.isEmpty()) {
+        *err = "이 키오스크는 관리자 회원가입을 받지 않습니다.";
+        return false;
+    }
+
+    // 길이와 내용이 다른 위치에 상관없이 같은 시간이 걸리도록 끝까지 비교한다
+    QByteArray a = code.toUtf8(), b = m_adminCode.toUtf8();
+    int diff = a.size() ^ b.size();
+    for (int i = 0; i < a.size(); ++i)
+        diff |= a.at(i) ^ b.at(i % b.size());
+    if (diff == 0) {
+        m_adminTries.remove(peer);
+        return true;
+    }
+
+    if (++t.fails >= ADMIN_MAX_FAILS) {
+        t.fails = 0;
+        t.lockedUntil = now.addSecs(ADMIN_LOCK_SECS);
+    }
+    *err = "관리자 코드가 올바르지 않습니다.";
+    return false;
+}
+
+QJsonObject Server::handle(const QJsonObject &req, const QString &peer)
 {
     QString cmd = req.value("cmd").toString();
     QVariant data;
@@ -271,8 +307,15 @@ QJsonObject Server::handle(const QJsonObject &req)
             if (!img.isEmpty())
                 faces << img;
         }
+        // adminCode 가 없거나 비어 있으면 일반 회원, 있으면 맞아야만 관리자로 가입
+        QString adminCode = req.value("adminCode").toString();
+        QString role = "member";
+        if (ok && !adminCode.isEmpty()) {
+            ok = checkAdminCode(adminCode, peer, &err);
+            role = "admin";
+        }
         ok = ok && m_db->join(req.value("name").toString(), req.value("loginId").toString(),
-                              req.value("password").toString(), faces, &data, &err);
+                              req.value("password").toString(), role, faces, &data, &err);
     } else if (cmd == "FACES") {
         ok = m_db->faces(req.value("afterId").toInt(), &data, &err);
     } else if (cmd == "PRODUCTS") {
@@ -376,6 +419,7 @@ void ServerThread::run()
 
     DB db;
     Server server(&db);
+    server.setAdminCode(ini.value("admin/signup_code").toString().trimmed());
     QString dbErr;
     if (!db.open(ini, &dbErr)) {
         m_err = "DB 연결 실패: " + dbErr;

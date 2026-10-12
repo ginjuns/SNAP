@@ -349,124 +349,69 @@
            </size>
           </property>
          </widget>
-         <widget class="QTabWidget" name="tabWidget_2">
-          <property name="currentIndex">
-           <number>0</number>
-          </property>
-          <widget class="QWidget" name="tabDetail">
-           <attribute name="title">
-            <string>구매 상세 내역</string>
-           </attribute>
-           <layout class="QVBoxLayout" name="verticalLayout_4">
-            <property name="leftMargin">
-             <number>0</number>
-            </property>
-            <property name="topMargin">
-             <number>0</number>
-            </property>
-            <property name="rightMargin">
-             <number>0</number>
-            </property>
-            <property name="bottomMargin">
-             <number>0</number>
-            </property>
-            <item>
-             <widget class="QTableWidget" name="tableDetail">
-              <property name="editTriggers">
-               <set>QAbstractItemView::NoEditTriggers</set>
+         <widget class="QWidget" name="boxDetail">
+          <layout class="QVBoxLayout" name="verticalLayout_4">
+           <property name="leftMargin">
+            <number>0</number>
+           </property>
+           <property name="topMargin">
+            <number>0</number>
+           </property>
+           <property name="rightMargin">
+            <number>0</number>
+           </property>
+           <property name="bottomMargin">
+            <number>0</number>
+           </property>
+           <item>
+            <widget class="QLabel" name="lblDetail">
+             <property name="text">
+              <string>시간대별 상품 판매</string>
+             </property>
+             <property name="styleSheet">
+              <string notr="true">font-size: 18px; font-weight: bold;</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QTableWidget" name="tableDetail">
+             <property name="editTriggers">
+              <set>QAbstractItemView::NoEditTriggers</set>
+             </property>
+             <property name="selectionBehavior">
+              <enum>QAbstractItemView::SelectRows</enum>
+             </property>
+             <attribute name="verticalHeaderVisible">
+              <bool>false</bool>
+             </attribute>
+             <column>
+              <property name="text">
+               <string>시간</string>
               </property>
-              <property name="selectionBehavior">
-               <enum>QAbstractItemView::SelectRows</enum>
+             </column>
+             <column>
+              <property name="text">
+               <string>상품</string>
               </property>
-              <attribute name="verticalHeaderVisible">
-               <bool>false</bool>
-              </attribute>
-              <column>
-               <property name="text">
-                <string>일시</string>
-               </property>
-              </column>
-              <column>
-               <property name="text">
-                <string>구매자</string>
-               </property>
-              </column>
-              <column>
-               <property name="text">
-                <string>상품</string>
-               </property>
-              </column>
-              <column>
-               <property name="text">
-                <string>수량</string>
-               </property>
-              </column>
-              <column>
-               <property name="text">
-                <string>금액</string>
-               </property>
-              </column>
-              <column>
-               <property name="text">
-                <string>결제수단</string>
-               </property>
-              </column>
-             </widget>
-            </item>
-           </layout>
-          </widget>
-          <widget class="QWidget" name="tabBuyer">
-           <attribute name="title">
-            <string>구매자·상품별 합계</string>
-           </attribute>
-           <layout class="QVBoxLayout" name="verticalLayout_5">
-            <property name="leftMargin">
-             <number>0</number>
-            </property>
-            <property name="topMargin">
-             <number>0</number>
-            </property>
-            <property name="rightMargin">
-             <number>0</number>
-            </property>
-            <property name="bottomMargin">
-             <number>0</number>
-            </property>
-            <item>
-             <widget class="QTableWidget" name="tableBuyer">
-              <property name="editTriggers">
-               <set>QAbstractItemView::NoEditTriggers</set>
+             </column>
+             <column>
+              <property name="text">
+               <string>카드</string>
               </property>
-              <property name="selectionBehavior">
-               <enum>QAbstractItemView::SelectRows</enum>
+             </column>
+             <column>
+              <property name="text">
+               <string>얼굴인식</string>
               </property>
-              <attribute name="verticalHeaderVisible">
-               <bool>false</bool>
-              </attribute>
-              <column>
-               <property name="text">
-                <string>구매자</string>
-               </property>
-              </column>
-              <column>
-               <property name="text">
-                <string>상품</string>
-               </property>
-              </column>
-              <column>
-               <property name="text">
-                <string>수량</string>
-               </property>
-              </column>
-              <column>
-               <property name="text">
-                <string>금액</string>
-               </property>
-              </column>
-             </widget>
-            </item>
-           </layout>
-          </widget>
+             </column>
+             <column>
+              <property name="text">
+               <string>합계</string>
+              </property>
+             </column>
+            </widget>
+           </item>
+          </layout>
          </widget>
         </widget>
        </item>

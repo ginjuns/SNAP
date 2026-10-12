@@ -102,7 +102,7 @@ bool DB::open(const QSettings &ini, QString *err)
     return true;
 }
 
-bool DB::join(const QString &name0, const QString &id0, const QString &pw,
+bool DB::join(const QString &name0, const QString &id0, const QString &pw, const QString &role,
               const QList<QByteArray> &faces, QVariant *out, QString *err)
 {
     QString name = name0.trimmed();
@@ -127,8 +127,9 @@ bool DB::join(const QString &name0, const QString &id0, const QString &pw,
     }
 
     QSqlDatabase::database().transaction();
-    q.prepare("INSERT INTO users (name, role, login_id, password) VALUES (?, 'member', ?, ?)");
+    q.prepare("INSERT INTO users (name, role, login_id, password) VALUES (?, ?, ?, ?)");
     q.addBindValue(name);
+    q.addBindValue(role);
     q.addBindValue(id);
     q.addBindValue(pw);
     if (!q.exec())
@@ -147,6 +148,7 @@ bool DB::join(const QString &name0, const QString &id0, const QString &pw,
         return rollback(QSqlDatabase::database().lastError().text(), err);
     QVariantMap m;
     m["userId"] = userId;
+    m["role"] = role;
     *out = m;
     return true;
 }
