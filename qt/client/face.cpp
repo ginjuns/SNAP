@@ -10,6 +10,10 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/objdetect/face.hpp>
 
+#include <condition_variable>
+#include <mutex>
+#include <thread>
+
 namespace {
 
 const double MIN_COSINE = 0.363;
@@ -538,12 +542,116 @@ bool recognizeFace(
         bestScore >= MIN_COSINE;
 }
 
+// 백그라운드 인식 결과 한 번
+struct Result
+{
+    bool known = false;
+    int label = -1;
+    double score = 0.0;
+    cv::Rect box;
+    FaceState state = FACE_NONE;
+    std::vector<cv::Rect> ignored;
+};
+
 }
 
-// 카메라 구조체
+/*
+ * 카메라 + 백그라운드 인식 스레드
+ *
+ * 얼굴 찾기(YuNet)와 얼굴 비교(SFace)는 한 번에 0.2초 정도 걸려서
+ * 화면 스레드에서 하면 카메라 화면이 초당 4~5번만 바뀐다.
+ * 그래서 화면 스레드는 카메라를 읽어 그리기만 하고(30fps),
+ * 인식은 이 스레드가 가장 최근 프레임으로 하고 결과만 넘겨 준다.
+ * 인식이 끝나기 전에 들어온 프레임은 최신 것 하나만 남기고 버린다.
+ */
 struct Face::Cam
 {
     cv::VideoCapture cap;
+    Result shown;               // 화면에 그리는 마지막 인식 결과 (화면 스레드만 사용)
+
+    // 백그라운드 스레드 시작
+    void start()
+    {
+        worker = std::thread(&Cam::run, this);
+    }
+
+    // 인식할 최신 프레임 넘기기 (이전에 처리 못 한 프레임은 버림)
+    void push(const cv::Mat &img)
+    {
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            pending = img.clone();
+        }
+        wake.notify_one();
+    }
+
+    // 새 인식 결과가 있으면 r 에 담고 true
+    bool take(Result *r)
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        if (!fresh)
+            return false;
+        *r = result;
+        fresh = false;
+        return true;
+    }
+
+    // 쌓여 있는 프레임과 결과를 버림 (인식을 다시 시작할 때)
+    void clear()
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        pending.release();
+        fresh = false;
+        shown = Result();
+    }
+
+    // 창을 닫을 때: 스레드에 멈추라고 알리고 끝날 때까지 기다림 (최대 인식 1번 시간)
+    ~Cam()
+    {
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            stop = true;
+        }
+        wake.notify_one();
+        if (worker.joinable())
+            worker.join();
+    }
+
+private:
+    // 백그라운드 스레드 본체: 프레임이 오면 인식하고 결과를 남김
+    void run()
+    {
+        for (;;) {
+            cv::Mat img;
+            {
+                std::unique_lock<std::mutex> lock(mutex);
+                wake.wait(lock, [this] { return stop || !pending.empty(); });
+                if (stop)
+                    return;
+                img = pending;
+                pending.release();
+            }
+
+            Result r;
+            try {
+                r.known = recognizeFace(img, &r.label, &r.score, &r.box, &r.state, &r.ignored);
+            } catch (...) {
+                r = Result();
+            }
+
+            std::lock_guard<std::mutex> lock(mutex);
+            result = r;
+            fresh = true;
+        }
+    }
+
+    std::thread worker;
+    std::mutex mutex;
+    std::condition_variable wake;
+    cv::Mat pending;            // 인식할 최신 프레임 (비어 있으면 대기)
+    Result result;              // 마지막 인식 결과
+    bool fresh = false;         // 화면 스레드가 아직 안 가져간 결과가 있음
+    bool stop = false;
 };
 
 
@@ -641,6 +749,7 @@ Face::Face(
 
         if (opened)
         {
+            m_cam->start();
             m_timer->start(33);
         }
         else
@@ -683,7 +792,8 @@ void Face::tick()
     {
         return;
     }
-    if (++m_ticks > MAX_TICKS)
+    // 인식을 MAX_TICKS 번 해도 못 찾으면 그만 (예전처럼 인식 횟수로 셈)
+    if (m_ticks > MAX_TICKS)
     {
         m_timer->stop();
 
@@ -708,21 +818,65 @@ void Face::tick()
         return;
     }
 
-    cv::Rect faceBox;
+    // 인식은 백그라운드 스레드에 맡기고, 새 결과가 왔을 때만 연속 인식 횟수/안내 문구를 바꿈
+    m_cam->push(img);
 
-    int label = -1;
-    double score = 0.0;
-    FaceState state = FACE_NONE;
-    std::vector<cv::Rect> ignored;
-    bool known =
-        recognizeFace(
-            img,
-            &label,
-            &score,
-            &faceBox,
-            &state,
-            &ignored
-        );
+    Result &r = m_cam->shown;
+    if (m_cam->take(&r))
+    {
+        ++m_ticks;
+
+        if (r.known &&
+            r.label == m_last)
+        {
+            ++m_hits;
+        }
+        else if (r.known)
+        {
+            m_last = r.label;
+            m_hits = 1;
+        }
+        else
+        {
+            m_last = -1;
+            m_hits = 0;
+        }
+
+        // 오른쪽 진행 막대: 연속 인식 횟수 (HITS 번이면 성공)
+        ui->barHits->setMaximum(HITS);
+        ui->barHits->setValue(qMin(m_hits, HITS));
+
+        if (r.known)
+        {
+            ui->lblStatus->setText(
+                QString(
+                    "인식 중... (%1/%2)"
+                )
+                .arg(m_hits)
+                .arg(HITS)
+            );
+        }
+        else if (r.state == FACE_OK)
+        {
+            ui->lblStatus->setText(
+                "등록되지 않은 얼굴입니다."
+            );
+        }
+        else if (r.state == FACE_TOO_FAR)
+        {
+            ui->lblStatus->setText(
+                "카메라에 조금 더 가까이 와 주세요."
+            );
+        }
+        else
+        {
+            ui->lblStatus->setText(
+                "흰색 사각형 안에 얼굴을 맞춰 주세요."
+            );
+        }
+    }
+
+    // 카메라 화면은 매 프레임 그림 (사각형은 마지막 인식 결과)
     cv::Rect zone = zoneRect(img.size());
     cv::Mat dark = img.clone();
     dark *= 0.4;
@@ -730,72 +884,23 @@ void Face::tick()
     img = dark;
     cv::rectangle(img, zone, cv::Scalar(255, 255, 255), 3);
 
-    for (size_t i = 0; i < ignored.size(); ++i)
-        cv::rectangle(img, ignored[i], cv::Scalar(150, 150, 150), 1);
+    for (size_t i = 0; i < r.ignored.size(); ++i)
+        cv::rectangle(img, r.ignored[i], cv::Scalar(150, 150, 150), 1);
 
-    if (state == FACE_OK &&
-        faceBox.width > 0 &&
-        faceBox.height > 0)
+    if (r.state == FACE_OK &&
+        r.box.width > 0 &&
+        r.box.height > 0)
     {
         cv::Scalar color =
-            known
+            r.known
                 ? cv::Scalar(0, 255, 0)
                 : cv::Scalar(0, 0, 255);
 
         cv::rectangle(
             img,
-            faceBox,
+            r.box,
             color,
             2
-        );
-    }
-
-    if (known &&
-        label == m_last)
-    {
-        ++m_hits;
-    }
-    else if (known)
-    {
-        m_last = label;
-        m_hits = 1;
-    }
-    else
-    {
-        m_last = -1;
-        m_hits = 0;
-    }
-
-    // 오른쪽 진행 막대: 연속 인식 횟수 (HITS 번이면 성공)
-    ui->barHits->setMaximum(HITS);
-    ui->barHits->setValue(qMin(m_hits, HITS));
-
-    if (known)
-    {
-        ui->lblStatus->setText(
-            QString(
-                "인식 중... (%1/%2)"
-            )
-            .arg(m_hits)
-            .arg(HITS)
-        );
-    }
-    else if (state == FACE_OK)
-    {
-        ui->lblStatus->setText(
-            "등록되지 않은 얼굴입니다."
-        );
-    }
-    else if (state == FACE_TOO_FAR)
-    {
-        ui->lblStatus->setText(
-            "카메라에 조금 더 가까이 와 주세요."
-        );
-    }
-    else
-    {
-        ui->lblStatus->setText(
-            "흰색 사각형 안에 얼굴을 맞춰 주세요."
         );
     }
 
@@ -860,6 +965,9 @@ void Face::pwLogin()
     else if (running)
     {
         m_ticks = 0;
+#ifdef USE_OPENCV
+        m_cam->clear();
+#endif
 
         m_timer->start(33);
     }
