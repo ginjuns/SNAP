@@ -114,6 +114,11 @@ static bool auth(const QString &id, const QString &pw, int *userId, QString *err
     return true;
 }
 
+// 매출 기록의 상품명. 상품이 삭제되면 product_id 가 NULL 이 되므로 앞에 "(삭제) " 를 붙임
+// (같은 이름으로 새로 등록한 상품과도 구분됨)
+#define SOLD_NAME(t) "CASE WHEN " t "product_id IS NULL THEN CONCAT('(삭제) ', " t "product_name)" \
+                     " ELSE " t "product_name END"
+
 // 진열대 번호 검사, 0(선택 안 함)이면 DB 에 NULL 로 저장
 static bool shelfValue(int shelf, QVariant *v, QString *err)
 {
@@ -668,7 +673,7 @@ bool DB::sales(const QString &unit, const QString &date, QVariant *out, QString 
         buckets << m;
     }
 
-    q.prepare("SELECT s.sold_at, COALESCE(u.name, '(알 수 없음)'), s.product_name, s.qty, s.amount, s.method"
+    q.prepare("SELECT s.sold_at, COALESCE(u.name, '(알 수 없음)'), " SOLD_NAME("s.") ", s.qty, s.amount, s.method"
               " FROM sales s LEFT JOIN users u ON u.id = s.user_id"
               " WHERE s.sold_at >= ? AND s.sold_at < ?"
               " ORDER BY s.sold_at DESC, s.id DESC");
@@ -739,8 +744,8 @@ bool DB::summary(const QDateTime &from, const QDateTime &to, QVariantMap *out, Q
     res["face"] = q.value(0).toInt() - q.value(3).toInt();
     res["customers"] = q.value(4).toInt();
 
-    if (!range(q, "SELECT product_name, SUM(qty), SUM(amount) FROM sales"
-                  " WHERE sold_at >= ? AND sold_at < ? GROUP BY product_name ORDER BY SUM(qty) DESC", from, to))
+    if (!range(q, "SELECT " SOLD_NAME("") " AS name, SUM(qty), SUM(amount) FROM sales"
+                  " WHERE sold_at >= ? AND sold_at < ? GROUP BY name ORDER BY SUM(qty) DESC", from, to))
         return fail(q, err);
     QVariantList products;
     while (q.next()) {
@@ -810,10 +815,10 @@ bool DB::daily(int productId, const QDate &from, int days, QVector<int> *qty, QS
 bool DB::purchases(int userId, int days, QVariantList *out, QString *err)
 {
     QSqlQuery q;
-    q.prepare("SELECT product_name, SUM(qty), COUNT(DISTINCT DATE(sold_at)), MAX(sold_at),"
+    q.prepare("SELECT " SOLD_NAME("") " AS name, SUM(qty), COUNT(DISTINCT DATE(sold_at)), MAX(sold_at),"
               " GROUP_CONCAT(DISTINCT HOUR(sold_at))"
               " FROM sales WHERE user_id = ? AND sold_at >= ?"
-              " GROUP BY product_name ORDER BY SUM(qty) DESC");
+              " GROUP BY name ORDER BY SUM(qty) DESC");
     q.addBindValue(userId);
     q.addBindValue(QDateTime::currentDateTime().addDays(-days));
     if (!q.exec())

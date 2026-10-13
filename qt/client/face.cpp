@@ -567,7 +567,7 @@ struct Result
 struct Face::Cam
 {
     cv::VideoCapture cap;
-    Result shown;               // 화면에 그리는 마지막 인식 결과 (화면 스레드만 사용)
+    Result shown;
 
     // 백그라운드 스레드 시작
     void start()
@@ -575,7 +575,7 @@ struct Face::Cam
         worker = std::thread(&Cam::run, this);
     }
 
-    // 인식할 최신 프레임 넘기기 (이전에 처리 못 한 프레임은 버림)
+    // 인식할 최신 프레임 넘기기
     void push(const cv::Mat &img)
     {
         {
@@ -596,7 +596,7 @@ struct Face::Cam
         return true;
     }
 
-    // 쌓여 있는 프레임과 결과를 버림 (인식을 다시 시작할 때)
+    // 쌓여 있는 프레임과 결과를 버림
     void clear()
     {
         std::lock_guard<std::mutex> lock(mutex);
@@ -605,7 +605,7 @@ struct Face::Cam
         shown = Result();
     }
 
-    // 창을 닫을 때: 스레드에 멈추라고 알리고 끝날 때까지 기다림 (최대 인식 1번 시간)
+    // 창을 닫을 때: 스레드에 멈추라고 알리고 끝날 때까지 기다림
     ~Cam()
     {
         {
@@ -618,7 +618,6 @@ struct Face::Cam
     }
 
 private:
-    // 백그라운드 스레드 본체: 프레임이 오면 인식하고 결과를 남김
     void run()
     {
         for (;;) {
@@ -648,9 +647,9 @@ private:
     std::thread worker;
     std::mutex mutex;
     std::condition_variable wake;
-    cv::Mat pending;            // 인식할 최신 프레임 (비어 있으면 대기)
-    Result result;              // 마지막 인식 결과
-    bool fresh = false;         // 화면 스레드가 아직 안 가져간 결과가 있음
+    cv::Mat pending;
+    Result result;
+    bool fresh = false;
     bool stop = false;
 };
 
@@ -952,9 +951,8 @@ void Face::pwLogin()
     m_timer->stop();
 
     Login dlg(this);
-
-    if (popup(&dlg) ==
-        QDialog::Accepted)
+Result:
+    if (popup(&dlg) == QDialog::Accepted)
     {
         m_id = dlg.id();
 
@@ -972,5 +970,4 @@ void Face::pwLogin()
         m_timer->start(33);
     }
 }
-
 
