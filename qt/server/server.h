@@ -3,6 +3,7 @@
 
 #include <QHash>
 #include <QJsonObject>
+#include <QQueue>
 #include <QSemaphore>
 #include <QTcpServer>
 #include <QThread>
@@ -26,12 +27,16 @@ private slots:
 
 private:
 
-    QJsonObject handle(const QJsonObject &req);
+    QJsonObject handle(const QJsonObject &req, bool local);
     bool checkAdminCode(const QString &code, QString *err);
+    QString newToken(int userId);
+    bool checkAdmin(const QJsonObject &req, QString *err);
 
     DB *m_db;
     QHash<QTcpSocket *, QByteArray> m_buf;
     QString m_adminCode;
+    QHash<QString, int> m_tokens;   // 로그인 토큰 -> 회원 번호
+    QQueue<QString> m_tokenOrder;   // 오래된 토큰부터 지우기 위한 발급 순서
 };
 
 class ServerThread : public QThread

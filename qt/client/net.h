@@ -8,6 +8,8 @@ class Net
 {
 public:
     static void setHost(const QString &ip);
+    static void setToken(const QString &token);
+    static QString token();
     static bool call(const QString &cmd, const QVariantMap &args, QVariant *out, QString *err);
 };
 

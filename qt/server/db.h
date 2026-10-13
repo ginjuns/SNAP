@@ -15,8 +15,12 @@ public:
 
     bool user(int id, QVariant *out, QString *err);
     bool login(const QString &id, const QString &pw, QVariant *out, QString *err);
-    bool join(const QString &name, const QString &id, const QString &pw, const QString &role,
-              const QList<QByteArray> &faces, QVariant *out, QString *err);
+    bool join(const QString &name, const QString &id, const QString &pw, const QString &phone,
+              const QString &role, const QList<QByteArray> &faces, QVariant *out, QString *err);
+    bool checkDup(const QString &id, const QString &phone, QVariant *out, QString *err);
+    bool editAccount(const QString &id, const QString &pw, const QString &newId, const QString &newPw,
+                     QVariant *out, QString *err);
+    bool topUp(const QString &id, const QString &pw, int amount, QVariant *out, QString *err);
     bool faces(int after, QVariant *out, QString *err);
     bool products(QVariant *out, QString *err);
     bool addProduct(const QString &name, int price, int stock, int shelf, const QByteArray &img, QString *err);

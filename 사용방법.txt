@@ -98,17 +98,18 @@ Qt Creator 에서 실행(Ctrl+R) 하거나 터미널에서 실행합니다.
  4. 회원가입 (얼굴 등록)
 --------------------------------------------------------------
 
-원래는 안드로이드 앱에서 이름/아이디/비밀번호를 입력하고 얼굴 사진을
-찍어 가입합니다. 사진은 DB 의 face_images 테이블에 저장됩니다.
+원래는 안드로이드 앱에서 이름/아이디/비밀번호/전화번호를 입력하고 얼굴 사진
+5장을 찍어 가입합니다. 사진은 DB 의 face_images 테이블에 저장됩니다.
+아이디와 전화번호는 다른 회원과 겹칠 수 없습니다.
 
 앱 없이 테스트할 때는 웹캠 사진으로 가입할 수 있습니다.
 (키오스크 프로그램이 켜져 있어야 합니다)
 
    1) cheese 로 정면 사진 5~10장 촬영 (사진 모드)
       -> ~/사진/Webcam/ 또는 ~/Pictures/Webcam/ 에 저장됨
-   2) python3 qt/server/register_test.py 이름 아이디 비밀번호 ~/사진/Webcam/*.jpg
-      예) python3 qt/server/register_test.py 엄준식 jun jun1234 ~/사진/Webcam/*.jpg
-   3) {'ok': True, 'data': {'userId': 4}} 가 나오면 가입 완료
+   2) python3 qt/server/register_test.py 이름 아이디 비밀번호 전화번호 ~/사진/Webcam/*.jpg
+      예) python3 qt/server/register_test.py 엄준식 jun jun1234 010-1234-5678 ~/사진/Webcam/*.jpg
+   3) {'ok': True, 'data': {'role': 'member', 'userId': 4}} 가 나오면 가입 완료
 
 가입하면 키오스크를 다시 켜지 않아도 다음 얼굴인식부터 바로 인식됩니다.
 
@@ -117,11 +118,39 @@ Qt Creator 에서 실행(Ctrl+R) 하거나 터미널에서 실행합니다.
    앱에서 가입할 때 이 코드를 입력하면 관리자로, 입력하지 않으면 일반 회원으로 가입됩니다.
    코드가 틀리면 가입되지 않습니다. (횟수 제한 없이 다시 시도 가능)
    테스트 도구로는 앞에 KIOSK_ADMIN_CODE 를 붙입니다.
-      KIOSK_ADMIN_CODE=관리자코드 python3 qt/server/register_test.py 이름 아이디 비밀번호 사진들...
+      KIOSK_ADMIN_CODE=관리자코드 python3 qt/server/register_test.py 이름 아이디 비밀번호 전화번호 사진들...
 
 사진 잘 찍는 법
    - 밝은 곳에서, 실제 키오스크 카메라로 찍는 것이 가장 정확합니다.
    - 정면 위주로 고개 각도와 표정을 조금씩 바꿔 찍습니다.
+
+앱 통신 규격 (9000번 포트, JSON 한 줄 + 줄바꿈, 응답 {"ok":true,"data":...} 또는 {"ok":false,"error":"..."})
+   회원가입     {"cmd":"REGISTER","name","loginId","password","phone","faces":[사진Base64 x5],"adminCode"(선택)}
+                -> {"userId","role"}
+                adminCode 외에는 모두 필수 (빈 칸/공백만 있으면 어느 칸인지 알려 주고 거절)
+                사진은 5장 이상, 장당 5MB 이하 JPEG/PNG. 비었거나 사진이 아니면 몇 번째인지 알려 줌
+                아이디/전화번호가 이미 있으면 거절 (중복 확인을 했어도 가입할 때 서버가 다시 확인)
+   아이디 중복 확인
+                {"cmd":"CHECK_ID","loginId"}
+                -> {"loginId","available":true/false,"message"}
+   아이디/전화번호 함께 확인
+                {"cmd":"CHECK_DUP","loginId"(선택),"phone"(선택)}
+                -> {"loginIdAvailable","phoneAvailable"} (보낸 항목만)
+   로그인       {"cmd":"PASSWORD_LOGIN","loginId","password"}
+                -> {"id","name","role","balance","loginId","phone","token"}
+                role 이 admin 이면 관리자 화면. token 은 관리자 기능에 필요하니 저장해 둠
+   로그아웃     {"cmd":"LOGOUT","token"}
+   아이디/비밀번호 변경
+                {"cmd":"CHANGE_ACCOUNT","loginId","password","newLoginId"(선택),"newPassword"(선택)}
+                -> 바뀐 회원 정보   (지금 아이디/비밀번호가 맞아야 함)
+   잔액 충전    {"cmd":"CHARGE","loginId","password","amount"}
+                -> 충전 후 회원 정보 (balance)   1회 최대 1,000,000원
+   관리자 전용  ADD_PRODUCT / UPDATE_PRODUCT / DELETE_PRODUCT / SALES / MEMBERS / AI_REPORT / AI_ASK / AI_FORECAST
+                요청에 관리자 로그인 때 받은 "token" 을 꼭 넣어야 함
+                토큰이 없으면 "관리자 로그인이 필요합니다", 회원 토큰이면 "관리자만 사용할 수 있는 기능입니다"
+                토큰은 로그아웃하거나 키오스크 프로그램을 다시 켜면 사라지므로 다시 로그인
+                (숫자는 3000 또는 "3000" 둘 다 가능, UPDATE_PRODUCT 에서 image 를 비우면 사진은 그대로)
+   상품 목록    PRODUCTS 는 누구나 (토큰 필요 없음)
 
 
 --------------------------------------------------------------

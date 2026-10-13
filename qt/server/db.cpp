@@ -33,6 +33,87 @@ static bool exists(const QString &name, int except, bool *found, QString *err)
     return true;
 }
 
+static const int MIN_FACES = 5;           // 회원가입에 필요한 얼굴 사진 수
+static const int MAX_CHARGE = 1000000;    // 한 번에 충전할 수 있는 최대 금액
+
+// 아이디 중복(UNIQUE) 위반이면 알맞은 문구로 바꿔서 err 에 넣음
+static QString dupMessage(const QSqlError &e)
+{
+    if (e.nativeErrorCode() != "1062")
+        return e.text();
+    if (e.text().contains("phone"))
+        return "이미 가입된 전화번호입니다.";
+    return "이미 사용 중인 아이디입니다.";
+}
+
+// 전화번호를 숫자만 남겨 정리 (010-1234-5678 -> 01012345678), 형식이 틀리면 빈 문자열
+static QString normPhone(const QString &phone)
+{
+    QString digits;
+    foreach (QChar c, phone) {
+        if (c.isDigit())
+            digits += c;
+        else if (c != '-' && c != ' ')
+            return QString();
+    }
+    if (digits.size() < 10 || digits.size() > 11 || !digits.startsWith('0'))
+        return QString();
+    return digits;
+}
+
+// 아이디 형식 검사 (1~30자, 공백 없음)
+static bool checkId(const QString &id, QString *err)
+{
+    bool space = false;
+    foreach (QChar c, id)
+        space = space || c.isSpace();
+    if (id.isEmpty() || id.size() > 30 || space) {
+        *err = "아이디는 공백 없이 1~30자로 입력하세요.";
+        return false;
+    }
+    return true;
+}
+
+// 비밀번호 형식 검사 (1~100자)
+static bool checkPw(const QString &pw, QString *err)
+{
+    if (pw.trimmed().isEmpty() || pw.size() > 100) {
+        *err = "비밀번호는 1~100자로 입력하세요. (공백만으로는 안 됨)";
+        return false;
+    }
+    return true;
+}
+
+// 같은 값을 가진 회원이 있는지 (column: login_id / phone, except 번 회원은 제외)
+static bool taken(const QString &column, const QString &value, int except, bool *found, QString *err)
+{
+    QSqlQuery q;
+    q.prepare(QString("SELECT COUNT(*) FROM users WHERE %1 = ? AND id <> ?").arg(column));
+    q.addBindValue(value);
+    q.addBindValue(except);
+    if (!q.exec() || !q.next())
+        return fail(q, err);
+    *found = q.value(0).toInt() > 0;
+    return true;
+}
+
+// 아이디/비밀번호가 맞으면 회원 번호를 userId 에
+static bool auth(const QString &id, const QString &pw, int *userId, QString *err)
+{
+    QSqlQuery q;
+    q.prepare("SELECT id FROM users WHERE login_id = ? AND password = ?");
+    q.addBindValue(id.trimmed());
+    q.addBindValue(pw);
+    if (!q.exec())
+        return fail(q, err);
+    if (!q.next()) {
+        *err = "아이디 또는 비밀번호가 올바르지 않습니다.";
+        return false;
+    }
+    *userId = q.value(0).toInt();
+    return true;
+}
+
 // 진열대 번호 검사, 0(선택 안 함)이면 DB 에 NULL 로 저장
 static bool shelfValue(int shelf, QVariant *v, QString *err)
 {
@@ -94,6 +175,11 @@ bool DB::open(const QSettings &ini, QString *err)
                "DB를 최신으로 맞추려면 sudo mysql < db/kiosk.sql 을 실행하세요.";
         return false;
     }
+    if (!q.exec("SELECT phone FROM users LIMIT 1")) {
+        *err = "users 테이블에 전화번호(phone) 칸이 없습니다.\n"
+               "DB를 최신으로 맞추려면 sudo mysql < db/kiosk.sql 을 실행하세요.";
+        return false;
+    }
     if (!q.exec("SELECT 1 FROM face_images LIMIT 1")) {
         *err = "얼굴 사진(face_images) 테이블이 없습니다.\n"
                "DB를 최신으로 맞추려면 sudo mysql < db/kiosk.sql 을 실행하세요.";
@@ -107,39 +193,56 @@ bool DB::open(const QSettings &ini, QString *err)
     return true;
 }
 
-// 회원가입: 아이디 중복 확인 후 회원과 얼굴 사진을 한 트랜잭션으로 저장
-bool DB::join(const QString &name0, const QString &id0, const QString &pw, const QString &role,
-              const QList<QByteArray> &faces, QVariant *out, QString *err)
+// 회원가입: 아이디/전화번호 중복 확인 후 회원과 얼굴 사진을 한 트랜잭션으로 저장
+bool DB::join(const QString &name0, const QString &id0, const QString &pw, const QString &phone0,
+              const QString &role, const QList<QByteArray> &faces, QVariant *out, QString *err)
 {
     QString name = name0.trimmed();
     QString id = id0.trimmed();
-    if (name.isEmpty() || id.isEmpty() || pw.isEmpty()) {
-        *err = "이름, 아이디, 비밀번호를 모두 입력하세요.";
+    if (name.isEmpty() || id.isEmpty() || pw.trimmed().isEmpty() || phone0.trimmed().isEmpty()) {
+        *err = "이름, 아이디, 비밀번호, 전화번호를 모두 입력하세요.";
         return false;
     }
-    if (faces.isEmpty()) {
-        *err = "얼굴 사진이 없습니다. (faces에 1장 이상)";
+    if (name.size() > 50) {
+        *err = "이름은 50자 이내로 입력하세요.";
+        return false;
+    }
+    if (!checkId(id, err) || !checkPw(pw, err))
+        return false;
+    QString phone = normPhone(phone0);
+    if (phone.isEmpty()) {
+        *err = "전화번호 형식이 올바르지 않습니다. (예: 010-1234-5678)";
+        return false;
+    }
+    if (faces.size() < MIN_FACES) {
+        *err = QString("얼굴 사진 %1장이 필요합니다. (받은 사진 %2장)").arg(MIN_FACES).arg(faces.size());
+        return false;
+    }
+
+    bool found = false;
+    if (!taken("login_id", id, 0, &found, err))
+        return false;
+    if (found) {
+        *err = QString("'%1' 아이디는 이미 사용 중입니다.").arg(id);
+        return false;
+    }
+    if (!taken("phone", phone, 0, &found, err))
+        return false;
+    if (found) {
+        *err = "이미 가입된 전화번호입니다.";
         return false;
     }
 
     QSqlQuery q;
-    q.prepare("SELECT COUNT(*) FROM users WHERE login_id = ?");
-    q.addBindValue(id);
-    if (!q.exec() || !q.next())
-        return fail(q, err);
-    if (q.value(0).toInt() > 0) {
-        *err = QString("'%1' 아이디는 이미 사용 중입니다.").arg(id);
-        return false;
-    }
-
     QSqlDatabase::database().transaction();
-    q.prepare("INSERT INTO users (name, role, login_id, password) VALUES (?, ?, ?, ?)");
+    q.prepare("INSERT INTO users (name, role, login_id, password, phone) VALUES (?, ?, ?, ?, ?)");
     q.addBindValue(name);
     q.addBindValue(role);
     q.addBindValue(id);
     q.addBindValue(pw);
+    q.addBindValue(phone);
     if (!q.exec())
-        return rollback(q.lastError().text(), err);
+        return rollback(dupMessage(q.lastError()), err);
     int userId = q.lastInsertId().toInt();
 
     foreach (const QByteArray &img, faces) {
@@ -182,24 +285,109 @@ bool DB::faces(int after, QVariant *out, QString *err)
 // 아이디/비밀번호 확인, 맞으면 회원 id
 bool DB::login(const QString &id, const QString &pw, QVariant *out, QString *err)
 {
-    QSqlQuery q;
-    q.prepare("SELECT id FROM users WHERE login_id = ? AND password = ?");
-    q.addBindValue(id);
-    q.addBindValue(pw);
-    if (!q.exec())
-        return fail(q, err);
-    if (!q.next()) {
-        *err = "아이디 또는 비밀번호가 올바르지 않습니다.";
-        return false;
-    }
-    return user(q.value(0).toInt(), out, err);
+    int userId = 0;
+    return auth(id, pw, &userId, err) && user(userId, out, err);
 }
 
-// 회원 정보 (이름, 권한, 잔액)
+// 앱 회원가입 화면의 중복 확인: 아이디/전화번호 중 보낸 것만 검사
+bool DB::checkDup(const QString &id0, const QString &phone0, QVariant *out, QString *err)
+{
+    QString id = id0.trimmed();
+    if (id.isEmpty() && phone0.trimmed().isEmpty()) {
+        *err = "확인할 아이디(loginId) 또는 전화번호(phone)를 보내 주세요.";
+        return false;
+    }
+    QVariantMap m;
+    bool found = false;
+    if (!id.isEmpty()) {
+        if (!checkId(id, err) || !taken("login_id", id, 0, &found, err))
+            return false;
+        m["loginIdAvailable"] = !found;
+    }
+    if (!phone0.trimmed().isEmpty()) {
+        QString phone = normPhone(phone0);
+        if (phone.isEmpty()) {
+            *err = "전화번호 형식이 올바르지 않습니다. (예: 010-1234-5678)";
+            return false;
+        }
+        if (!taken("phone", phone, 0, &found, err))
+            return false;
+        m["phoneAvailable"] = !found;
+    }
+    *out = m;
+    return true;
+}
+
+// 회원 아이디/비밀번호 변경: 지금 아이디·비밀번호가 맞아야 하고, 보낸 항목만 바꿈
+bool DB::editAccount(const QString &id, const QString &pw, const QString &newId0, const QString &newPw,
+                     QVariant *out, QString *err)
+{
+    int userId = 0;
+    if (!auth(id, pw, &userId, err))
+        return false;
+
+    QString newId = newId0.trimmed();
+    QStringList sets;
+    QVariantList vals;
+    if (!newId.isEmpty()) {
+        bool found = false;
+        if (!checkId(newId, err) || !taken("login_id", newId, userId, &found, err))
+            return false;
+        if (found) {
+            *err = QString("'%1' 아이디는 이미 사용 중입니다.").arg(newId);
+            return false;
+        }
+        sets << "login_id = ?";
+        vals << newId;
+    }
+    if (!newPw.isEmpty()) {
+        if (!checkPw(newPw, err))
+            return false;
+        sets << "password = ?";
+        vals << newPw;
+    }
+    if (sets.isEmpty()) {
+        *err = "바꿀 아이디(newLoginId) 또는 비밀번호(newPassword)를 입력하세요.";
+        return false;
+    }
+
+    QSqlQuery q;
+    q.prepare("UPDATE users SET " + sets.join(", ") + " WHERE id = ?");
+    foreach (const QVariant &v, vals)
+        q.addBindValue(v);
+    q.addBindValue(userId);
+    if (!q.exec()) {
+        *err = dupMessage(q.lastError());
+        return false;
+    }
+    return user(userId, out, err);
+}
+
+// 잔액 충전: 아이디·비밀번호 확인 후 amount 원을 더함
+bool DB::topUp(const QString &id, const QString &pw, int amount, QVariant *out, QString *err)
+{
+    if (amount <= 0 || amount > MAX_CHARGE) {
+        *err = QString("충전 금액은 1원 ~ %L1원 사이로 입력하세요.").arg(MAX_CHARGE);
+        return false;
+    }
+    int userId = 0;
+    if (!auth(id, pw, &userId, err))
+        return false;
+
+    QSqlQuery q;
+    q.prepare("UPDATE users SET balance = balance + ? WHERE id = ?");
+    q.addBindValue(amount);
+    q.addBindValue(userId);
+    if (!q.exec())
+        return fail(q, err);
+    return user(userId, out, err);
+}
+
+// 회원 정보 (이름, 권한, 잔액, 아이디, 전화번호)
 bool DB::user(int id, QVariant *out, QString *err)
 {
     QSqlQuery q;
-    q.prepare("SELECT id, name, role, balance FROM users WHERE id = ?");
+    q.prepare("SELECT id, name, role, balance, login_id, phone FROM users WHERE id = ?");
     q.addBindValue(id);
     if (!q.exec())
         return fail(q, err);
@@ -212,6 +400,8 @@ bool DB::user(int id, QVariant *out, QString *err)
     m["name"] = q.value(1).toString();
     m["role"] = q.value(2).toString();
     m["balance"] = q.value(3).toInt();
+    m["loginId"] = q.value(4).toString();
+    m["phone"] = q.value(5).toString();
     *out = m;
     return true;
 }

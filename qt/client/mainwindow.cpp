@@ -64,9 +64,20 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
+// 서버에서 로그인 토큰을 지우고 잊음 (관리자 기능을 더 쓰지 못하게)
+static void logout()
+{
+    if (Net::token().isEmpty())
+        return;
+    QString err;
+    Net::call("LOGOUT", QVariantMap(), 0, &err);
+    Net::setToken(QString());
+}
+
 // 얼굴인식 또는 비밀번호로 로그인한 뒤 권한에 따라 관리자/회원 화면으로 이동
 void MainWindow::login()
 {
+    Net::setToken(QString());
     Face face("얼굴인식 로그인", this, true);
     if (popup(&face, true) != QDialog::Accepted)
         return;
@@ -81,6 +92,9 @@ void MainWindow::login()
         return;
 
     QVariantMap user = data.toMap();
+    // 같은 PC 서버면 LOGIN 응답에 토큰이 옴. 없으면 비밀번호 로그인 때 받은 토큰을 그대로 씀
+    if (user.contains("token"))
+        Net::setToken(user.value("token").toString());
     user["pwLogin"] = face.byPassword();
     if (user.value("role").toString() == "admin") {
         m_admin->start(user);
@@ -94,6 +108,7 @@ void MainWindow::login()
 // 로그아웃: 첫 화면으로 돌아감 (절전 중이면 그대로)
 void MainWindow::home()
 {
+    logout();
     if (!m_sleep)
         ui->stack->setCurrentWidget(ui->pageLogin);
 }
@@ -111,6 +126,7 @@ void MainWindow::onPresence(bool on)
 void MainWindow::sleep()
 {
     m_sleep = true;
+    logout();
     setBlocked(true);
     closeAll();
     ui->stack->setCurrentWidget(ui->pageSleep);

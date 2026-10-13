@@ -4,7 +4,10 @@
 #include "ai.h"
 #include "forecast.h"
 
+#include <QBuffer>
 #include <QDate>
+#include <QImageReader>
+#include <QUuid>
 #include <QJsonDocument>
 #include <QCoreApplication>
 #include <QDir>
@@ -26,6 +29,20 @@ static bool readImage(const QJsonObject &req, QByteArray *img, QString *err)
         return false;
     }
     return true;
+}
+
+// 요청의 숫자 값 읽기. 앱이 "3000" 처럼 문자열로 보내도 숫자로 바꿈
+static int num(const QJsonObject &req, const QString &key)
+{
+    QJsonValue v = req.value(key);
+    return v.isString() ? v.toString().trimmed().toInt() : v.toInt();
+}
+
+// 요청에 그 항목이 값과 함께 들어 있는지 (없거나 null 이면 false)
+static bool has(const QJsonObject &req, const QString &key)
+{
+    QJsonValue v = req.value(key);
+    return !v.isUndefined() && !v.isNull();
 }
 
 // 앱/화면 요청을 받는 서버 생성
@@ -52,9 +69,11 @@ void Server::onRead()
     QByteArray &buf = m_buf[sock];
     buf += sock->readAll();
 
+    // 같은 PC(키오스크 화면)에서 온 요청인지. 얼굴인식 로그인 토큰은 여기에만 발급
+    bool local = sock->peerAddress().isLoopback();
     QJsonObject req;
     while (unpack(buf, &req))
-        sock->write(pack(handle(req)));
+        sock->write(pack(handle(req, local)));
 
     if (buf.size() > MAX_SIZE) {
         QJsonObject res;
@@ -464,69 +483,175 @@ bool Server::checkAdminCode(const QString &code, QString *err)
     return false;
 }
 
+static const int MAX_TOKENS = 1000;
+
+// 로그인 토큰 발급 (추측할 수 없는 임의 문자열). 너무 많아지면 오래된 것부터 지움
+QString Server::newToken(int userId)
+{
+    QString token = QUuid::createUuid().toString().remove('{').remove('}').remove('-')
+                    + QUuid::createUuid().toString().remove('{').remove('}').remove('-');
+    m_tokens.insert(token, userId);
+    m_tokenOrder.enqueue(token);
+    while (m_tokenOrder.size() > MAX_TOKENS)
+        m_tokens.remove(m_tokenOrder.dequeue());
+    return token;
+}
+
+// 요청의 token 이 지금 관리자 계정의 것인지 (권한은 매번 DB 에서 다시 확인)
+bool Server::checkAdmin(const QJsonObject &req, QString *err)
+{
+    int userId = m_tokens.value(req.value("token").toString(), 0);
+    if (!userId) {
+        *err = "관리자 로그인이 필요합니다. (로그인 응답의 token 을 함께 보내 주세요)";
+        return false;
+    }
+    QVariant user;
+    if (!m_db->user(userId, &user, err))
+        return false;
+    if (user.toMap().value("role").toString() != "admin") {
+        *err = "관리자만 사용할 수 있는 기능입니다.";
+        return false;
+    }
+    return true;
+}
+
+// 로그인 결과(회원 정보)에 토큰을 붙임
+static void addToken(QVariant *data, const QString &token)
+{
+    QVariantMap m = data->toMap();
+    m["token"] = token;
+    *data = m;
+}
+
+// 회원가입 사진들을 읽음: 비었거나 사진이 아니면 몇 번째 사진인지 알려 주고 실패
+static bool readFaces(const QJsonObject &req, QList<QByteArray> *faces, QString *err)
+{
+    QJsonArray list = req.value("faces").toArray();
+    for (int i = 0; i < list.size(); ++i) {
+        QJsonObject one;
+        one["image"] = list.at(i);
+        QByteArray img;
+        if (!readImage(one, &img, err))
+            return false;
+        QBuffer buf(&img);
+        if (img.isEmpty() || !QImageReader(&buf).canRead()) {
+            *err = QString("%1번째 얼굴 사진이 비어 있거나 사진 파일(JPEG/PNG)이 아닙니다.").arg(i + 1);
+            return false;
+        }
+        *faces << img;
+    }
+    return true;
+}
+
+// 관리자만 쓸 수 있는 명령 (상품 추가/수정/삭제, 매출, 회원 목록, AI)
+static bool adminOnly(const QString &cmd)
+{
+    static const QSet<QString> cmds{"ADD_PRODUCT", "UPDATE_PRODUCT", "DELETE_PRODUCT", "SALES",
+                                    "MEMBERS", "AI_REPORT", "AI_ASK", "AI_FORECAST"};
+    return cmds.contains(cmd);
+}
+
 // 요청 하나 처리: cmd 에 따라 DB/AI 함수 호출 후 {ok, data | error} 응답 생성
-QJsonObject Server::handle(const QJsonObject &req)
+QJsonObject Server::handle(const QJsonObject &req, bool local)
 {
     QString cmd = req.value("cmd").toString();
     QVariant data;
     QString err;
     bool ok = false;
 
-    if (cmd == "LOGIN") {
-        ok = m_db->user(req.value("userId").toInt(), &data, &err);
+    if (adminOnly(cmd) && !checkAdmin(req, &err)) {
+        // 권한 없음: 아래 처리를 건너뛰고 오류 응답
+    } else if (cmd == "LOGIN") {
+        // 얼굴인식 로그인은 키오스크 화면(같은 PC)에서만 토큰을 받음
+        ok = m_db->user(num(req, "userId"), &data, &err);
+        if (ok && local)
+            addToken(&data, newToken(num(req, "userId")));
     } else if (cmd == "PASSWORD_LOGIN") {
         ok = m_db->login(req.value("loginId").toString(), req.value("password").toString(), &data, &err);
-    } else if (cmd == "REGISTER") {
-        QList<QByteArray> faces;
+        if (ok)
+            addToken(&data, newToken(data.toMap().value("id").toInt()));
+    } else if (cmd == "LOGOUT") {
+        m_tokens.remove(req.value("token").toString());
         ok = true;
-        foreach (const QJsonValue &v, req.value("faces").toArray()) {
-            QJsonObject one;
-            one["image"] = v;
-            QByteArray img;
-            if (!(ok = readImage(one, &img, &err)))
+    } else if (cmd == "REGISTER") {
+        // 관리자 코드 외에는 모두 필수: 빈 칸이 있으면 어느 칸인지 알려 주고 거절
+        struct Field { const char *key, *label; };
+        const Field fields[] = {{"name", "이름"}, {"loginId", "아이디"}, {"password", "비밀번호"},
+                                {"phone", "전화번호"}};
+        ok = true;
+        for (const Field &f : fields) {
+            if (req.value(f.key).toString().trimmed().isEmpty()) {
+                err = QString("%1(%2)을(를) 입력하세요.").arg(f.label, f.key);
+                ok = false;
                 break;
-            if (!img.isEmpty())
-                faces << img;
+            }
         }
-        // adminCode 가 없거나 비어 있으면 일반 회원, 있으면 맞아야만 관리자로 가입
-        QString adminCode = req.value("adminCode").toString();
+        QList<QByteArray> faces;
+        ok = ok && readFaces(req, &faces, &err);
+        // adminCode 가 없거나 비어 있으면 일반 회원, 있으면 맞아야만 관리자로 가입 (숫자로 보내도 됨)
+        QJsonValue code = req.value("adminCode");
+        QString adminCode = (code.isDouble() ? QString::number(code.toVariant().toLongLong())
+                                             : code.toString()).trimmed();
         QString role = "member";
         if (ok && !adminCode.isEmpty()) {
             ok = checkAdminCode(adminCode, &err);
             role = "admin";
         }
         ok = ok && m_db->join(req.value("name").toString(), req.value("loginId").toString(),
-                              req.value("password").toString(), role, faces, &data, &err);
+                              req.value("password").toString(), req.value("phone").toString(),
+                              role, faces, &data, &err);
+    } else if (cmd == "CHECK_ID") {
+        // 아이디 중복 확인: {loginId} -> {loginId, available, message}
+        QString id = req.value("loginId").toString().trimmed();
+        if (id.isEmpty())
+            err = "아이디(loginId)를 입력하세요.";
+        else
+            ok = m_db->checkDup(id, QString(), &data, &err);
+        if (ok) {
+            bool available = data.toMap().value("loginIdAvailable").toBool();
+            data = QVariantMap{{"loginId", id}, {"available", available},
+                               {"message", available ? "사용할 수 있는 아이디입니다." : "이미 사용 중인 아이디입니다."}};
+        }
+    } else if (cmd == "CHECK_DUP") {
+        ok = m_db->checkDup(req.value("loginId").toString(), req.value("phone").toString(), &data, &err);
+    } else if (cmd == "CHANGE_ACCOUNT") {
+        ok = m_db->editAccount(req.value("loginId").toString(), req.value("password").toString(),
+                               req.value("newLoginId").toString(), req.value("newPassword").toString(),
+                               &data, &err);
+    } else if (cmd == "CHARGE") {
+        ok = m_db->topUp(req.value("loginId").toString(), req.value("password").toString(),
+                         num(req, "amount"), &data, &err);
     } else if (cmd == "FACES") {
-        ok = m_db->faces(req.value("afterId").toInt(), &data, &err);
+        ok = m_db->faces(num(req, "afterId"), &data, &err);
     } else if (cmd == "PRODUCTS") {
         ok = m_db->products(&data, &err);
     } else if (cmd == "ADD_PRODUCT") {
         QByteArray img;
         ok = readImage(req, &img, &err)
-             && m_db->addProduct(req.value("name").toString(), req.value("price").toInt(),
-                                 req.value("stock").toInt(), req.value("shelf").toInt(), img, &err);
+             && m_db->addProduct(req.value("name").toString(), num(req, "price"),
+                                 num(req, "stock"), num(req, "shelf"), img, &err);
     } else if (cmd == "UPDATE_PRODUCT") {
+        // 보낸 항목만 바꿈 (null 이나 빈 사진은 '바꾸지 않음')
         QVariantMap f;
-        if (req.contains("name"))
+        if (has(req, "name"))
             f["name"] = req.value("name").toString();
-        if (req.contains("price"))
-            f["price"] = req.value("price").toInt();
-        if (req.contains("stock"))
-            f["stock"] = req.value("stock").toInt();
-        if (req.contains("shelf"))
-            f["shelf"] = req.value("shelf").toInt();
+        if (has(req, "price"))
+            f["price"] = num(req, "price");
+        if (has(req, "stock"))
+            f["stock"] = num(req, "stock");
+        if (has(req, "shelf"))
+            f["shelf"] = num(req, "shelf");
         QByteArray img;
         ok = readImage(req, &img, &err);
         if (ok) {
-            if (req.contains("image"))
+            if (!img.isEmpty())
                 f["image"] = img;
-            ok = m_db->editProduct(req.value("productId").toInt(), f, &err);
+            ok = m_db->editProduct(num(req, "productId"), f, &err);
         }
     } else if (cmd == "DELETE_PRODUCT") {
-        ok = m_db->delProduct(req.value("productId").toInt(), &err);
+        ok = m_db->delProduct(num(req, "productId"), &err);
     } else if (cmd == "PAY") {
-        ok = m_db->pay(req.value("userId").toInt(), req.value("method").toString(),
+        ok = m_db->pay(num(req, "userId"), req.value("method").toString(),
                        req.value("cardUid").toString(), req.value("items").toArray().toVariantList(),
                        &data, &err);
     } else if (cmd == "SALES") {
@@ -536,10 +661,10 @@ QJsonObject Server::handle(const QJsonObject &req)
     } else if (cmd == "AI_REPORT") {
         ok = aiReport(m_db, req.value("unit").toString(), req.value("date").toString(), &data, &err);
     } else if (cmd == "AI_ASK") {
-        ok = aiAsk(m_db, req.value("question").toString(), req.value("productId").toInt(),
-                   req.value("userId").toInt(), &data, &err);
+        ok = aiAsk(m_db, req.value("question").toString(), num(req, "productId"),
+                   num(req, "userId"), &data, &err);
     } else if (cmd == "AI_FORECAST") {
-        ok = aiForecast(m_db, req.value("productId").toInt(), req.value("days").toInt(), &data, &err);
+        ok = aiForecast(m_db, num(req, "productId"), num(req, "days"), &data, &err);
     } else {
         err = cmd.isEmpty() ? "요청 형식이 잘못되었습니다. (cmd가 있는 JSON 객체 한 줄)"
                             : "알 수 없는 명령: " + cmd;

@@ -23,9 +23,11 @@ CREATE TABLE IF NOT EXISTS users (
     balance     INT          NOT NULL DEFAULT 0,          -- 충전 잔액(원)
     login_id    VARCHAR(30)  NULL,                        -- 비밀번호 로그인용 아이디 (얼굴인식 실패 시)
     password    VARCHAR(100) COLLATE utf8mb4_bin NULL,    -- 비밀번호 (_bin: 대소문자 구분)
+    phone       VARCHAR(20)  NULL,                        -- 전화번호 (숫자만, 예: 01012345678)
     created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
-    UNIQUE KEY uq_users_login_id (login_id)
+    UNIQUE KEY uq_users_login_id (login_id),
+    UNIQUE KEY uq_users_phone (phone)                     -- 전화번호 중복 금지
 ) ENGINE=InnoDB;
 
 -- 상품: 사진은 MEDIUMBLOB(최대 16MB)에 저장. BLOB(64KB)은 사진이 잘리므로 사용 금지
@@ -113,6 +115,13 @@ SET @sql = IF((SELECT COUNT(*) FROM information_schema.columns
               'DO 0');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
+-- 전화번호(phone) 칸 추가 (중복 금지, 예전 회원은 NULL)
+SET @sql = IF((SELECT COUNT(*) FROM information_schema.columns
+               WHERE table_schema = 'kiosk' AND table_name = 'users' AND column_name = 'phone') = 0,
+              'ALTER TABLE users ADD COLUMN phone VARCHAR(20) NULL AFTER password, ADD UNIQUE KEY uq_users_phone (phone)',
+              'DO 0');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
 -- 예전에 암호화(SHA2)해서 저장하던 password_hash 칸 삭제
 -- (암호화된 값은 되돌릴 수 없으므로 샘플 계정 외 회원은 비밀번호를 다시 넣어야 한다. 맨 아래 예 참고)
 SET @sql = IF((SELECT COUNT(*) FROM information_schema.columns
@@ -158,7 +167,7 @@ FLUSH PRIVILEGES;
 
 -- 다른 회원의 비밀번호를 넣거나 바꾸는 예:
 --   UPDATE users SET password = 'jun1234' WHERE login_id = 'jun';
--- 회원 잔액 충전 예:
+-- 회원 잔액 충전 예 (앱에서는 CHARGE 명령으로 충전):
 --   UPDATE users SET balance = balance + 10000 WHERE login_id = 'jun';
 -- 테스트 카드 UID를 실제 카드로 바꾸는 예:
 --   UPDATE cards SET uid = 'A1B2C3D4' WHERE name = '성공 카드';

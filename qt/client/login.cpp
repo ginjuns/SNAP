@@ -51,5 +51,6 @@ void Login::login()
         return;
     }
     m_id = data.toMap().value("id").toInt();
+    Net::setToken(data.toMap().value("token").toString());
     accept();
 }
