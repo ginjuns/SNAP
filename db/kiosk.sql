@@ -71,6 +71,20 @@ CREATE TABLE IF NOT EXISTS face_images (
     CONSTRAINT fk_face_images_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
+-- 충전 기록: 앱에서 CHARGE 할 때마다 1행. HISTORY 에서 결제 내역과 함께 보여 준다.
+CREATE TABLE IF NOT EXISTS charges (
+    id          INT          NOT NULL AUTO_INCREMENT,
+    user_id     INT          NOT NULL,
+    amount      INT          NOT NULL,                    -- 충전 금액(원)
+    payment_key VARCHAR(200) NULL,                        -- 토스 결제 키 (같은 결제로 두 번 충전 금지)
+    order_id    VARCHAR(64)  NULL,                        -- 앱이 만든 주문번호
+    charged_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_charges_user (user_id, charged_at),
+    UNIQUE KEY uq_charges_payment_key (payment_key),
+    CONSTRAINT fk_charges_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
 -- 카드: ESP32(RC522)가 읽은 카드 UID별 잔액. 카드 결제 시 여기서 차감한다.
 -- uid는 공백 없는 대문자 16진수 (예: A1B2C3D4)
 CREATE TABLE IF NOT EXISTS cards (
@@ -122,6 +136,13 @@ SET @sql = IF((SELECT COUNT(*) FROM information_schema.columns
               'DO 0');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
+-- 충전 기록에 토스 결제 키(payment_key), 주문번호(order_id) 칸 추가
+SET @sql = IF((SELECT COUNT(*) FROM information_schema.columns
+               WHERE table_schema = 'kiosk' AND table_name = 'charges' AND column_name = 'payment_key') = 0,
+              'ALTER TABLE charges ADD COLUMN payment_key VARCHAR(200) NULL AFTER amount, ADD COLUMN order_id VARCHAR(64) NULL AFTER payment_key, ADD UNIQUE KEY uq_charges_payment_key (payment_key)',
+              'DO 0');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
 -- 예전에 암호화(SHA2)해서 저장하던 password_hash 칸 삭제
 -- (암호화된 값은 되돌릴 수 없으므로 샘플 계정 외 회원은 비밀번호를 다시 넣어야 한다. 맨 아래 예 참고)
 SET @sql = IF((SELECT COUNT(*) FROM information_schema.columns
@@ -167,7 +188,7 @@ FLUSH PRIVILEGES;
 
 -- 다른 회원의 비밀번호를 넣거나 바꾸는 예:
 --   UPDATE users SET password = 'jun1234' WHERE login_id = 'jun';
--- 회원 잔액 충전 예 (앱에서는 CHARGE 명령으로 충전):
+-- 회원 잔액 충전 예 (앱에서는 토스 결제 후 CHARGE 명령으로 충전, 이 방법은 충전 기록에 남지 않음):
 --   UPDATE users SET balance = balance + 10000 WHERE login_id = 'jun';
 -- 테스트 카드 UID를 실제 카드로 바꾸는 예:
 --   UPDATE cards SET uid = 'A1B2C3D4' WHERE name = '성공 카드';

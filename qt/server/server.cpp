@@ -11,12 +11,18 @@
 #include <QJsonDocument>
 #include <QCoreApplication>
 #include <QDir>
+#include <QEventLoop>
 #include <QFileInfo>
 #include <QJsonArray>
+#include <QNetworkAccessManager>
+#include <QNetworkReply>
+#include <QNetworkRequest>
+#include <QPointer>
 #include <QSet>
 #include <QSettings>
 #include <QStringList>
 #include <QTcpSocket>
+#include <QTimer>
 
 static const int MAX_IMG = 5 * 1024 * 1024;
 
@@ -63,26 +69,39 @@ void Server::onConnect()
 }
 
 // 받은 데이터에서 한 줄씩 요청을 꺼내 처리하고 응답, 너무 크면 연결 끊기
+// 토스·AI 응답을 기다리는 동안 다른 이벤트가 처리되므로, 이 연결은 다시 읽지 않고(끝난 뒤 이어서 읽음)
+// 그 사이 접속이 끊겼으면 응답하지 않음
 void Server::onRead()
 {
-    QTcpSocket *sock = qobject_cast<QTcpSocket *>(sender());
-    QByteArray &buf = m_buf[sock];
-    buf += sock->readAll();
+    QTcpSocket *raw = qobject_cast<QTcpSocket *>(sender());
+    if (m_busy.contains(raw))
+        return;
+    m_busy.insert(raw);
+    QPointer<QTcpSocket> sock = raw;
 
     // 같은 PC(키오스크 화면)에서 온 요청인지. 얼굴인식 로그인 토큰은 여기에만 발급
     bool local = sock->peerAddress().isLoopback();
-    QJsonObject req;
-    while (unpack(buf, &req))
-        sock->write(pack(handle(req, local)));
-
-    if (buf.size() > MAX_SIZE) {
-        QJsonObject res;
-        res["ok"] = false;
-        res["error"] = "메시지가 너무 큽니다.";
-        buf.clear();
+    for (;;) {
+        QByteArray &buf = m_buf[sock];
+        buf += sock->readAll();
+        QJsonObject req;
+        if (!unpack(buf, &req)) {
+            if (buf.size() > MAX_SIZE) {
+                QJsonObject res;
+                res["ok"] = false;
+                res["error"] = "메시지가 너무 큽니다.";
+                buf.clear();
+                sock->write(pack(res));
+                sock->disconnectFromHost();
+            }
+            break;
+        }
+        QJsonObject res = handle(req, local);
+        if (!sock || !m_buf.contains(sock))   // 처리하는 동안 접속이 끊김 (onClose 가 버퍼를 지움)
+            break;
         sock->write(pack(res));
-        sock->disconnectFromHost();
     }
+    m_busy.remove(raw);
 }
 
 // 접속이 끊기면 버퍼 정리
@@ -543,6 +562,120 @@ static bool readFaces(const QJsonObject &req, QList<QByteArray> *faces, QString 
     return true;
 }
 
+static const int TOSS_TIMEOUT = 15000;   // 토스 API 응답을 기다리는 시간(ms)
+
+// 토스 결제 API 에 POST (시크릿 키로 인증). HTTP 상태 코드, 응답이 없으면 0
+static int tossPost(const QString &key, const QString &path, const QJsonObject &body, QJsonObject *res)
+{
+    QNetworkRequest req(QUrl("https://api.tosspayments.com/v1/payments/" + path));
+    req.setRawHeader("Authorization", "Basic " + (key + ":").toUtf8().toBase64());
+    req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    QNetworkAccessManager net;
+    QNetworkReply *rep = net.post(req, QJsonDocument(body).toJson(QJsonDocument::Compact));
+    QEventLoop loop;
+    QTimer timer;
+    timer.setSingleShot(true);
+    QObject::connect(rep, SIGNAL(finished()), &loop, SLOT(quit()));
+    QObject::connect(&timer, SIGNAL(timeout()), &loop, SLOT(quit()));
+    timer.start(TOSS_TIMEOUT);
+    loop.exec();
+    if (!rep->isFinished()) {
+        rep->abort();
+        return 0;
+    }
+    *res = QJsonDocument::fromJson(rep->readAll()).object();
+    return rep->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+}
+
+// 토스 응답의 오류 문구 (없으면 상태 코드)
+static QString tossError(int status, const QJsonObject &res)
+{
+    QString msg = res.value("message").toString();
+    if (!msg.isEmpty())
+        return msg;
+    return status ? QString("HTTP %1").arg(status) : QString("토스 응답이 없습니다.");
+}
+
+// 토스 결제 최종 승인 (앱이 결제창에서 받은 paymentKey, orderId, amount 를 토스에 확인)
+// 승인됐는지 알 수 없으면(응답 없음, 토스 서버 오류, 완료가 아닌 상태) *unsure = true
+static bool tossConfirm(const QString &key, const QString &paymentKey, const QString &orderId, int amount,
+                        bool *unsure, QString *err)
+{
+    QJsonObject body{{"paymentKey", paymentKey}, {"orderId", orderId}, {"amount", amount}};
+    QJsonObject res;
+    int status = tossPost(key, "confirm", body, &res);
+    if (status == 200 && res.value("status").toString() == "DONE")
+        return true;
+    *unsure = status == 0 || status == 200 || status >= 500;
+    *err = "결제 승인 실패: " + tossError(status, res);
+    return false;
+}
+
+// 토스 결제 취소 (승인됐을 수도 있는데 충전하지 못했을 때 돈을 돌려줌)
+static bool tossCancel(const QString &key, const QString &paymentKey, QString *err)
+{
+    QJsonObject res;
+    int status = tossPost(key, QUrl::toPercentEncoding(paymentKey) + "/cancel",
+                          QJsonObject{{"cancelReason", "잔액 충전 실패"}}, &res);
+    if (status == 200)
+        return true;
+    *err = tossError(status, res);
+    return false;
+}
+
+// 충전하지 못한 결제를 취소. 그 사이 충전이 됐으면 취소하지 않고, 취소가 안 되면 관리자가 처리하도록 기록
+static void refund(DB *db, const QString &key, const QString &paymentKey, const QString &orderId, QString *err)
+{
+    bool found = false;
+    QString dbErr, cancelErr;
+    if (db->charged(paymentKey, &found, &dbErr) && found)
+        return;
+    if (tossCancel(key, paymentKey, &cancelErr)) {
+        *err += " (결제는 취소되었습니다)";
+        return;
+    }
+    qWarning("[CHARGE] 결제 취소 실패 paymentKey=%s orderId=%s: %s",
+             qPrintable(paymentKey), qPrintable(orderId), qPrintable(cancelErr));
+    *err += QString(" 결제가 완료되었다면 관리자에게 문의하세요. (주문번호 %1)").arg(orderId);
+}
+
+// 앱 잔액 충전: 비밀번호·금액·중복 확인 → 토스 최종 승인 → 잔액 충전
+// 승인은 모든 확인이 끝난 뒤에 하고, 승인 뒤 충전에 실패하면 결제를 취소해서 '돈만 빠지는' 일을 막음
+static bool tossCharge(DB *db, const QString &key, const QJsonObject &req, QVariant *out, QString *err)
+{
+    QString paymentKey = req.value("paymentKey").toString().trimmed();
+    QString orderId = req.value("orderId").toString().trimmed();
+    int amount = num(req, "amount");
+    if (key.isEmpty()) {
+        *err = "서버에 토스 시크릿 키가 설정되지 않았습니다. (server.ini 의 [toss] secret_key)";
+        return false;
+    }
+    if (paymentKey.isEmpty() || orderId.isEmpty()) {
+        *err = "결제 정보(paymentKey, orderId)가 없습니다.";
+        return false;
+    }
+    QVariant who;
+    bool found = false;
+    if (!db->login(req.value("loginId").toString(), req.value("password").toString(), &who, err)
+        || !DB::checkCharge(amount, err) || !db->charged(paymentKey, &found, err))
+        return false;
+    if (found) {
+        *err = "이미 충전된 결제입니다.";
+        return false;
+    }
+
+    bool unsure = false;
+    if (!tossConfirm(key, paymentKey, orderId, amount, &unsure, err)) {
+        if (unsure)
+            refund(db, key, paymentKey, orderId, err);
+        return false;
+    }
+    if (db->topUp(who.toMap().value("id").toInt(), amount, paymentKey, orderId, out, err))
+        return true;
+    refund(db, key, paymentKey, orderId, err);
+    return false;
+}
+
 // 관리자만 쓸 수 있는 명령 (상품 추가/수정/삭제, 매출, 회원 목록, AI)
 static bool adminOnly(const QString &cmd)
 {
@@ -619,8 +752,10 @@ QJsonObject Server::handle(const QJsonObject &req, bool local)
                                req.value("newLoginId").toString(), req.value("newPassword").toString(),
                                &data, &err);
     } else if (cmd == "CHARGE") {
-        ok = m_db->topUp(req.value("loginId").toString(), req.value("password").toString(),
-                         num(req, "amount"), &data, &err);
+        ok = tossCharge(m_db, m_tossKey, req, &data, &err);
+    } else if (cmd == "HISTORY") {
+        ok = m_db->history(num(req, "userId"), req.value("from").toString(),
+                           req.value("to").toString(), &data, &err);
     } else if (cmd == "FACES") {
         ok = m_db->faces(num(req, "afterId"), &data, &err);
     } else if (cmd == "PRODUCTS") {
@@ -730,6 +865,7 @@ void ServerThread::run()
     DB db;
     Server server(&db);
     server.setAdminCode(ini.value("admin/signup_code").toString().trimmed());
+    server.setTossKey(ini.value("toss/secret_key").toString().trimmed());
     QString dbErr;
     if (!db.open(ini, &dbErr)) {
         m_err = "DB 연결 실패: " + dbErr;

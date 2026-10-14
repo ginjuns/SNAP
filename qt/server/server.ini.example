@@ -17,6 +17,12 @@ groq_key=
 groq_model=openai/gpt-oss-120b
 groq_fallback_model=openai/gpt-oss-20b
 
+; 토스페이먼츠 결제 승인 (앱 잔액 충전)
+; 앱의 클라이언트 키(test_gck_...)와 짝인 시크릿 키(test_gsk_... / live_gsk_...)를 넣습니다.
+; 비워 두면 앱 충전(CHARGE)을 받지 않습니다. 시크릿 키는 git 에 올리지 마세요.
+[toss]
+secret_key=
+
 ; 관리자 회원가입 코드
 ; 안드로이드 앱에서 회원가입할 때 이 코드를 입력해야 관리자로 가입됩니다.
 ; 비워 두면 관리자 가입을 받지 않습니다. 코드가 틀리면 가입이 거절됩니다.

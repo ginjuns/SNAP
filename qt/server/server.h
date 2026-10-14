@@ -5,6 +5,7 @@
 #include <QJsonObject>
 #include <QQueue>
 #include <QSemaphore>
+#include <QSet>
 #include <QTcpServer>
 #include <QThread>
 #include <QVariant>
@@ -19,6 +20,7 @@ public:
     explicit Server(DB *db, QObject *parent = 0);
 
     void setAdminCode(const QString &code) { m_adminCode = code; }
+    void setTossKey(const QString &key) { m_tossKey = key; }
 
 private slots:
     void onConnect();
@@ -35,6 +37,8 @@ private:
     DB *m_db;
     QHash<QTcpSocket *, QByteArray> m_buf;
     QString m_adminCode;
+    QString m_tossKey;              // 토스 결제 승인용 시크릿 키
+    QSet<QTcpSocket *> m_busy;      // 요청을 처리하는 중인 연결 (토스·AI 응답 대기 중 다시 읽지 않도록)
     QHash<QString, int> m_tokens;   // 로그인 토큰 -> 회원 번호
     QQueue<QString> m_tokenOrder;   // 오래된 토큰부터 지우기 위한 발급 순서
 };

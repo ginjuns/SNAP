@@ -195,6 +195,11 @@ bool DB::open(const QSettings &ini, QString *err)
                "DB를 최신으로 맞추려면 sudo mysql < db/kiosk.sql 을 실행하세요.";
         return false;
     }
+    if (!q.exec("SELECT payment_key FROM charges LIMIT 1")) {
+        *err = "충전 기록(charges) 테이블이 없거나 결제 키(payment_key) 칸이 없습니다.\n"
+               "DB를 최신으로 맞추려면 sudo mysql < db/kiosk.sql 을 실행하세요.";
+        return false;
+    }
     return true;
 }
 
@@ -368,24 +373,95 @@ bool DB::editAccount(const QString &id, const QString &pw, const QString &newId0
     return user(userId, out, err);
 }
 
-// 잔액 충전: 아이디·비밀번호 확인 후 amount 원을 더함
-bool DB::topUp(const QString &id, const QString &pw, int amount, QVariant *out, QString *err)
+// 충전 금액 검사 (토스 승인 전에 확인해서, 승인 뒤 충전이 거절되는 일을 막음)
+bool DB::checkCharge(int amount, QString *err)
 {
     if (amount <= 0 || amount > MAX_CHARGE) {
         *err = QString("충전 금액은 1원 ~ %L1원 사이로 입력하세요.").arg(MAX_CHARGE);
         return false;
     }
-    int userId = 0;
-    if (!auth(id, pw, &userId, err))
+    return true;
+}
+
+// 이 토스 결제(paymentKey)로 이미 충전했는지
+bool DB::charged(const QString &paymentKey, bool *found, QString *err)
+{
+    QSqlQuery q;
+    q.prepare("SELECT COUNT(*) FROM charges WHERE payment_key = ?");
+    q.addBindValue(paymentKey);
+    if (!q.exec() || !q.next())
+        return fail(q, err);
+    *found = q.value(0).toInt() > 0;
+    return true;
+}
+
+// 잔액 충전: 토스 승인이 끝난 결제의 금액을 더하고 충전 기록을 남김
+bool DB::topUp(int userId, int amount, const QString &paymentKey, const QString &orderId,
+               QVariant *out, QString *err)
+{
+    if (!checkCharge(amount, err))
         return false;
 
+    // 잔액 증가와 충전 기록 저장은 함께 성공하거나 함께 취소
     QSqlQuery q;
+    QSqlDatabase::database().transaction();
     q.prepare("UPDATE users SET balance = balance + ? WHERE id = ?");
     q.addBindValue(amount);
     q.addBindValue(userId);
     if (!q.exec())
-        return fail(q, err);
+        return rollback(q.lastError().text(), err);
+    if (q.numRowsAffected() == 0)
+        return rollback("등록되지 않은 사용자입니다.", err);
+    q.prepare("INSERT INTO charges (user_id, amount, payment_key, order_id) VALUES (?, ?, ?, ?)");
+    q.addBindValue(userId);
+    q.addBindValue(amount);
+    q.addBindValue(paymentKey);
+    q.addBindValue(orderId);
+    if (!q.exec())
+        return rollback(q.lastError().nativeErrorCode() == "1062" ? "이미 충전된 결제입니다."
+                                                                  : q.lastError().text(), err);
+    if (!QSqlDatabase::database().commit())
+        return rollback(QSqlDatabase::database().lastError().text(), err);
     return user(userId, out, err);
+}
+
+// 이용 내역: from ~ to(미포함) 사이의 결제(use, 결제 1건 = 1줄)와 충전(charge)을 시간순으로
+bool DB::history(int userId, const QString &from0, const QString &to0, QVariant *out, QString *err)
+{
+    QDate fromDay = QDate::fromString(from0, "yyyy-MM-dd");
+    QDate toDay = QDate::fromString(to0, "yyyy-MM-dd");
+    if (!fromDay.isValid() || !toDay.isValid()) {
+        *err = "날짜 형식이 잘못되었습니다. (from, to: yyyy-MM-dd)";
+        return false;
+    }
+    QDateTime from(fromDay);
+    QDateTime to(toDay);
+
+    // 결제 한 번의 상품 줄들은 sold_at 이 같으므로 sold_at 으로 묶어 합계
+    QSqlQuery q;
+    q.prepare("SELECT sold_at, 'use', SUM(amount) FROM sales"
+              " WHERE user_id = ? AND sold_at >= ? AND sold_at < ? GROUP BY sold_at"
+              " UNION ALL"
+              " SELECT charged_at, 'charge', amount FROM charges"
+              " WHERE user_id = ? AND charged_at >= ? AND charged_at < ?"
+              " ORDER BY 1");
+    for (int i = 0; i < 2; ++i) {
+        q.addBindValue(userId);
+        q.addBindValue(from);
+        q.addBindValue(to);
+    }
+    if (!q.exec())
+        return fail(q, err);
+    QVariantList list;
+    while (q.next()) {
+        QVariantMap m;
+        m["time"] = q.value(0).toDateTime().toString("yyyy-MM-dd HH:mm:ss");
+        m["type"] = q.value(1).toString();
+        m["amount"] = q.value(2).toInt();
+        list << m;
+    }
+    *out = list;
+    return true;
 }
 
 // 회원 정보 (이름, 권한, 잔액, 아이디, 전화번호)

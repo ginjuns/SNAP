@@ -20,7 +20,11 @@ public:
     bool checkDup(const QString &id, const QString &phone, QVariant *out, QString *err);
     bool editAccount(const QString &id, const QString &pw, const QString &newId, const QString &newPw,
                      QVariant *out, QString *err);
-    bool topUp(const QString &id, const QString &pw, int amount, QVariant *out, QString *err);
+    static bool checkCharge(int amount, QString *err);
+    bool charged(const QString &paymentKey, bool *found, QString *err);
+    bool topUp(int userId, int amount, const QString &paymentKey, const QString &orderId,
+               QVariant *out, QString *err);
+    bool history(int userId, const QString &from, const QString &to, QVariant *out, QString *err);
     bool faces(int after, QVariant *out, QString *err);
     bool products(QVariant *out, QString *err);
     bool addProduct(const QString &name, int price, int stock, int shelf, const QByteArray &img, QString *err);
