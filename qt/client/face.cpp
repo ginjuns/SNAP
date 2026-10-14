@@ -951,7 +951,6 @@ void Face::pwLogin()
     m_timer->stop();
 
     Login dlg(this);
-Result:
     if (popup(&dlg) == QDialog::Accepted)
     {
         m_id = dlg.id();

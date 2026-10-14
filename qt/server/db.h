@@ -17,7 +17,7 @@ public:
     bool login(const QString &id, const QString &pw, QVariant *out, QString *err);
     bool join(const QString &name, const QString &id, const QString &pw, const QString &phone,
               const QString &role, const QList<QByteArray> &faces, QVariant *out, QString *err);
-    bool checkDup(const QString &id, const QString &phone, QVariant *out, QString *err);
+    bool idAvailable(const QString &id, bool *available, QString *err);
     bool editAccount(const QString &id, const QString &pw, const QString &newId, const QString &newPw,
                      QVariant *out, QString *err);
     static bool checkCharge(int amount, QString *err);

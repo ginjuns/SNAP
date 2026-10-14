@@ -151,54 +151,15 @@ bool DB::open(const QSettings &ini, QString *err)
         return false;
     }
 
-    const char *tables[] = { "users", "products", "sales" };
+    // 필요한 테이블이 모두 있는지 (없으면 kiosk.sql 을 실행하라고 안내)
+    const char *tables[] = { "users", "products", "sales", "face_images", "charges", "cards" };
     QSqlQuery q;
-    for (int i = 0; i < 3; ++i) {
-        if (!q.exec(QString("SELECT 1 FROM %1 LIMIT 1").arg(tables[i]))) {
+    for (const char *t : tables) {
+        if (!q.exec(QString("SELECT 1 FROM %1 LIMIT 1").arg(t))) {
             *err = QString("'%1' 테이블을 읽을 수 없습니다. sudo mysql < db/kiosk.sql 을 먼저 실행하세요.\n%2")
-                       .arg(tables[i]).arg(q.lastError().text());
+                       .arg(t).arg(q.lastError().text());
             return false;
         }
-    }
-    if (!q.exec("SELECT stock FROM products LIMIT 1")) {
-        *err = "products 테이블에 재고(stock) 칸이 없습니다.\n"
-               "DB를 최신으로 맞추려면 sudo mysql < db/kiosk.sql 을 실행하세요.";
-        return false;
-    }
-    if (!q.exec("SELECT shelf FROM products LIMIT 1")) {
-        *err = "products 테이블에 진열대(shelf) 칸이 없습니다.\n"
-               "DB를 최신으로 맞추려면 sudo mysql < db/kiosk.sql 을 실행하세요.";
-        return false;
-    }
-    if (!q.exec("SELECT login_id FROM users LIMIT 1")) {
-        *err = "users 테이블에 비밀번호 로그인(login_id, password) 칸이 없습니다.\n"
-               "DB를 최신으로 맞추려면 sudo mysql < db/kiosk.sql 을 실행하세요.";
-        return false;
-    }
-    if (!q.exec("SELECT password FROM users LIMIT 1")) {
-        *err = "비밀번호 저장 방식이 바뀌었습니다 (암호화 -> 글자 그대로).\n"
-               "DB를 최신으로 맞추려면 sudo mysql < db/kiosk.sql 을 실행하세요.";
-        return false;
-    }
-    if (!q.exec("SELECT phone FROM users LIMIT 1")) {
-        *err = "users 테이블에 전화번호(phone) 칸이 없습니다.\n"
-               "DB를 최신으로 맞추려면 sudo mysql < db/kiosk.sql 을 실행하세요.";
-        return false;
-    }
-    if (!q.exec("SELECT 1 FROM face_images LIMIT 1")) {
-        *err = "얼굴 사진(face_images) 테이블이 없습니다.\n"
-               "DB를 최신으로 맞추려면 sudo mysql < db/kiosk.sql 을 실행하세요.";
-        return false;
-    }
-    if (!q.exec("SELECT 1 FROM cards LIMIT 1")) {
-        *err = "카드(cards) 테이블이 없습니다.\n"
-               "DB를 최신으로 맞추려면 sudo mysql < db/kiosk.sql 을 실행하세요.";
-        return false;
-    }
-    if (!q.exec("SELECT payment_key FROM charges LIMIT 1")) {
-        *err = "충전 기록(charges) 테이블이 없거나 결제 키(payment_key) 칸이 없습니다.\n"
-               "DB를 최신으로 맞추려면 sudo mysql < db/kiosk.sql 을 실행하세요.";
-        return false;
     }
     return true;
 }
@@ -299,32 +260,14 @@ bool DB::login(const QString &id, const QString &pw, QVariant *out, QString *err
     return auth(id, pw, &userId, err) && user(userId, out, err);
 }
 
-// 앱 회원가입 화면의 중복 확인: 아이디/전화번호 중 보낸 것만 검사
-bool DB::checkDup(const QString &id0, const QString &phone0, QVariant *out, QString *err)
+// 앱 회원가입 화면의 아이디 중복 확인: 쓸 수 있으면 *available = true
+bool DB::idAvailable(const QString &id0, bool *available, QString *err)
 {
     QString id = id0.trimmed();
-    if (id.isEmpty() && phone0.trimmed().isEmpty()) {
-        *err = "확인할 아이디(loginId) 또는 전화번호(phone)를 보내 주세요.";
-        return false;
-    }
-    QVariantMap m;
     bool found = false;
-    if (!id.isEmpty()) {
-        if (!checkId(id, err) || !taken("login_id", id, 0, &found, err))
-            return false;
-        m["loginIdAvailable"] = !found;
-    }
-    if (!phone0.trimmed().isEmpty()) {
-        QString phone = normPhone(phone0);
-        if (phone.isEmpty()) {
-            *err = "전화번호 형식이 올바르지 않습니다. (예: 010-1234-5678)";
-            return false;
-        }
-        if (!taken("phone", phone, 0, &found, err))
-            return false;
-        m["phoneAvailable"] = !found;
-    }
-    *out = m;
+    if (!checkId(id, err) || !taken("login_id", id, 0, &found, err))
+        return false;
+    *available = !found;
     return true;
 }
 

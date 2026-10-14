@@ -4,7 +4,7 @@
 
 lessThan(QT_MAJOR_VERSION, 5): error("Qt 5 이상이 필요합니다")
 
-QT       += core gui widgets network sql
+QT       += core gui widgets network sql concurrent
 CONFIG   += c++11 opencv
 TARGET    = KioskClient
 TEMPLATE  = app

@@ -736,17 +736,14 @@ QJsonObject Server::handle(const QJsonObject &req, bool local)
     } else if (cmd == "CHECK_ID") {
         // 아이디 중복 확인: {loginId} -> {loginId, available, message}
         QString id = req.value("loginId").toString().trimmed();
+        bool available = false;
         if (id.isEmpty())
             err = "아이디(loginId)를 입력하세요.";
         else
-            ok = m_db->checkDup(id, QString(), &data, &err);
-        if (ok) {
-            bool available = data.toMap().value("loginIdAvailable").toBool();
+            ok = m_db->idAvailable(id, &available, &err);
+        if (ok)
             data = QVariantMap{{"loginId", id}, {"available", available},
                                {"message", available ? "사용할 수 있는 아이디입니다." : "이미 사용 중인 아이디입니다."}};
-        }
-    } else if (cmd == "CHECK_DUP") {
-        ok = m_db->checkDup(req.value("loginId").toString(), req.value("phone").toString(), &data, &err);
     } else if (cmd == "CHANGE_ACCOUNT") {
         ok = m_db->editAccount(req.value("loginId").toString(), req.value("password").toString(),
                                req.value("newLoginId").toString(), req.value("newPassword").toString(),

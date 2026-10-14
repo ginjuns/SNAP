@@ -12,9 +12,8 @@
 폴더 구성
   qt/        키오스크 프로그램 (Qt Creator 로 qt/KioskSystem.pro 열기)
     client/    화면 (회원/관리자/얼굴인식/장바구니/키보드)
-    server/    서버(앱 9000번, ESP32 8000번), DB 처리, server.ini, 회원가입 테스트 도구,
-               통신 규격(packet.h)
-  db/        kiosk.sql  (DB 만들기 + 예전 DB 업데이트를 한 파일로)
+    server/    서버(앱 9000번, ESP32 8000번), DB 처리, server.ini, 통신 규격(packet.h)
+  db/        kiosk.sql  (테이블 + 서버 접속 계정 만들기, 샘플 데이터 없음)
   esp32/     ESP32 코드
 
 
@@ -34,33 +33,24 @@
    sudo mysql < db/kiosk.sql
    (root 비밀번호가 아니라 우분투 로그인 비밀번호를 묻습니다)
 
-4) DB 접속 설정 파일 만들기
+4) 설정 파일 만들기
    cp qt/server/server.ini.example qt/server/server.ini
-   (MySQL 계정을 바꿨다면 server.ini 의 user / password 를 고칩니다)
+   server.ini 에서 채울 값
+     [mysql] user / password   kiosk.sql 의 서버 접속 계정과 같게
+     [ai]    groq_key           AI 리포트/상담/예측용 Groq API 키
+     [toss]  secret_key         앱 충전 승인용 토스페이먼츠 시크릿 키 (비우면 충전 불가)
+     [admin] signup_code        관리자 가입 코드 (비우면 관리자 가입 불가)
 
 5) Qt Creator 로 빌드
-   - qt/KioskSystem.pro 를 엽니다. (Qt 5 이상)
-   - 프로젝트 -> 빌드 -> qmake 단계 -> 추가 인자에  CONFIG+=opencv  입력
-   - 빌드 -> qmake 실행 -> 다시 빌드
-   (CONFIG+=opencv 없이 빌드하면 얼굴인식을 쓸 수 없고 비밀번호 로그인만 됩니다)
+   - qt/KioskSystem.pro 를 열고 빌드합니다. (Qt 5 이상, 얼굴인식 OpenCV 포함)
+
+6) 관리자 계정 만들기
+   샘플 계정이 없으므로 안드로이드 앱에서 회원가입할 때 관리자 코드(signup_code)를
+   입력해 첫 관리자를 만듭니다.
 
 
 --------------------------------------------------------------
- 2. 이미 쓰던 DB 를 최신으로 맞추기
---------------------------------------------------------------
-
-저장소를 새로 받은 뒤(git pull)나 프로그램이 DB 관련 경고를 띄우면
-아래를 한 번 실행합니다. 데이터는 지워지지 않고 빠진 테이블/칸만 추가됩니다.
-
-   sudo mysql < db/kiosk.sql
-
-예전 암호화 비밀번호를 쓰던 DB 라면 실행 후 샘플 계정 외 회원의 비밀번호를
-다시 넣어야 합니다. (예전 암호화 값은 되돌릴 수 없음)
-   sudo mysql kiosk -e "UPDATE users SET password='jun1234' WHERE login_id='jun';"
-
-
---------------------------------------------------------------
- 3. 실행
+ 2. 실행
 --------------------------------------------------------------
 
 Qt Creator 에서 실행(Ctrl+R) 하거나 터미널에서 실행합니다.
@@ -95,21 +85,12 @@ Qt Creator 에서 실행(Ctrl+R) 하거나 터미널에서 실행합니다.
 
 
 --------------------------------------------------------------
- 4. 회원가입 (얼굴 등록)
+ 3. 회원가입 (얼굴 등록)
 --------------------------------------------------------------
 
 원래는 안드로이드 앱에서 이름/아이디/비밀번호/전화번호를 입력하고 얼굴 사진
 5장을 찍어 가입합니다. 사진은 DB 의 face_images 테이블에 저장됩니다.
 아이디와 전화번호는 다른 회원과 겹칠 수 없습니다.
-
-앱 없이 테스트할 때는 웹캠 사진으로 가입할 수 있습니다.
-(키오스크 프로그램이 켜져 있어야 합니다)
-
-   1) cheese 로 정면 사진 5~10장 촬영 (사진 모드)
-      -> ~/사진/Webcam/ 또는 ~/Pictures/Webcam/ 에 저장됨
-   2) python3 qt/server/register_test.py 이름 아이디 비밀번호 전화번호 ~/사진/Webcam/*.jpg
-      예) python3 qt/server/register_test.py 엄준식 jun jun1234 010-1234-5678 ~/사진/Webcam/*.jpg
-   3) {'ok': True, 'data': {'role': 'member', 'userId': 4}} 가 나오면 가입 완료
 
 가입하면 키오스크를 다시 켜지 않아도 다음 얼굴인식부터 바로 인식됩니다.
 
@@ -117,8 +98,6 @@ Qt Creator 에서 실행(Ctrl+R) 하거나 터미널에서 실행합니다.
    server.ini 의 [admin] signup_code 에 관리자 코드를 적어 둡니다. (비워 두면 관리자 가입 불가)
    앱에서 가입할 때 이 코드를 입력하면 관리자로, 입력하지 않으면 일반 회원으로 가입됩니다.
    코드가 틀리면 가입되지 않습니다. (횟수 제한 없이 다시 시도 가능)
-   테스트 도구로는 앞에 KIOSK_ADMIN_CODE 를 붙입니다.
-      KIOSK_ADMIN_CODE=관리자코드 python3 qt/server/register_test.py 이름 아이디 비밀번호 전화번호 사진들...
 
 사진 잘 찍는 법
    - 밝은 곳에서, 실제 키오스크 카메라로 찍는 것이 가장 정확합니다.
@@ -133,9 +112,6 @@ Qt Creator 에서 실행(Ctrl+R) 하거나 터미널에서 실행합니다.
    아이디 중복 확인
                 {"cmd":"CHECK_ID","loginId"}
                 -> {"loginId","available":true/false,"message"}
-   아이디/전화번호 함께 확인
-                {"cmd":"CHECK_DUP","loginId"(선택),"phone"(선택)}
-                -> {"loginIdAvailable","phoneAvailable"} (보낸 항목만)
    로그인       {"cmd":"PASSWORD_LOGIN","loginId","password"}
                 -> {"id","name","role","balance","loginId","phone","token"}
                 role 이 admin 이면 관리자 화면. token 은 관리자 기능에 필요하니 저장해 둠
@@ -143,8 +119,12 @@ Qt Creator 에서 실행(Ctrl+R) 하거나 터미널에서 실행합니다.
    아이디/비밀번호 변경
                 {"cmd":"CHANGE_ACCOUNT","loginId","password","newLoginId"(선택),"newPassword"(선택)}
                 -> 바뀐 회원 정보   (지금 아이디/비밀번호가 맞아야 함)
-   잔액 충전    {"cmd":"CHARGE","loginId","password","amount"}
+   잔액 충전    {"cmd":"CHARGE","loginId","password","amount","paymentKey","orderId"}
                 -> 충전 후 회원 정보 (balance)   1회 최대 1,000,000원
+                앱이 토스 결제창에서 받은 paymentKey, orderId 로 서버가 토스에 최종 승인 후 충전
+                승인 뒤 충전에 실패하면 결제를 자동 취소. 같은 결제로 두 번 충전 불가
+   이용 내역    {"cmd":"HISTORY","userId","from":"yyyy-MM-dd","to":"yyyy-MM-dd"(미포함)}
+                -> [{"time":"yyyy-MM-dd HH:mm:ss","type":"use"/"charge","amount"}, ...] 시간순
    관리자 전용  ADD_PRODUCT / UPDATE_PRODUCT / DELETE_PRODUCT / SALES / MEMBERS / AI_REPORT / AI_ASK / AI_FORECAST
                 요청에 관리자 로그인 때 받은 "token" 을 꼭 넣어야 함
                 토큰이 없으면 "관리자 로그인이 필요합니다", 회원 토큰이면 "관리자만 사용할 수 있는 기능입니다"
@@ -154,7 +134,7 @@ Qt Creator 에서 실행(Ctrl+R) 하거나 터미널에서 실행합니다.
 
 
 --------------------------------------------------------------
- 5. 로그인
+ 4. 로그인
 --------------------------------------------------------------
 
 1) 첫 화면에서 [얼굴인식으로 시작하기]
@@ -169,15 +149,9 @@ Qt Creator 에서 실행(Ctrl+R) 하거나 터미널에서 실행합니다.
    - 화면 키보드로 아이디 -> 비밀번호 입력 -> [로그인]
 4) 관리자 계정이면 관리자 화면, 회원이면 상품 화면으로 이동합니다.
 
-샘플 계정
-   아이디   비밀번호    권한
-   admin    admin1234   관리자
-   hong     hong1234    회원 (잔액 50,000원)
-   kim      kim1234     회원 (잔액 30,000원)
-
 
 --------------------------------------------------------------
- 6. 회원 화면 (상품 구매)
+ 5. 회원 화면 (상품 구매)
 --------------------------------------------------------------
 
 - 상품을 터치하면 장바구니에 1개씩 담깁니다. 품절 상품은 담을 수 없습니다.
@@ -194,13 +168,13 @@ Qt Creator 에서 실행(Ctrl+R) 하거나 터미널에서 실행합니다.
 
 
 --------------------------------------------------------------
- 7. 관리자 화면
+ 6. 관리자 화면
 --------------------------------------------------------------
 
 [상품 관리] 메뉴  (왼쪽 입력칸 / 오른쪽 상품 목록)
 - 사진 영역을 터치해 상품 사진을 고릅니다.
 - 상품명, 가격, 재고를 입력합니다. (입력칸을 터치하면 화면 키보드)
-- 진열대(1번~6번)는 선택 사항입니다. 고르면 ESP32 가 그 진열대를 비었다고
+- 진열대(1번~4번)는 선택 사항입니다. 고르면 ESP32 가 그 진열대를 비었다고
   알릴 때 손님 화면에 품절로 표시됩니다. [선택 안 함] 이면 재고로만 판단합니다.
   목록의 진열대 칸에 "(비어 있음)" 이 붙으면 지금 그 진열대가 빈 상태입니다.
 - 아이콘 버튼
@@ -233,7 +207,7 @@ Qt Creator 에서 실행(Ctrl+R) 하거나 터미널에서 실행합니다.
 
 
 --------------------------------------------------------------
- 8. ESP32 통신 (8000번 포트)
+ 7. ESP32 통신 (8000번 포트)
 --------------------------------------------------------------
 
 ESP32 는 키오스크 PC 의 8000번 포트로 TCP 접속해서 연결을 계속 유지합니다.
@@ -243,7 +217,7 @@ ESP32 는 키오스크 PC 의 8000번 포트로 TCP 접속해서 연결을 계�
 ESP32 -> 키오스크 (응답 없음)
   사람 감지 (초음파)     person:1             떠나면 person:0
   카드 접촉 (RFID)       card:A1B2C3D4        card:카드UID (16진수, 공백은 무시)
-  선반 물건 유무 (ToF)   stand 1:1            stand 진열대번호(1~6):1=있음 0=없음
+  선반 물건 유무 (ToF)   stand 1:1            stand 진열대번호(1~4):1=있음 0=없음
                          바뀐 진열대만 한 줄씩 보내면 됩니다. 소식이 없는 진열대는 있음으로 봅니다.
                          (관리자 화면에서 상품마다 진열대 번호를 지정)
                          진열대가 0 이면 재고가 남아 있어도 품절로 표시되고,
@@ -261,21 +235,19 @@ ESP32 -> 키오스크 (응답 없음)
     실패: CARD_FAIL (등록 안 된 카드 / 잔액 부족) -> 다른 카드를 대면 다시 결제
     [취소] 또는 사람이 떠남: CARD_CANCEL
 
-테스트 카드 (cards 테이블, db/kiosk.sql 에서 추가)
-  성공 카드   uid 11223344   잔액 100,000원
-  실패 카드   uid 55667788   잔액 0원
-  실제 카드를 태그하면 로그에 [ESP32] card:UID 가 찍히니 그 값으로 바꿉니다.
-    sudo mysql kiosk -e "UPDATE cards SET uid='A1B2C3D4' WHERE name='성공 카드';"
+카드 등록 (cards 테이블, 등록 화면은 없음)
+  카드를 태그하면 키오스크 로그에 [ESP32] card:UID 가 찍히니 그 값으로 등록합니다.
+    sudo mysql kiosk -e "INSERT INTO cards (uid, name, balance) VALUES ('A1B2C3D4', '카드 이름', 10000);"
 
 연결 시험 (키오스크 PC 에서, ESP32 대신)
   nc 127.0.0.1 8000
   person:1                             <- 입력 후 Enter, 키오스크 로그에 [ESP32] 로 표시
   [카드 결제] 를 누르면 CARD_SELECT 가 찍히고,
-  card:11223344 입력 -> 결제 성공(BUZZER), card:55667788 입력 -> 결제 실패(CARD_FAIL)
+  card:등록한UID 입력 -> 결제 성공(BUZZER), 등록 안 된 UID 나 잔액 부족 -> 결제 실패(CARD_FAIL)
 
 
 --------------------------------------------------------------
- 9. DB 직접 보기 (MySQL Workbench)
+ 8. DB 직접 보기 (MySQL Workbench)
 --------------------------------------------------------------
 
 접속: Hostname 127.0.0.1 / Port 3306 / Username kiosk / Password kiosk1234
@@ -286,16 +258,14 @@ ESP32 -> 키오스크 (응답 없음)
    SELECT id, name, price, stock FROM products;              -- 상품
    SELECT * FROM sales ORDER BY sold_at DESC;                -- 매출
    SELECT id, user_id, image FROM face_images;               -- 얼굴 사진
+   SELECT * FROM charges ORDER BY charged_at DESC;           -- 충전 기록
    SELECT * FROM cards;                                      -- 카드 잔액
 
 얼굴 사진 보기: image 칸 오른쪽 클릭 -> Open Value in Editor -> Image 탭
 
-회원 잔액 충전 예:
-   sudo mysql kiosk -e "UPDATE users SET balance = balance + 10000 WHERE login_id='jun';"
-
 
 --------------------------------------------------------------
- 10. 문제 해결
+ 9. 문제 해결
 --------------------------------------------------------------
 
 Access denied for user 'root'@'localhost'
@@ -311,19 +281,16 @@ server.ini 를 찾을 수 없습니다
    -> 다른 키오스크 프로그램이 이미 켜져 있는지 확인
 
 얼굴인식 화면에 "OpenCV 없이 빌드되어 얼굴인식을 사용할 수 없습니다" 가 나옴
-   -> qmake 추가 인자 CONFIG+=opencv 확인 후 qmake 실행, 다시 빌드
+   -> sudo apt install libopencv-dev libopencv-contrib-dev 후 qmake 실행, 다시 빌드
 
 haarcascade_frontalface_default.xml 파일을 찾을 수 없습니다
    -> sudo apt install opencv-data
 
 등록된 얼굴이 없습니다
-   -> 4번 회원가입을 먼저 하거나, 얼굴이 잘 보이는 사진으로 다시 가입
+   -> 3번 회원가입을 먼저 하거나, 얼굴이 잘 보이는 사진으로 다시 가입
 
 카메라를 열 수 없습니다
-   -> cheese 등 카메라를 쓰는 다른 프로그램을 닫기
-
-register_test.py 에서 FileNotFoundError ... *.jpg
-   -> 그 폴더에 사진이 없음. 사진 폴더 경로 확인 (~/사진 또는 ~/Pictures)
+   -> 카메라를 쓰는 다른 프로그램을 닫기
 
 절전모드에서 모니터가 꺼지지 않음 (검은 화면만 나옴)
    -> echo $XDG_SESSION_TYPE 로 세션 확인

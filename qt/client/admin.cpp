@@ -9,6 +9,9 @@
 #include "popup.h"
 #include "util.h"
 
+#include <QFutureWatcher>
+#include <QPointer>
+#include <QtConcurrent>
 // 표에 넣을 칸 생성
 static QTableWidgetItem *cell(const QString &text, bool num = false)
 {
@@ -200,7 +203,8 @@ void Admin::start(const QVariantMap &user)
     ui->textReport->clear();
     ui->textKpi->clear();
 
-    // AI 상담: 대화 내용과 추천 질문 지우기
+    // AI 상담: 대화 내용과 추천 질문 지우기 (기다리던 답이 오면 버리도록 대화 번호 증가)
+    ++m_chat;
     for (int i = ui->layoutChat->count() - 1; i >= 0; --i) {
         QLayoutItem *item = ui->layoutChat->itemAt(i);
         if (item->widget()) {
@@ -413,7 +417,9 @@ void Admin::onSelect()
     ui->editName->setText(p.value("name").toString());
     ui->editPrice->setText(QString::number(p.value("price").toInt()));
     ui->editStock->setText(QString::number(p.value("stock").toInt()));
-    ui->comboShelf->setCurrentIndex(p.value("shelf").toInt());
+    // 지금 없는 진열대 번호(예전에 쓰던 5·6번)는 '선택 안 함'으로 (저장하면 정리됨)
+    int shelf = p.value("shelf").toInt();
+    ui->comboShelf->setCurrentIndex(shelf <= SHELF_COUNT ? shelf : 0);
 
     m_img = QByteArray::fromBase64(p.value("image").toString().toLatin1());
     m_imgChanged = false;
@@ -445,7 +451,7 @@ void Admin::loadProducts()
         ui->tableProduct->setItem(i, 1, cell(stock > 0 ? QString("%L1개").arg(stock) : QString("품절"), true));
         ui->tableProduct->setItem(i, 2, cell(won(p.value("price").toInt()), true));
         int shelf = p.value("shelf").toInt();
-        QString s = shelf ? QString("%1번").arg(shelf) : QString("-");
+        QString s = shelf && shelf <= SHELF_COUNT ? QString("%1번").arg(shelf) : QString("-");
         if (Esp::shelfEmpty(shelf))
             s += " (비어 있음)";
         ui->tableProduct->setItem(i, 3, cell(s));
@@ -719,25 +725,44 @@ void Admin::ask()
         args[target == 1 ? "productId" : "userId"] = ui->comboTarget->currentData();
     }
     args["question"] = text;
+    args["token"] = Net::token();   // 백그라운드에서 토큰을 읽지 않도록 미리 넣어 둠
 
+    // 질문과 '분석 중'을 먼저 보여 주고, AI 답은 백그라운드에서 기다림 (그동안 화면이 멈추지 않음)
+    if (m_asking)
+        return;
+    m_asking = true;
     addBubble(text, true);
-    QLabel *wait = addBubble("AI가 분석 중...", false);
-    flushChat();   // AI 답을 기다리는 동안 화면이 멈추므로, 그 전에 배치/스크롤을 끝내 둠
-
-    QVariant data;
-    QString err;
-    bool ok = Net::call("AI_ASK", args, &data, &err);
-    ui->layoutChat->removeWidget(wait);
-    wait->hide();
-    wait->deleteLater();
-    if (!ok) {
-        addBubble("오류: " + err, false);
-    } else {
-        QVariantMap res = data.toMap();
-        addBubble(res.value("answer").toString(), false);
-        setFollowUps(res.value("followUps").toStringList());
-    }
+    QPointer<QLabel> wait = addBubble("AI가 분석 중...", false);
     flushChat();
+
+    int chat = m_chat;
+    QFutureWatcher<QVariantMap> *watcher = new QFutureWatcher<QVariantMap>(this);
+    connect(watcher, &QFutureWatcher<QVariantMap>::finished, this, [this, watcher, wait, chat]() {
+        QVariantMap r = watcher->result();
+        watcher->deleteLater();
+        m_asking = false;
+        if (chat != m_chat)   // 기다리는 사이 로그아웃 등으로 대화가 지워졌으면 버림
+            return;
+        if (wait) {
+            ui->layoutChat->removeWidget(wait);
+            wait->hide();
+            wait->deleteLater();
+        }
+        if (!r.value("ok").toBool()) {
+            addBubble("오류: " + r.value("err").toString(), false);
+        } else {
+            QVariantMap res = r.value("data").toMap();
+            addBubble(res.value("answer").toString(), false);
+            setFollowUps(res.value("followUps").toStringList());
+        }
+        flushChat();
+    });
+    watcher->setFuture(QtConcurrent::run([args]() {
+        QVariant data;
+        QString err;
+        bool ok = Net::call("AI_ASK", args, &data, &err);
+        return QVariantMap{{"ok", ok}, {"data", data}, {"err", err}};
+    }));
 }
 
 // 대화창 배치를 바로 끝내고 맨 아래로 스크롤 (배치가 밀린 채로 그려져 말풍선이 겹쳐 보이던 문제)
