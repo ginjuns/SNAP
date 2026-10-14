@@ -79,3 +79,8 @@ CREATE TABLE IF NOT EXISTS cards (
     created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (uid)
 ) ENGINE=InnoDB;
+
+-- 서버 접속 계정
+CREATE USER IF NOT EXISTS 'kiosk'@'localhost' IDENTIFIED BY 'kiosk1234';
+GRANT SELECT, INSERT, UPDATE, DELETE ON kiosk.* TO 'kiosk'@'localhost';
+FLUSH PRIVILEGES;
