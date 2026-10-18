@@ -24,6 +24,23 @@
 * - 진열대 
 * - MqttTask -> ServerTask 변경
 * - TCP 서버 통신 구조로......
+*
+* [2026-10-10]
+* - LED 코드 추가
+* - ShelfTask() 일부 수정
+*
+* [2026-10-14]
+* - strip.show() 빠트려서 추가
+* - 결제 완료 후 타임아웃, 그 다음을 SLEEP에서 ACTIVE로 바꿈
+* - 사람 감지 관련해서 서버로 보내는 형식 수정
+*
+* [2026-10-15]
+* - 네오픽셀바 코드 수정...
+*
+* [보류]
+* - 진열대에 ToF 센서 설치 후 거리 조절
+* - Queue 전송 실패할 경우 대비...
+*
 */
 
 
@@ -37,25 +54,28 @@
 
 // I2C
 #define PIN_SDA
-#define PIN_SCL
+#define PIN_SCL 22
 // RC522 SPI
-#define PIN_RFID_SCK
-#define PIN_RFID_MISO
-#define PIN_RFID_MOSI
-#define PIN_RFID_SS
-#define PIN_RFID_RST
+#define PIN_RFID_SCK 18
+#define PIN_RFID_MISO 19
+#define PIN_RFID_MOSI 23
+#define PIN_RFID_SS 5
+#define PIN_RFID_RST 
 // WS2812B
-#define PIN_NEO
+#define PIN_NEO1
+#define PIN_NEO2
+#define PIN_NEO3
+#define PIN_NEO4
 // HC-SR04
 #define PIN_TRIG
 #define PIN_ECHO
 // Buzzer
-#define PIN_BUZZER
+#define PIN_BUZZER 25
 
 #define WIFI_SSID ""
 #define WIFI_PASSWORD ""
-#define SERVER_IP "192.168.0.0"
-#define SERVER_PORT 9000
+#define SERVER_IP "1"
+#define SERVER_PORT 
 
 
 /*키오스크 화면 상태*/
@@ -64,7 +84,7 @@ enum class KioskState : uint8_t {
   ACTIVE,                                                        // 활성화
   PAYMENT_SELECT,                                                // 결제 수단 선택 화면
   RFID_PAYMENT,                                                  // 카드 결제 진행 중 (RC522 대기)
-  FACE_PAYMENT,                                                  // 얼굴 인식 결제 진행 중 (카메라 대기)
+  FACE_PAYMENT,                                                  // 얼굴 인식 결제 진행 중
   PAYMENT_SUCCESS                                                // 결제 성공 안내 화면
 };
 
@@ -97,24 +117,24 @@ enum class WakeEvent : uint8_t {
   TIMEOUT                                                        // 시간 초과
 };
 
-// Output
+/*Output*/
 enum class OutType : uint8_t {
   SHELF_LED,                                                     // LED
   BUZZER_SOUND                                                   // BUZZER
 };
 
-// OutputTask에게 보내는 명령
+/*OutputTask에게 보내는 명령*/
 struct OutCmd {
   OutType type;                                                  // LED 갱신 / 결제 성공음
   uint8_t shelfMask;                                             // SHELF_LED일 때만 사용
 };
 
-// ServerTask가 서버로 보낼 메시지
+/*ServerTask가 서버로 보낼 메시지*/
 struct ServerMsg {
-  char line[96];                                                 // 보낼 JSON
+  char line[96];                                                 // 서버로 보낼 메시지 한 줄
 };
 
-// RFIDTask 깨우기
+/*RFIDTask 깨우기*/
 enum CardCmd : uint8_t {
   CARD_START = 1,                                                // 카드로 결제 on
   CARD_STOP = 2                                                  // 카드로 결제 off
@@ -155,20 +175,20 @@ static volatile struct SensorSharedResources {
   bool doneFlag;                                                 // 완료 플래그
 } sharedRes;
 
-constexpr uint8_t numSlot = 6;                                   // 진열대 칸 개수
+constexpr uint8_t numSlot = 4;                                   // 진열대 칸 개수
 constexpr uint16_t outOfRange = 8190;                            // 범위 밖 ("상품 없음"으로 간주)
 
-/* 진열대 공통 설정 */
+/* 진열대 공통 설정*/
 struct ShelfConfig {
   uint8_t pcaAddr;                                               // PCA9548A 주소
   uint16_t presentMm;                                            // "상품 있음"의 기준 거리
-  uint32_t scanIntervalMs;                                       // 6칸 한 바퀴 측정 주기 (ms)
+  uint32_t scanIntervalMs;                                       // 'numSlot'칸 한 바퀴 측정 주기 (ms)
   uint8_t confirmCnt;                                            // 상품 유무가 바뀌려면 필요한 연속 확인 횟수
 };
 
 constexpr ShelfConfig shelfCfg = { 0x70, 150, 200, 3 };
 
-/* 슬롯 상태  */
+/* 슬롯 상태*/
 struct SlotState {
   uint16_t lastDistanceMm;                                       // 마지막 측정 거리
   bool hasItem;                                                  // 현재 확정된 상품 유무
@@ -177,17 +197,19 @@ struct SlotState {
 
 SlotState slotStates[numSlot];
 
-// Global Handles
+/*Global Handles*/
 QueueHandle_t kioskQueue;                                        // 키오스크 관련
 QueueHandle_t outQueue;                                          // 출력 데이터 전달 큐
 QueueHandle_t serverQueue;                                       // 통신 데이터 전달 큐
 TaskHandle_t  rfidTaskHandle;                                    // RFID 태스크 관리 핸들
 
-Adafruit_VL53L0X lox[numSlot];                                   // VL53L0X 거리 센서 6개
-Adafruit_NeoPixel strip(6, PIN_NEO, NEO_GRB + NEO_KHZ800);       // NeoPixel LED 6개
+Adafruit_VL53L0X lox[numSlot];                                   // VL53L0X 거리 센서 4개
 MFRC522 mfrc522(PIN_RFID_SS, PIN_RFID_RST);                      // RFID 리더 객체
 WiFiClient espClient;                                            // Wi-Fi 통신 객체
 
+const uint8_t neoPins[numSlot] = { PIN_NEO1, PIN_NEO2, PIN_NEO3, PIN_NEO4 };
+constexpr uint8_t ledsPerPiece = 1; 
+Adafruit_NeoPixel strip[numSlot];
 
 void setup() {
   initSerial();
@@ -198,17 +220,15 @@ void setup() {
   initRfid();
   initPresenceHardware();
 
-  // Queue 생성
+  /*Queue 생성*/
   kioskQueue = xQueueCreate(12, sizeof(KioskEvent));
   outQueue = xQueueCreate(8, sizeof(OutCmd));
   serverQueue = xQueueCreate(12, sizeof(ServerMsg));
 
   initPresenceInterrupt();
-
-  // Network
   initWifi();
   
-  // Tasks 생성
+  /*Tasks 생성*/
   xTaskCreatePinnedToCore(KioskTask, "Kiosk", 4096, NULL, 3, NULL, 1);
   xTaskCreatePinnedToCore(ShelfTask, "Shelf", 4096, NULL, 3, NULL, 1);
   xTaskCreatePinnedToCore(PresenceTask, "Presence", 3072, NULL, 2, NULL, 1);
@@ -233,7 +253,7 @@ void initI2C() {
 }
 
 void selectTofChannel(uint8_t bus) {
-  if (bus > 5) return;
+  if (bus >= numSlot) return;
 
   Wire.beginTransmission(shelfCfg.pcaAddr);
   Wire.write(1 << bus);
@@ -253,8 +273,14 @@ void initTof() {
 }
 
 void initLed() {
-  strip.begin();
-  strip.show();
+  for (uint8_t i = 0; i < numSlot; i++) {
+    strip[i].updateLength(ledsPerPiece);                         // LED 개수
+    strip[i].updateType(NEO_GRB + NEO_KHZ800);                   // 네오픽셀 종류
+    strip[i].setPin(neoPins[i]);                                 // 핀 번호
+    strip[i].begin();
+    strip[i].setBrightness(80);                                  // LED 밝기 (최대 255)
+    strip[i].show();
+  }
   Serial.println("LED Initialized");
 }
 
@@ -323,6 +349,9 @@ void handleEvent(KioskEvent ev) {
     case KioskState::ACTIVE:                                                // 활성화 -> 결제 시작 -> 결제 수단 선택/사람 이탈/취소
       if (ev == KioskEvent::PAY_START) {
         enterState(KioskState::PAYMENT_SELECT);
+      } else if (ev == KioskEvent::SELECT_CARD) {                           // PAY_START 없이 바로 CARD_SELECT를 보냄...
+        xTaskNotify(rfidTaskHandle, CARD_START, eSetValueWithOverwrite);
+        enterState(KioskState::RFID_PAYMENT);
       } else if (ev == KioskEvent::PERSON_ABSENT) {
         enterState(KioskState::SLEEP);
       } else if (ev == KioskEvent::CANCEL) {
@@ -349,7 +378,7 @@ void handleEvent(KioskEvent ev) {
         enterState(KioskState::RFID_PAYMENT);
       } else if (ev == KioskEvent::CANCEL) {
         xTaskNotify(rfidTaskHandle, CARD_STOP, eSetValueWithOverwrite);     // 결제 취소 -> 카드 리더기 비활성화
-        enterState(KioskState::SLEEP);
+        enterState(KioskState::ACTIVE);
       } 
       break;
     case KioskState::FACE_PAYMENT:                                          // 얼굴 인식 결제 선택 -> 성공/실패/취소
@@ -361,9 +390,9 @@ void handleEvent(KioskEvent ev) {
         enterState(KioskState::SLEEP);
       } 
       break;
-    case KioskState::PAYMENT_SUCCESS:                                       // 결제 성공 -> 타임아웃 -> 슬립 모드
+    case KioskState::PAYMENT_SUCCESS:                                       // 결제 성공 -> 타임아웃 -> 활성화
       if (ev == KioskEvent::TIMEOUT) {
-        enterState(KioskState::SLEEP);
+        enterState(KioskState::ACTIVE);
       }
       break;
     }
@@ -378,7 +407,7 @@ void KioskTask(void *pvParameters) {
       handleEvent(ev);
     }
 
-    // 결제 성공 화면에서 일정 시간 지나면 타임아웃
+    /*결제 성공 화면에서 일정 시간 지나면 타임아웃*/
     if (currKioskState == KioskState::PAYMENT_SUCCESS &&
       millis() - kioskStateStartTime >= SUCCESS_SCREEN_TIME) {
       handleEvent(KioskEvent::TIMEOUT);
@@ -423,9 +452,9 @@ void ShelfTask(void *pvParameters) {
         slotStates[ch].changeCnt++;
         if (slotStates[ch].changeCnt >= shelfCfg.confirmCnt) {              // 일정 횟수 이상 연속으로 다른 결과가 나오면 상태 변경
           slotStates[ch].hasItem = rawHasItem;
-          slotStates[ch].changeCnt = 0;                                     // 기존 상태와 같은 결과가 나오면 변경 카운트 초기화
+          slotStates[ch].changeCnt = 0;
         }
-      } else {
+      } else {                                                              // 기존 상태와 같은 결과가 나오면 변경 카운트 초기화
         slotStates[ch].changeCnt = 0;
       }
     }
@@ -441,14 +470,15 @@ void ShelfTask(void *pvParameters) {
 
       xQueueSend(outQueue, &cmd, 0);
 
-      /*서버 전송 JSON 문자열 생성*/
-      String line = "{\"cmd\":\"SHELF\",\"shelf\":[";
+      /*바뀐 진열대만 서버로 전송*/
       for (uint8_t ch = 0; ch < numSlot; ch++) {
-        if (ch > 0) line += ",";
-        line += slotStates[ch].hasItem ? "true" : "false";
+        bool now  = currentMask & (1 << ch);
+        bool prev = prevMask & (1 << ch);
+        if (now != prev) {
+          String line = "stand " + String(ch + 1) + ":" + (now ? "1" : "0");
+          sendToServer(line.c_str());
+        }
       }
-      line += "]}";
-      sendToServer(line.c_str());
 
       /*전송한 상태를 이전 상태로 저장*/
       prevMask = currentMask;
@@ -515,12 +545,12 @@ void RFIDTask(void *pvParameters) {
       
       String uid = "";
       for (byte i = 0; i < mfrc522.uid.size; i++) {
-        uid.concat(String(mfrc522.uid.uidByte[i] < 0x10 ? "0" : " "));
+        uid.concat(String(mfrc522.uid.uidByte[i] < 0x10 ? "0" : ""));
         uid.concat(String(mfrc522.uid.uidByte[i], HEX));
       }
       uid.toUpperCase();
 
-      String line = "{\"cmd\":\"CARD\",\"uid\":\"" + uid + "\"}";
+      String line = "card:" + uid;
       // Serial.println(line); 
       sendToServer(line.c_str());
 
@@ -534,8 +564,16 @@ void OutputTask(void *pvParameters) {
   for (;;) {
     xQueueReceive(outQueue, &m, portMAX_DELAY);
     switch (m.type) {
-      case OutType::SHELF_LED:                                                      // LED 갱신
+      case OutType::SHELF_LED: {                                                    // LED 갱신
+        uint32_t green = Adafruit_NeoPixel::Color(0, 255, 0);
+        uint32_t red   = Adafruit_NeoPixel::Color(255, 0, 0);
+
+        for (uint8_t i = 0; i < numSlot; i++) {
+          strip[i].fill((m.shelfMask & (1 << i)) ? green : red);                    // i번 칸 조각 전체를 한 색으로
+          strip[i].show();
+        }
         break;
+      }
       case OutType::BUZZER_SOUND:                                                   // 결제 성공 알림음
         digitalWrite(PIN_BUZZER, HIGH);
         vTaskDelay(pdMS_TO_TICKS(70));
@@ -552,7 +590,47 @@ void OutputTask(void *pvParameters) {
 void ServerTask(void *pvParameters) {
   ServerMsg m;
   for (;;) {
-    
+    /*서버와 연결되어 있지 않은 경우 1초마다 연결 시도*/
+    if (!espClient.connected()) {
+      if (WiFi.status() == WL_CONNECTED) {
+        espClient.connect(SERVER_IP, SERVER_PORT);
+      }
+      vTaskDelay(pdMS_TO_TICKS(1000));
+      continue;
+    }
+
+    /*ServerQueue에서 데이터를 가져와 서버로 보내기*/
+    if (xQueueReceive(serverQueue, &m, pdMS_TO_TICKS(50)) == pdTRUE) {
+      espClient.print(m.line);
+      espClient.print("\n");
+    }
+
+    if (espClient.available()) {
+      String line = espClient.readStringUntil('\n');
+      
+      if (line.indexOf("BUZZER") >= 0) {                                             // 결제 성공 알림음
+        OutCmd cmd;
+        cmd.type = OutType::BUZZER_SOUND;
+        xQueueSend(outQueue, &cmd, 0);
+        sendKioskEvent(KioskEvent::PAYMENT_SUCCESS);
+      } else if (line.indexOf("CARD_SELECT") >= 0) {                                 // 카드 결제 선택
+        sendKioskEvent(KioskEvent::SELECT_CARD);
+      } else if (line.indexOf("CARD_FAIL") >= 0) {                                   // 결제 실패
+        sendKioskEvent(KioskEvent::PAYMENT_FAILED);
+      } else if (line.indexOf("CARD_CANCEL") >= 0) {                                 // 취소
+        sendKioskEvent(KioskEvent::CANCEL);
+      }
+    }
+  }
+}
+
+/*서버로 보낼 메시지를 ServerQueue에 전달*/
+void sendToServer(const char *line) {
+  ServerMsg m;
+  strncpy(m.line, line, sizeof(m.line) - 1);
+  m.line[sizeof(m.line) - 1] = '\0';
+  if (xQueueSend(serverQueue, &m, 0) != pdTRUE) {
+    Serial.println("...Server Queue Full");
   }
 }
 
@@ -576,6 +654,7 @@ void handleEvent(WakeEvent wakeEvent){
     case WakeState::PRE_WAKE:
       if (wakeEvent == WakeEvent::PRESENCE_CONFIRMED) {                               // 사람 존재 확인되면 ACTIVE
         sendKioskEvent(KioskEvent::PERSON_PRESENT);
+        sendToServer("person:1");
         enterState(WakeState::ACTIVE);
       } else if (wakeEvent == WakeEvent::PERSON_ABSENT) {                             // 이탈 또는 시간 초과 시 다시 IDLE
         enterState(WakeState::IDLE);
@@ -591,6 +670,7 @@ void handleEvent(WakeEvent wakeEvent){
         enterState(WakeState::ACTIVE);
       } else if (wakeEvent == WakeEvent::TIMEOUT) {                                   // 시간 초과되면 IDLE
         sendKioskEvent(KioskEvent::PERSON_ABSENT);
+        sendToServer("person:0");
         enterState(WakeState::IDLE);
       }
       break;
