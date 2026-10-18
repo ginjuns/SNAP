@@ -116,6 +116,8 @@ Qt Creator 에서 실행(Ctrl+R) 하거나 터미널에서 실행합니다.
    로그인       {"cmd":"PASSWORD_LOGIN","loginId","password"}
                 -> {"id","name","role","balance","loginId","phone","token"}
                 role 이 admin 이면 관리자 화면. token 은 관리자 기능에 필요하니 저장해 둠
+   회원 정보    {"cmd":"LOGIN","userId","token"(권장)}
+                -> {"id","name","role","balance"} + 본인 token 을 보내면 "loginId","phone" 도 옴
    로그아웃     {"cmd":"LOGOUT","token"}
    아이디/비밀번호 변경
                 {"cmd":"CHANGE_ACCOUNT","loginId","password","newLoginId"(선택),"newPassword"(선택)}

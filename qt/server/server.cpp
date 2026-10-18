@@ -670,11 +670,11 @@ static bool adminOnly(const QString &cmd)
     return cmds.contains(cmd);
 }
 
-// 키오스크 화면(같은 PC)만 쓸 수 있는 명령 (얼굴 로그인, 얼굴 사진 목록, 결제)
+// 키오스크 화면(같은 PC)만 쓸 수 있는 명령 (얼굴 사진 목록, 결제)
 // 본인 확인 없이 회원 번호만으로 처리하므로 다른 PC 에서 오면 거절
 static bool kioskOnly(const QString &cmd)
 {
-    static const QSet<QString> cmds{"LOGIN", "FACES", "PAY"};
+    static const QSet<QString> cmds{"FACES", "PAY"};
     return cmds.contains(cmd);
 }
 
@@ -691,10 +691,18 @@ QJsonObject Server::handle(const QJsonObject &req, bool local)
     } else if (adminOnly(cmd) && !checkAdmin(req, &err)) {
         // 권한 없음: 아래 처리를 건너뛰고 오류 응답
     } else if (cmd == "LOGIN") {
-        // 얼굴인식 로그인 (키오스크 화면에서만 옴)
-        ok = m_db->user(num(req, "userId"), &data, &err);
-        if (ok)
-            addToken(&data, newToken(num(req, "userId")));
+        // 회원 정보 조회: 키오스크 화면(얼굴인식 로그인)은 토큰 발급,
+        // 앱은 본인 토큰이 있으면 전체 정보, 없으면 이름·잔액만 (전화번호, 아이디는 빼고)
+        int userId = num(req, "userId");
+        ok = m_db->user(userId, &data, &err);
+        if (ok && local) {
+            addToken(&data, newToken(userId));
+        } else if (ok && m_tokens.value(req.value("token").toString(), 0) != userId) {
+            QVariantMap m = data.toMap();
+            m.remove("phone");
+            m.remove("loginId");
+            data = m;
+        }
     } else if (cmd == "PASSWORD_LOGIN") {
         ok = m_db->login(req.value("loginId").toString(), req.value("password").toString(), &data, &err);
         if (ok)
@@ -703,7 +711,6 @@ QJsonObject Server::handle(const QJsonObject &req, bool local)
         m_tokens.remove(req.value("token").toString());
         ok = true;
     } else if (cmd == "REGISTER") {
-        // 관리자 코드 외에는 모두 필수: 빈 칸이 있으면 어느 칸인지 알려 주고 거절
         struct Field { const char *key, *label; };
         const Field fields[] = {{"name", "이름"}, {"loginId", "아이디"}, {"password", "비밀번호"},
                                 {"phone", "전화번호"}};
@@ -878,7 +885,7 @@ Esp::Esp(QObject *parent)
 {
     instance = this;
     for (int i = 0; i < SHELF_COUNT; ++i)
-        m_shelf << 1;   // 아직 소식이 없는 진열대는 차 있다고 본다
+        m_shelf << 1;
     connect(this, SIGNAL(newConnection()), SLOT(onConnect()));
 }
 
