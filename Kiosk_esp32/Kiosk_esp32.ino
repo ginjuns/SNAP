@@ -35,14 +35,20 @@
 * - 사람 감지 관련해서 서버로 보내는 형식 수정
 *
 * [2026-10-15]
-* - 네오픽셀바 코드 수정...
+* - 네오픽셀바 4개 각각 작동하도록 수정
+* 
+* [2026-10-16]
+* - 초음파 센서, 카드 리더기, 부저, ToF 센서 핀 다 꼽고 번호 확정
+* - 3번 진열대의 ToF 센서 상품 유무 검사 건너뛰도록 수정
 *
-* [보류]
-* - 진열대에 ToF 센서 설치 후 거리 조절
-* - Queue 전송 실패할 경우 대비...
+* [2026-10-18]
+* - 네오픽셀바 핀 다 꼽고 번호 확정
+* - 3번 진열대 LED 계속 빨간색으로 켜지도록 수정
+* - 진열대마다 상품 유무 거리 다 다르게 설정
+* - TpF 센서 4번 채널 말썽 이슈로 수정의 수정의 수정의 수정 끝에 이제 진짜 최종
+* - 
 *
 */
-
 
 #include <Arduino.h>
 #include <Wire.h>                                                // I2C(VL53L0X, PCA9548A)
@@ -53,29 +59,29 @@
 #include <WiFi.h>
 
 // I2C
-#define PIN_SDA
+#define PIN_SDA 21
 #define PIN_SCL 22
 // RC522 SPI
 #define PIN_RFID_SCK 18
 #define PIN_RFID_MISO 19
 #define PIN_RFID_MOSI 23
 #define PIN_RFID_SS 5
-#define PIN_RFID_RST 
+#define PIN_RFID_RST 4
 // WS2812B
-#define PIN_NEO1
-#define PIN_NEO2
-#define PIN_NEO3
-#define PIN_NEO4
+#define PIN_NEO1 13
+#define PIN_NEO2 14
+#define PIN_NEO3 26
+#define PIN_NEO4 27
 // HC-SR04
-#define PIN_TRIG
-#define PIN_ECHO
+#define PIN_TRIG 32
+#define PIN_ECHO 34
 // Buzzer
 #define PIN_BUZZER 25
 
-#define WIFI_SSID ""
-#define WIFI_PASSWORD ""
-#define SERVER_IP "1"
-#define SERVER_PORT 
+#define WIFI_SSID "OneTwo"
+#define WIFI_PASSWORD "12345678"
+#define SERVER_IP "192.168.0.6"
+#define SERVER_PORT 8000
 
 
 /*키오스크 화면 상태*/
@@ -181,12 +187,12 @@ constexpr uint16_t outOfRange = 8190;                            // 범위 밖 (
 /* 진열대 공통 설정*/
 struct ShelfConfig {
   uint8_t pcaAddr;                                               // PCA9548A 주소
-  uint16_t presentMm;                                            // "상품 있음"의 기준 거리
   uint32_t scanIntervalMs;                                       // 'numSlot'칸 한 바퀴 측정 주기 (ms)
   uint8_t confirmCnt;                                            // 상품 유무가 바뀌려면 필요한 연속 확인 횟수
 };
 
-constexpr ShelfConfig shelfCfg = { 0x70, 150, 200, 3 };
+constexpr ShelfConfig shelfCfg = { 0x70, 200, 3 };
+constexpr uint16_t presentMm[numSlot] = { 330, 330, 310, 293};
 
 /* 슬롯 상태*/
 struct SlotState {
@@ -207,9 +213,13 @@ Adafruit_VL53L0X lox[numSlot];                                   // VL53L0X 거�
 MFRC522 mfrc522(PIN_RFID_SS, PIN_RFID_RST);                      // RFID 리더 객체
 WiFiClient espClient;                                            // Wi-Fi 통신 객체
 
-const uint8_t neoPins[numSlot] = { PIN_NEO1, PIN_NEO2, PIN_NEO3, PIN_NEO4 };
 constexpr uint8_t ledsPerPiece = 1; 
-Adafruit_NeoPixel strip[numSlot];
+Adafruit_NeoPixel strip[numSlot] = {
+  { ledsPerPiece, PIN_NEO1, NEO_GRB + NEO_KHZ800 },
+  { ledsPerPiece, PIN_NEO2, NEO_GRB + NEO_KHZ800 },
+  { ledsPerPiece, PIN_NEO3, NEO_GRB + NEO_KHZ800 },
+  { ledsPerPiece, PIN_NEO4, NEO_GRB + NEO_KHZ800 }
+};
 
 void setup() {
   initSerial();
@@ -262,6 +272,7 @@ void selectTofChannel(uint8_t bus) {
 
 void initTof() {
   for (int i = 0; i < numSlot; i++) {
+    if (i == 2) continue;
     selectTofChannel(i);
 
     if (!lox[i].begin(0x29, false, &Wire)) {
@@ -274,11 +285,8 @@ void initTof() {
 
 void initLed() {
   for (uint8_t i = 0; i < numSlot; i++) {
-    strip[i].updateLength(ledsPerPiece);                         // LED 개수
-    strip[i].updateType(NEO_GRB + NEO_KHZ800);                   // 네오픽셀 종류
-    strip[i].setPin(neoPins[i]);                                 // 핀 번호
     strip[i].begin();
-    strip[i].setBrightness(80);                                  // LED 밝기 (최대 255)
+    strip[i].setBrightness(100);                                  // LED 밝기 (최대 255)
     strip[i].show();
   }
   Serial.println("LED Initialized");
@@ -293,6 +301,8 @@ void initBuzzer() {
 void initRfid() {
   SPI.begin(PIN_RFID_SCK, PIN_RFID_MISO, PIN_RFID_MOSI, PIN_RFID_SS);
   mfrc522.PCD_Init();
+  delay(100);
+  mfrc522.PCD_SetAntennaGain(mfrc522.RxGain_max);                // 안테나 감도 최대
   Serial.println("RFID Initialized");
 }
 
@@ -335,6 +345,7 @@ static uint32_t kioskStateStartTime = 0;                                    // �
 void enterState(KioskState next) {
   currKioskState = next;
   kioskStateStartTime = millis();                                           // 상태가 바뀔 때마다 시간 기록
+  //Serial.printf("[KIOSK] 상태 -> %d\n", (int)next); // 시리얼 모니터 테스트용
 }
 
 void handleEvent(KioskEvent ev) {
@@ -432,21 +443,27 @@ void ShelfTask(void *pvParameters) {
 
   for (;;) {
     for (uint8_t ch = 0; ch < numSlot; ch++) {
+      if (ch == 2) {
+      slotStates[ch].hasItem = true;                                      // 3번 칸은 항상 "상품 있음"
+      continue;
+      }
       selectTofChannel(ch);
 
       /*ToF 센서 거리 측정*/
       VL53L0X_RangingMeasurementData_t measure;
-      lox[ch].rangingTest(&measure, false);
+      VL53L0X_Error err = lox[ch].rangingTest(&measure, false);
 
       /*측정 데이터 검사*/
-      if (measure.RangeStatus != 4) {
+      if (err == VL53L0X_ERROR_NONE && measure.RangeStatus != 4) {
         slotStates[ch].lastDistanceMm = measure.RangeMilliMeter;
       } else {
         slotStates[ch].lastDistanceMm = outOfRange;
       }
 
+      // Serial.printf("[TOF] ch[%d] %dmm\n", ch, slotStates[ch].lastDistanceMm); // 시리얼 모니터 테스트용
+
       /*기준 거리 이하일 경우 "상품 있음"으로 판단*/
-      bool rawHasItem = (slotStates[ch].lastDistanceMm <= shelfCfg.presentMm);
+      bool rawHasItem = (slotStates[ch].lastDistanceMm <= presentMm[ch]);
 
       if (rawHasItem != slotStates[ch].hasItem) {                           // 현재 확정된 상태와 다른 결과가 연속으로 나오는지 확인
         slotStates[ch].changeCnt++;
@@ -457,6 +474,13 @@ void ShelfTask(void *pvParameters) {
       } else {                                                              // 기존 상태와 같은 결과가 나오면 변경 카운트 초기화
         slotStates[ch].changeCnt = 0;
       }
+    }
+
+    //static uint32_t lastPrintMs = 0;                                        // 시리얼 모니터 테스트용
+    if (millis() - lastPrintMs >= 1000) {
+      lastPrintMs = millis();
+      Serial.printf("[TOF] 1번:%dmm  2번:%dmm  4번:%dmm\n",
+        slotStates[0].lastDistanceMm, slotStates[1].lastDistanceMm, slotStates[3].lastDistanceMm);
     }
 
     /*진열대 비트마스크 상태 업데이트*/
@@ -516,6 +540,8 @@ void PresenceTask(void *pvParameters) {
       distance = FAR_DISTANCE;
     }
 
+    // Serial.printf("[US] %.1fcm\n", distance); //시리얼 모니터 테스트용
+
     /*웨이크 상태 머신에 거리 전달*/
     updatePresence(distance);
 
@@ -529,9 +555,11 @@ void RFIDTask(void *pvParameters) {
   for (;;) {
     xTaskNotifyWait(0, UINT32_MAX, &cmd, portMAX_DELAY);                            // CARD_START 대기
     if (cmd != CARD_START) continue;
+    //Serial.println("[RFID] 리더기 ON"); // 시리얼 모니터 테스트용
 
     for (;;) {
       if (xTaskNotifyWait(0, UINT32_MAX, &cmd, 0) == pdTRUE && cmd == CARD_STOP) {  // CARD_STOP 확인
+        Serial.println("[RFID] 리더기 OFF"); // 시리얼 모니터 테스트용
         break;
       }
       if (!mfrc522.PICC_IsNewCardPresent()) {                                       // 새 카드 있어?
@@ -551,7 +579,7 @@ void RFIDTask(void *pvParameters) {
       uid.toUpperCase();
 
       String line = "card:" + uid;
-      // Serial.println(line); 
+      //Serial.println("[CARD] " + line); // 시리얼 모니터 테스트용
       sendToServer(line.c_str());
 
       mfrc522.PICC_HaltA();                                                         // 카드 리더기 통신 종료
@@ -565,6 +593,7 @@ void OutputTask(void *pvParameters) {
     xQueueReceive(outQueue, &m, portMAX_DELAY);
     switch (m.type) {
       case OutType::SHELF_LED: {                                                    // LED 갱신
+        Serial.printf("[LED] mask = 0x%02X\n", m.shelfMask); // 시리얼 모니터 테스트용
         uint32_t green = Adafruit_NeoPixel::Color(0, 255, 0);
         uint32_t red   = Adafruit_NeoPixel::Color(255, 0, 0);
 
@@ -575,6 +604,7 @@ void OutputTask(void *pvParameters) {
         break;
       }
       case OutType::BUZZER_SOUND:                                                   // 결제 성공 알림음
+      Serial.println("[BUZZER] 울림"); // 시리얼 모니터 테스트용
         digitalWrite(PIN_BUZZER, HIGH);
         vTaskDelay(pdMS_TO_TICKS(70));
         digitalWrite(PIN_BUZZER, LOW);
@@ -595,6 +625,7 @@ void ServerTask(void *pvParameters) {
       if (WiFi.status() == WL_CONNECTED) {
         espClient.connect(SERVER_IP, SERVER_PORT);
       }
+      xQueueReset(serverQueue);                                                      // 연결 끊긴 동안 쌓인 메시지 비우기
       vTaskDelay(pdMS_TO_TICKS(1000));
       continue;
     }
@@ -603,11 +634,13 @@ void ServerTask(void *pvParameters) {
     if (xQueueReceive(serverQueue, &m, pdMS_TO_TICKS(50)) == pdTRUE) {
       espClient.print(m.line);
       espClient.print("\n");
+      Serial.printf("[SEND] %s\n", m.line); // 시리얼 모니터 테스트용
     }
 
     if (espClient.available()) {
       String line = espClient.readStringUntil('\n');
-      
+      Serial.println("[RECV] " + line); // 시리얼 모니터 테스트용
+
       if (line.indexOf("BUZZER") >= 0) {                                             // 결제 성공 알림음
         OutCmd cmd;
         cmd.type = OutType::BUZZER_SOUND;
@@ -642,6 +675,7 @@ void sendKioskEvent(KioskEvent ev) {
 void enterState(WakeState next) {
   wake.state = next;
   wake.enteredTimeMs = millis();                                                      // 상태가 바뀔 때마다 시간 기록
+  //Serial.printf("[WAKE] 상태 -> %d\n", (int)next); // 시리얼 모니터 테스트용
 }
 
 void handleEvent(WakeEvent wakeEvent){
