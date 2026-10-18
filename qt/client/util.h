@@ -132,6 +132,7 @@ inline QString appStyle()
 
         "QLineEdit, QComboBox, QDateEdit { background: white; border: 2px solid LINE; border-radius: 8px;"
         "  padding: 4px 8px; min-height: 32px; }"
+        "QDateEdit { min-height: 40px; }"   // 옆의 버튼, 토글과 높이를 맞춤
         "QLineEdit:focus { border-color: GREEN; }"
         "QComboBox::drop-down { border: none; width: 28px; }"
         "QComboBox QAbstractItemView { background: white; selection-background-color: MINT; selection-color: INK; }"
@@ -167,6 +168,12 @@ inline QString appStyle()
         "QPushButton[menu=\"true\"]:checked { background: GREEN; color: white; font-weight: bold; }"
         "QLabel#lblKpiTotal, QLabel#lblKpiCard, QLabel#lblKpiFace, QLabel#lblKpiQty {"
         "  background: white; border: 2px solid LINE; border-radius: 12px; padding: 6px 16px; }"
+        // 일별/주별/월별 토글 버튼 묶음 (admin.cpp 의 segment())
+        "QFrame#segment { background: white; border: 2px solid LINE; border-radius: 12px; }"
+        "QFrame#segment QPushButton { min-height: 42px; padding: 0 22px; border: none; border-radius: 9px;"
+        "  background: transparent; color: INK; }"
+        "QFrame#segment QPushButton:pressed { background: MINT; }"
+        "QFrame#segment QPushButton:checked { background: GREEN; color: white; font-weight: bold; }"
         "QFrame#statusBox { background: white; border: 2px solid LINE; border-radius: 14px; }"
         "QProgressBar { background: #e2f4e2; border: none; border-radius: 7px; min-height: 14px; max-height: 14px; }"
         "QProgressBar::chunk { background: GREEN; border-radius: 7px; }"

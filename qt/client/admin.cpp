@@ -78,6 +78,47 @@ static void setIcon(QPushButton *btn, Icon type)
     btn->setIconSize(QSize(px(32), px(32)));
 }
 
+// 콤보박스를 터치하기 쉬운 토글 버튼 묶음(일별 | 월별)으로 바꿔 보여 줌
+// 콤보박스는 숨겨서 그대로 두고 값만 버튼과 맞춤 (선택 로직은 콤보박스 그대로 사용)
+static void segment(QComboBox *combo)
+{
+    QFrame *box = new QFrame;
+    box->setObjectName("segment");
+    QHBoxLayout *h = new QHBoxLayout(box);
+    h->setContentsMargins(px(3), px(3), px(3), px(3));
+    h->setSpacing(px(2));
+    QButtonGroup *group = new QButtonGroup(box);
+    for (int i = 0; i < combo->count(); ++i) {
+        QPushButton *b = new QPushButton(combo->itemText(i).section(" (", 0, 0));
+        b->setCheckable(true);
+        b->setChecked(i == combo->currentIndex());
+        group->addButton(b, i);
+        h->addWidget(b);
+    }
+    QObject::connect(group, static_cast<void (QButtonGroup::*)(int)>(&QButtonGroup::buttonClicked),
+                     combo, &QComboBox::setCurrentIndex);
+    QObject::connect(combo, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged),
+                     group, [group](int i) { if (group->button(i)) group->button(i)->setChecked(true); });
+    combo->setProperty("segment", QVariant::fromValue<QObject *>(group));
+
+    foreach (QBoxLayout *l, combo->parentWidget()->findChildren<QBoxLayout *>()) {
+        int at = l->indexOf(combo);
+        if (at >= 0) {
+            l->insertWidget(at, box);
+            break;
+        }
+    }
+    combo->hide();
+}
+
+// 신호를 막고 콤보박스 값을 바꿨을 때 토글 버튼도 맞춤
+static void syncSegment(QComboBox *combo)
+{
+    QButtonGroup *group = qobject_cast<QButtonGroup *>(combo->property("segment").value<QObject *>());
+    if (group && group->button(combo->currentIndex()))
+        group->button(combo->currentIndex())->setChecked(true);
+}
+
 // 관리자 화면 초기화: 입력칸 키보드, 버튼/표/콤보박스 설정과 시그널 연결
 Admin::Admin(QWidget *parent)
     : QWidget(parent), ui(new Ui::Admin), m_imgChanged(false)
@@ -117,8 +158,7 @@ Admin::Admin(QWidget *parent)
 
     ui->date->setDate(QDate::currentDate());
     ui->date->findChild<QLineEdit *>()->installEventFilter(this);
-    ui->comboUnit->setView(new QListView);
-    ui->comboUnit->setStyleSheet(css("QComboBox QAbstractItemView::item { min-height: 48px; }"));
+    segment(ui->comboUnit);
     connect(ui->comboUnit, SIGNAL(currentIndexChanged(int)), SLOT(onUnit()));
     connect(ui->date, SIGNAL(dateChanged(QDate)), SLOT(loadSales()));
     connect(ui->btnPrev, SIGNAL(clicked()), SLOT(prev()));
@@ -146,11 +186,13 @@ Admin::Admin(QWidget *parent)
     ui->dateReport->setDate(QDate::currentDate());
     ui->dateReport->setMaximumDate(QDate::currentDate());
     ui->dateReport->findChild<QLineEdit *>()->installEventFilter(this);
+    segment(ui->comboPeriod);
+    segment(ui->comboDays);
     connect(ui->comboPeriod, SIGNAL(currentIndexChanged(int)), SLOT(onReportUnit()));
     connect(ui->comboCategory, SIGNAL(currentIndexChanged(int)), SLOT(onCategory()));
     connect(ui->btnForecast, SIGNAL(clicked()), SLOT(forecast()));
-    foreach (QComboBox *c, QList<QComboBox *>() << ui->comboPeriod << ui->comboCategory << ui->comboTarget
-                                                << ui->comboProduct << ui->comboDays) {
+    foreach (QComboBox *c, QList<QComboBox *>() << ui->comboCategory << ui->comboTarget
+                                                << ui->comboProduct) {
         c->setView(new QListView);
         c->setStyleSheet(css("QComboBox QAbstractItemView::item { min-height: 48px; }"));
     }
@@ -183,6 +225,7 @@ void Admin::start(const QVariantMap &user)
     ui->comboUnit->blockSignals(true);
     ui->comboUnit->setCurrentIndex(0);
     ui->comboUnit->blockSignals(false);
+    syncSegment(ui->comboUnit);
     ui->date->setDisplayFormat("yyyy-MM-dd");
     ui->date->blockSignals(true);
     ui->date->setDate(QDate::currentDate());

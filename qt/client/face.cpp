@@ -16,7 +16,7 @@
 
 namespace {
 
-const double MIN_COSINE = 0.363;   // 같은 사람으로 볼 최소 유사도 (SFace)
+const double MIN_COSINE = 0.7;  //0.5랑 별차이는 없어보임
 const int HITS = 5;
 const int MAX_TICKS = 600;
 
