@@ -16,35 +16,27 @@
 
 namespace {
 
-const double MIN_COSINE = 0.363;
+const double MIN_COSINE = 0.363;   // 같은 사람으로 볼 최소 유사도 (SFace)
 const int HITS = 5;
 const int MAX_TICKS = 600;
 
-/*
- * 인식 구역
- *
- * 뒤에 서 있는 사람이 인식되지 않도록 카메라 화면 가운데의
- * 구역 안에 얼굴 중심이 있고, 충분히 가까이 있는(크게 보이는)
- * 얼굴만 인식한다. 값은 화면 크기에 대한 비율.
- *
- * - ZONE_W, ZONE_H : 인식 구역의 가로/세로 (화면 가운데 기준)
- * - MIN_FACE_W     : 얼굴 너비가 화면 너비의 이 비율보다 작으면
- *                    멀리 있는 사람으로 보고 무시
- *                    (뒤에 사람이 계속 인식되면 값을 키운다)
- */
+// 인식 구역: 화면 가운데 구역(가로/세로 비율) 안의, 화면 너비 대비 MIN_FACE_W 이상인 얼굴만 인식
 const double ZONE_W = 0.5;
 const double ZONE_H = 0.8;
 const double MIN_FACE_W = 0.15;
 
+// 위조 판별: 진짜 확률이 이 값보다 낮으면 사진/화면으로 봄 (실제 얼굴이 막히면 낮추고, 사진이 통과되면 높임)
+const double REAL_MIN = 0.5;
+
 enum FaceState
 {
-    FACE_NONE,      // 얼굴 없음
-    FACE_OUTSIDE,   // 구역 밖의 얼굴만 있음
-    FACE_TOO_FAR,   // 구역 안이지만 너무 멀리 있음
+    FACE_NONE,
+    FACE_OUTSIDE,
+    FACE_TOO_FAR,
     FACE_OK
 };
 
-// 카메라 화면 가운데의 인식 구역 사각형
+// 화면 가운데 인식 구역 사각형
 cv::Rect zoneRect(const cv::Size &size)
 {
     int w = cvRound(size.width * ZONE_W);
@@ -53,15 +45,20 @@ cv::Rect zoneRect(const cv::Size &size)
     return cv::Rect((size.width - w) / 2, (size.height - h) / 2, w, h);
 }
 
-const char *YUNET_MODEL =
-    "/home/jun/Smart_Face_Kiosk/qt/client/models/face_detection_yunet_2022mar.onnx";
-
-const char *SFACE_MODEL =
-    "/home/jun/Smart_Face_Kiosk/qt/client/models/face_recognition_sface_2021dec.onnx";
+// 모델: YuNet(얼굴 검출), SFace(얼굴 비교), MiniFASNet(위조 판별)
+const char *YUNET_MODEL = MODEL_DIR "/face_detection_yunet_2022mar.onnx";
+const char *SFACE_MODEL = MODEL_DIR "/face_recognition_sface_2021dec.onnx";
 
 cv::Ptr<cv::FaceDetectorYN> detector;
 cv::Ptr<cv::FaceRecognizerSF> recognizer;
 
+const char *FAS_V2_MODEL = MODEL_DIR "/MiniFASNetV2.onnx";
+const char *FAS_V1SE_MODEL = MODEL_DIR "/MiniFASNetV1SE.onnx";
+
+cv::dnn::Net fasV2;
+cv::dnn::Net fasV1SE;
+
+// 등록된 회원 얼굴의 특징 벡터
 struct RegisteredFace
 {
     int userId;
@@ -74,7 +71,7 @@ int lastId = 0;
 
 
 
-// YuNet + SFace 모델 로드
+// 얼굴 검출, 비교, 위조 판별 모델 로드
 bool loadModels(QString *err)
 {
     if (detector.empty())
@@ -136,26 +133,81 @@ bool loadModels(QString *err)
             return false;
         }
     }
+    if (fasV2.empty() || fasV1SE.empty())
+    {
+        try
+        {
+            fasV2 = cv::dnn::readNetFromONNX(FAS_V2_MODEL);
+            fasV1SE = cv::dnn::readNetFromONNX(FAS_V1SE_MODEL);
+        }
+        catch (const cv::Exception &e)
+        {
+            fasV2 = cv::dnn::Net();
+            fasV1SE = cv::dnn::Net();
+            *err =
+                QString("위조 얼굴 판별 모델을 불러올 수 없습니다.\n"
+                        "MiniFASNetV2.onnx, MiniFASNetV1SE.onnx 파일을 확인해 주세요.\n%1")
+                    .arg(e.what());
+
+            return false;
+        }
+    }
 
     return true;
 }
 
+// 위조 판별용: 얼굴 주변을 scale 배로 넓혀 80x80 으로 자름
+cv::Mat fasCrop(const cv::Mat &img, const cv::Rect &box, double scale)
+{
+    scale = std::min(scale, (img.rows - 1) / double(box.height));
+    scale = std::min(scale, (img.cols - 1) / double(box.width));
 
-/*
- * YuNet으로 얼굴 검출
- *
- * FaceDetectorYN::detect() 결과는 한 얼굴당
- *
- * [x, y, w, h,
- *  right_eye_x, right_eye_y,
- *  left_eye_x, left_eye_y,
- *  nose_x, nose_y,
- *  right_mouth_x, right_mouth_y,
- *  left_mouth_x, left_mouth_y,
- *  score]
- *
- * 총 15개의 값으로 구성된다.
- */
+    double cx = box.x + box.width / 2.0;
+    double cy = box.y + box.height / 2.0;
+    double w = box.width * scale;
+    double h = box.height * scale;
+
+    int x1 = std::max(0, int(cx - w / 2));
+    int y1 = std::max(0, int(cy - h / 2));
+    int x2 = std::min(img.cols - 1, int(cx + w / 2));
+    int y2 = std::min(img.rows - 1, int(cy + h / 2));
+
+    cv::Mat out;
+    cv::resize(img(cv::Rect(x1, y1, x2 - x1 + 1, y2 - y1 + 1)), out, cv::Size(80, 80));
+    return out;
+}
+
+// 모델 하나의 진짜 확률 (출력: 인쇄 위조, 진짜, 화면 위조)
+double fasReal(cv::dnn::Net &net, const cv::Mat &img, const cv::Rect &box, double scale)
+{
+    net.setInput(cv::dnn::blobFromImage(fasCrop(img, box, scale)));
+
+    cv::Mat out = net.forward().reshape(1, 1).clone();
+    double maxValue;
+    cv::minMaxLoc(out, 0, &maxValue);
+    cv::exp(out - maxValue, out);
+
+    return out.at<float>(0, 1) / cv::sum(out)[0];
+}
+
+// 얼굴이 진짜일 확률 (V2 2.7배, V1SE 4배 크롭 결과의 평균)
+double realScore(const cv::Mat &img, const cv::Rect &box)
+{
+    if (fasV2.empty() || fasV1SE.empty() || box.width <= 0 || box.height <= 0)
+        return 0.0;
+
+    try
+    {
+        return (fasReal(fasV2, img, box, 2.7) + fasReal(fasV1SE, img, box, 4.0)) / 2;
+    }
+    catch (const cv::Exception &)
+    {
+        return 0.0;
+    }
+}
+
+
+// 이미지에서 얼굴 하나를 골라 검출 결과(한 줄 15개 값: 박스, 눈/코/입 위치, 점수)와 박스를 돌려줌
 bool detectFace(
     const cv::Mat &img,
     cv::Mat *bestFace,
@@ -198,12 +250,7 @@ bool detectFace(
         return false;
 
 
-    /*
-     * 여러 얼굴이 발견되면
-     * - 카메라 화면(useZone): 인식 구역 안의 충분히 큰 얼굴 중 가장 큰 얼굴
-     *   (키오스크 바로 앞에 선 사람)
-     * - 등록 사진: confidence가 가장 높은 얼굴
-     */
+    // 카메라 화면은 구역 안의 가장 큰 얼굴, 등록 사진은 점수가 가장 높은 얼굴
     cv::Rect zone = zoneRect(img.size());
     int minWidth = cvRound(img.cols * MIN_FACE_W);
     bool tooFar = false;
@@ -291,7 +338,7 @@ bool detectFace(
     return true;
 }
 
-// 얼굴 이미지 → SFace 특징 벡터
+// 이미지에서 얼굴을 찾아 SFace 특징 벡터로 변환
 bool extractFeature(
     const cv::Mat &img,
     cv::Mat *feature,
@@ -344,7 +391,7 @@ bool extractFeature(
         !feature->empty();
 }
 
-// DB에 등록된 얼굴들을 메모리에 학습
+// 서버에서 새로 등록된 얼굴 사진을 받아 특징 벡터로 저장
 bool train(QString *err)
 {
     if (!loadModels(err))
@@ -476,34 +523,35 @@ bool train(QString *err)
 }
 
 
-/*
- * 현재 카메라 이미지의 얼굴을
- * 등록된 얼굴들과 비교
- */
+// 카메라 이미지의 얼굴을 등록된 얼굴들과 비교하고 위조 여부도 판별
 bool recognizeFace(
     const cv::Mat &img,
     int *userId,
     double *score,
     cv::Rect *box,
     FaceState *state,
-    std::vector<cv::Rect> *ignored)
+    std::vector<cv::Rect> *ignored,
+    double *real)
 {
     cv::Mat feature;
+    cv::Rect faceBox;
 
 
-    /*
-     * 현재 얼굴의 SFace 특징 벡터 추출
-     */
     if (!extractFeature(
             img,
             &feature,
-            box,
+            &faceBox,
             true,
             state,
             ignored))
     {
         return false;
     }
+
+    if (box)
+        *box = faceBox;
+    if (real)
+        *real = realScore(img, faceBox);
 
 
     double bestScore = -1.0;
@@ -542,12 +590,13 @@ bool recognizeFace(
         bestScore >= MIN_COSINE;
 }
 
-// 백그라운드 인식 결과 한 번
+// 프레임 한 장의 인식 결과
 struct Result
 {
     bool known = false;
     int label = -1;
     double score = 0.0;
+    double real = 0.0;
     cv::Rect box;
     FaceState state = FACE_NONE;
     std::vector<cv::Rect> ignored;
@@ -555,27 +604,17 @@ struct Result
 
 }
 
-/*
- * 카메라 + 백그라운드 인식 스레드
- *
- * 얼굴 찾기(YuNet)와 얼굴 비교(SFace)는 한 번에 0.2초 정도 걸려서
- * 화면 스레드에서 하면 카메라 화면이 초당 4~5번만 바뀐다.
- * 그래서 화면 스레드는 카메라를 읽어 그리기만 하고(30fps),
- * 인식은 이 스레드가 가장 최근 프레임으로 하고 결과만 넘겨 준다.
- * 인식이 끝나기 전에 들어온 프레임은 최신 것 하나만 남기고 버린다.
- */
+// 카메라 + 백그라운드 인식 스레드
 struct Face::Cam
 {
     cv::VideoCapture cap;
     Result shown;
 
-    // 백그라운드 스레드 시작
     void start()
     {
         worker = std::thread(&Cam::run, this);
     }
 
-    // 인식할 최신 프레임 넘기기
     void push(const cv::Mat &img)
     {
         {
@@ -585,7 +624,6 @@ struct Face::Cam
         wake.notify_one();
     }
 
-    // 새 인식 결과가 있으면 r 에 담고 true
     bool take(Result *r)
     {
         std::lock_guard<std::mutex> lock(mutex);
@@ -596,7 +634,6 @@ struct Face::Cam
         return true;
     }
 
-    // 쌓여 있는 프레임과 결과를 버림
     void clear()
     {
         std::lock_guard<std::mutex> lock(mutex);
@@ -605,7 +642,6 @@ struct Face::Cam
         shown = Result();
     }
 
-    // 창을 닫을 때: 스레드에 멈추라고 알리고 끝날 때까지 기다림
     ~Cam()
     {
         {
@@ -633,7 +669,7 @@ private:
 
             Result r;
             try {
-                r.known = recognizeFace(img, &r.label, &r.score, &r.box, &r.state, &r.ignored);
+                r.known = recognizeFace(img, &r.label, &r.score, &r.box, &r.state, &r.ignored, &r.real);
             } catch (...) {
                 r = Result();
             }
@@ -665,7 +701,7 @@ struct Face::Cam
 #endif
 
 
-// 얼굴인식 창 초기화: 등록 얼굴을 불러오고 카메라를 열어 50ms 마다 tick 실행
+// 얼굴인식 창 초기화: 등록 얼굴을 불러오고 카메라를 열어 33ms 마다 tick 실행
 Face::Face(
     const QString &title,
     QWidget *parent,
@@ -725,13 +761,6 @@ Face::Face(
     else
     {
         m_cam = new Cam;
-
-        /*
-         * 카메라를 640x480 / MJPG / 30fps 로 연다.
-         * 그냥 open(0) 하면 카메라의 최대 해상도(C920: 2560x1472)를 압축 없이 받아
-         * 초당 2~5프레임밖에 안 나와 화면이 끊긴다.
-         * V4L2 로 못 열면 예전 방식(open(0))으로 연다.
-         */
         bool opened = m_cam->cap.open(0, cv::CAP_V4L2);
         if (opened)
         {
@@ -772,14 +801,14 @@ Face::Face(
 }
 
 
-// 카메라 닫기
+// 인식 스레드 종료 후 카메라 닫기
 Face::~Face()
 {
     delete m_cam;
     delete ui;
 }
 
-// 카메라 프레임 처리
+// 33ms 마다: 카메라 프레임을 읽어 인식 스레드에 넘기고, 결과를 반영해 화면에 그림
 void Face::tick()
 {
 #ifdef USE_OPENCV
@@ -791,7 +820,6 @@ void Face::tick()
     {
         return;
     }
-    // 인식을 MAX_TICKS 번 해도 못 찾으면 그만 (예전처럼 인식 횟수로 셈)
     if (m_ticks > MAX_TICKS)
     {
         m_timer->stop();
@@ -817,7 +845,6 @@ void Face::tick()
         return;
     }
 
-    // 인식은 백그라운드 스레드에 맡기고, 새 결과가 왔을 때만 연속 인식 횟수/안내 문구를 바꿈
     m_cam->push(img);
 
     Result &r = m_cam->shown;
@@ -825,7 +852,14 @@ void Face::tick()
     {
         ++m_ticks;
 
-        if (r.known &&
+        bool fake = r.state == FACE_OK && r.real < REAL_MIN;
+
+        if (fake)
+        {
+            m_last = -1;
+            m_hits = 0;
+        }
+        else if (r.known &&
             r.label == m_last)
         {
             ++m_hits;
@@ -841,11 +875,16 @@ void Face::tick()
             m_hits = 0;
         }
 
-        // 오른쪽 진행 막대: 연속 인식 횟수 (HITS 번이면 성공)
         ui->barHits->setMaximum(HITS);
         ui->barHits->setValue(qMin(m_hits, HITS));
 
-        if (r.known)
+        if (fake)
+        {
+            ui->lblStatus->setText(
+                "사진이나 화면은 사용할 수 없습니다. 실제 얼굴을 비춰 주세요."
+            );
+        }
+        else if (r.known)
         {
             ui->lblStatus->setText(
                 QString(
@@ -875,7 +914,6 @@ void Face::tick()
         }
     }
 
-    // 카메라 화면은 매 프레임 그림 (사각형은 마지막 인식 결과)
     cv::Rect zone = zoneRect(img.size());
     cv::Mat dark = img.clone();
     dark *= 0.4;
@@ -891,9 +929,11 @@ void Face::tick()
         r.box.height > 0)
     {
         cv::Scalar color =
-            r.known
-                ? cv::Scalar(0, 255, 0)
-                : cv::Scalar(0, 0, 255);
+            r.real < REAL_MIN
+                ? cv::Scalar(0, 140, 255)
+                : r.known
+                    ? cv::Scalar(0, 255, 0)
+                    : cv::Scalar(0, 0, 255);
 
         cv::rectangle(
             img,
@@ -903,9 +943,6 @@ void Face::tick()
         );
     }
 
-    /*
-     * BGR → RGB
-     */
     cv::Mat rgb;
 
     cv::cvtColor(
@@ -942,7 +979,7 @@ void Face::tick()
 }
 
 
-// [비밀번호로 로그인]: 카메라를 멈추고 비밀번호 로그인 창, 취소하면 다시 얼굴인식
+// [비밀번호로 로그인]: 인식을 멈추고 비밀번호 로그인 창, 취소하면 처음부터 다시 얼굴인식
 void Face::pwLogin()
 {
     bool running =
@@ -962,6 +999,8 @@ void Face::pwLogin()
     else if (running)
     {
         m_ticks = 0;
+        m_last = -1;
+        m_hits = 0;
 #ifdef USE_OPENCV
         m_cam->clear();
 #endif

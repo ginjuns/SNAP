@@ -11,8 +11,7 @@ Cart::Cart(QWidget *parent)
     : QWidget(parent), ui(new Ui::Cart), m_items(0)
 {
     ui->setupUi(this);
-    setAttribute(Qt::WA_StyledBackground);   // 공통 스타일의 패널 배경/테두리 적용
-    // 크기 조정(scaleUi)은 이 패널을 품은 회원 화면이 한 번에 해 줌 (여기서 또 하면 두 번 커짐)
+    setAttribute(Qt::WA_StyledBackground);
     QHeaderView *h = ui->table->horizontalHeader();
     h->setSectionResizeMode(QHeaderView::ResizeToContents);
     h->setSectionResizeMode(0, QHeaderView::Stretch);
@@ -149,7 +148,7 @@ bool Cart::checkSoldOut()
     return false;
 }
 
-// 서버에 결제 요청, 성공하면 ESP32 부저 / 카드 결제 실패면 CARD_FAIL
+// 서버에 결제 요청, 성공하면 ESP32 부저 / 카드 결제 실패면 CARD_STOP
 bool Cart::pay(int userId, const QString &method, QVariantMap *out, const QString &cardUid)
 {
     if (m_items->isEmpty()) {

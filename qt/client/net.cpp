@@ -4,7 +4,7 @@
 #include <QTcpSocket>
 
 static QString host = "127.0.0.1";
-static QString s_token; // 로그인한 사람의 토큰 (관리자 기능에 필요)
+static QString s_token;
 
 // 접속할 서버 IP 설정
 void Net::setHost(const QString &ip)
@@ -35,7 +35,7 @@ bool Net::call(const QString &cmd, const QVariantMap &args, QVariant *out, QStri
     }
     QJsonObject req = QJsonObject::fromVariantMap(args);
     req["cmd"] = cmd;
-    if (!s_token.isEmpty() && !req.contains("token"))
+    if (!req.contains("token") && !s_token.isEmpty())
         req["token"] = s_token;
     sock.write(pack(req));
 

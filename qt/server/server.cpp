@@ -78,8 +78,6 @@ void Server::onRead()
         return;
     m_busy.insert(raw);
     QPointer<QTcpSocket> sock = raw;
-
-    // 같은 PC(키오스크 화면)에서 온 요청인지. 얼굴인식 로그인 토큰은 여기에만 발급
     bool local = sock->peerAddress().isLoopback();
     for (;;) {
         QByteArray &buf = m_buf[sock];
@@ -97,7 +95,7 @@ void Server::onRead()
             break;
         }
         QJsonObject res = handle(req, local);
-        if (!sock || !m_buf.contains(sock))   // 처리하는 동안 접속이 끊김 (onClose 가 버퍼를 지움)
+        if (!sock || !m_buf.contains(sock))
             break;
         sock->write(pack(res));
     }
@@ -210,7 +208,7 @@ static QString change(double cur, double old)
     return QString("%1%2%").arg(pct > 0 ? "+" : "").arg(pct);
 }
 
-// 변화율 칸 HTML (증가는 초록, 감소는 빨강)
+// 변화율 칸 HTML
 static QString changeCell(double cur, double old)
 {
     QString text = change(cur, old);
@@ -235,17 +233,11 @@ static QString bullets(const QJsonArray &list, bool numbered = false)
 }
 
 // AI_REPORT: 고른 날짜의 일/주/월 매출 리포트
-//  - 숫자(핵심 지표, 상품별 판매, 재고)는 서버가 계산해서 표로 보여 주고
-//  - AI(Groq)는 그 숫자를 근거로 한 줄 요약, 잘된 점, 살펴볼 점, 재고·발주, 할 일만 작성
-//  - AI 가 실패해도 숫자 표는 그대로 보여 줌
-//  - 가로 화면용으로 kpiHtml(왼쪽 숫자) / aiHtml(오른쪽 AI 분석)을 나눠서 돌려줌
 static bool aiReport(DB *db, const QString &unit, const QString &date, QVariant *out, QString *err)
 {
     QDate d = QDate::fromString(date, "yyyy-MM-dd");
     if (!d.isValid())
         d = QDate::currentDate();
-
-    // 기간: 일별은 그날, 주별은 그 주 월~일, 월별은 그 달. 이전 기간은 바로 앞 같은 단위
     QDate from = d, end = d.addDays(1), prev = d.addDays(-1);
     QString name = QLocale().toString(d, "yyyy년 M월 d일 (ddd)"), prevName = "전날";
     if (unit == "week") {
@@ -266,7 +258,6 @@ static bool aiReport(DB *db, const QString &unit, const QString &date, QVariant 
         *err = "아직 오지 않은 기간은 리포트를 만들 수 없습니다.";
         return false;
     }
-    // 진행 중인 기간(오늘, 이번 주, 이번 달)은 지금까지만, 이전 기간도 같은 경과 시간만큼만 비교
     bool partial = QDateTime(end) > now;
     QDateTime to = partial ? now : QDateTime(end);
     QDateTime prevTo = partial ? QDateTime(prev).addSecs(QDateTime(from).secsTo(now)) : QDateTime(from);
@@ -284,7 +275,6 @@ static bool aiReport(DB *db, const QString &unit, const QString &date, QVariant 
     int orders = cur.value("orders").toInt(), oldOrders = old.value("orders").toInt();
     int avg = orders ? total / orders : 0, oldAvg = oldOrders ? oldTotal / oldOrders : 0;
 
-    // ---- 핵심 지표 표 ----
     QString html = QString("<h3>%1 매출 리포트</h3>").arg(name.toHtmlEscaped());
     html += QString("<p style='color:#888'>비교 기준: %1</p>").arg(prevName);
     html += "<table width=100% cellspacing=0 cellpadding=6 border=1 style='border-color:#a8dca8'>"
@@ -308,8 +298,6 @@ static bool aiReport(DB *db, const QString &unit, const QString &date, QVariant 
                     .arg(changeCell(k.cur, k.old));
     }
     html += "</table>";
-
-    // ---- 상품별 비교 (AI 에도 같은 숫자를 넘김) ----
     QMap<QString, int> oldQty;
     foreach (const QVariant &v, old.value("products").toList())
         oldQty[v.toMap().value("name").toString()] = v.toMap().value("qty").toInt();
@@ -340,7 +328,6 @@ static bool aiReport(DB *db, const QString &unit, const QString &date, QVariant 
             unsold << pname;
     }
 
-    // 매출이 가장 많은 시간대
     QString peak;
     int peakAmount = 0;
     foreach (const QVariant &v, cur.value("hours").toList()) {
@@ -351,7 +338,6 @@ static bool aiReport(DB *db, const QString &unit, const QString &date, QVariant 
         }
     }
 
-    // ---- AI 분석 ----
     QVariantMap data;
     data["기간"] = name;
     data["비교 기준"] = prevName;
@@ -684,6 +670,14 @@ static bool adminOnly(const QString &cmd)
     return cmds.contains(cmd);
 }
 
+// 키오스크 화면(같은 PC)만 쓸 수 있는 명령 (얼굴 로그인, 얼굴 사진 목록, 결제)
+// 본인 확인 없이 회원 번호만으로 처리하므로 다른 PC 에서 오면 거절
+static bool kioskOnly(const QString &cmd)
+{
+    static const QSet<QString> cmds{"LOGIN", "FACES", "PAY"};
+    return cmds.contains(cmd);
+}
+
 // 요청 하나 처리: cmd 에 따라 DB/AI 함수 호출 후 {ok, data | error} 응답 생성
 QJsonObject Server::handle(const QJsonObject &req, bool local)
 {
@@ -692,12 +686,14 @@ QJsonObject Server::handle(const QJsonObject &req, bool local)
     QString err;
     bool ok = false;
 
-    if (adminOnly(cmd) && !checkAdmin(req, &err)) {
+    if (kioskOnly(cmd) && !local) {
+        err = "키오스크에서만 사용할 수 있는 기능입니다.";
+    } else if (adminOnly(cmd) && !checkAdmin(req, &err)) {
         // 권한 없음: 아래 처리를 건너뛰고 오류 응답
     } else if (cmd == "LOGIN") {
-        // 얼굴인식 로그인은 키오스크 화면(같은 PC)에서만 토큰을 받음
+        // 얼굴인식 로그인 (키오스크 화면에서만 옴)
         ok = m_db->user(num(req, "userId"), &data, &err);
-        if (ok && local)
+        if (ok)
             addToken(&data, newToken(num(req, "userId")));
     } else if (cmd == "PASSWORD_LOGIN") {
         ok = m_db->login(req.value("loginId").toString(), req.value("password").toString(), &data, &err);
@@ -721,7 +717,6 @@ QJsonObject Server::handle(const QJsonObject &req, bool local)
         }
         QList<QByteArray> faces;
         ok = ok && readFaces(req, &faces, &err);
-        // adminCode 가 없거나 비어 있으면 일반 회원, 있으면 맞아야만 관리자로 가입 (숫자로 보내도 됨)
         QJsonValue code = req.value("adminCode");
         QString adminCode = (code.isDouble() ? QString::number(code.toVariant().toLongLong())
                                              : code.toString()).trimmed();
@@ -734,7 +729,6 @@ QJsonObject Server::handle(const QJsonObject &req, bool local)
                               req.value("password").toString(), req.value("phone").toString(),
                               role, faces, &data, &err);
     } else if (cmd == "CHECK_ID") {
-        // 아이디 중복 확인: {loginId} -> {loginId, available, message}
         QString id = req.value("loginId").toString().trimmed();
         bool available = false;
         if (id.isEmpty())
@@ -763,7 +757,6 @@ QJsonObject Server::handle(const QJsonObject &req, bool local)
              && m_db->addProduct(req.value("name").toString(), num(req, "price"),
                                  num(req, "stock"), num(req, "shelf"), img, &err);
     } else if (cmd == "UPDATE_PRODUCT") {
-        // 보낸 항목만 바꿈 (null 이나 빈 사진은 '바꾸지 않음')
         QVariantMap f;
         if (has(req, "name"))
             f["name"] = req.value("name").toString();

@@ -83,7 +83,7 @@ Admin::Admin(QWidget *parent)
     : QWidget(parent), ui(new Ui::Admin), m_imgChanged(false)
 {
     ui->setupUi(this);
-    setAttribute(Qt::WA_StyledBackground);   // 공통 스타일의 화면 배경색 적용
+    setAttribute(Qt::WA_StyledBackground);
     scaleUi(this);
     connect(ui->btnLogout, SIGNAL(clicked()), SIGNAL(done()));
 
@@ -125,15 +125,11 @@ Admin::Admin(QWidget *parent)
     connect(ui->btnNext, SIGNAL(clicked()), SLOT(next()));
     connect(ui->btnToday, SIGNAL(clicked()), SLOT(today()));
 
-    // 숫자 칸(시간/카드/얼굴인식/합계)은 내용 크기만큼, 남는 폭은 상품 칸이 사용 (가로 화면에서 잘리지 않게)
     ui->tableDetail->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
     ui->tableDetail->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
-    // 표가 좌우로 움직이지 않게: 가로 스크롤바는 끄고, 세로 스크롤바는 항상 보이게 해서
-    // 줄이 많아져도 표 폭이 바뀌지 않도록 함 (폭이 줄면 그만큼 좌우로 밀리던 문제)
     ui->tableDetail->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     ui->tableDetail->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
     touchScroll(ui->tableDetail);
-    // 가로 화면: 왼쪽 세로 메뉴 버튼을 누르면 오른쪽 화면(stack)을 바꿈
     ui->lblLogo->setPixmap(QPixmap(":/images/snap_logo.png")
                                .scaled(px(40), px(40), Qt::KeepAspectRatio, Qt::SmoothTransformation));
     QList<QPushButton *> menu;
@@ -158,7 +154,6 @@ Admin::Admin(QWidget *parent)
         c->setView(new QListView);
         c->setStyleSheet(css("QComboBox QAbstractItemView::item { min-height: 48px; }"));
     }
-    // AI 리포트도 손가락으로 끌어서 스크롤 (글자 선택은 끔: 끌기가 선택으로 잡히지 않게)
     ui->textReport->setTextInteractionFlags(Qt::NoTextInteraction);
     ui->textKpi->setTextInteractionFlags(Qt::NoTextInteraction);
     touchScroll(ui->textReport);
@@ -176,7 +171,7 @@ Admin::~Admin()
 // 관리자가 로그인할 때마다 이전 관리자가 보던 화면을 모두 처음 상태로 되돌린다.
 void Admin::start(const QVariantMap &user)
 {
-    ui->lblWelcome->setText(user.value("name").toString());   // 왼쪽 메뉴 "SNAP 관리자" 아래 이름
+    ui->lblWelcome->setText(user.value("name").toString());
     ui->btnMenuProduct->setChecked(true);
     ui->stack->setCurrentIndex(0);
 
@@ -203,7 +198,7 @@ void Admin::start(const QVariantMap &user)
     ui->textReport->clear();
     ui->textKpi->clear();
 
-    // AI 상담: 대화 내용과 추천 질문 지우기 (기다리던 답이 오면 버리도록 대화 번호 증가)
+    // AI 상담: 대화 내용과 추천 질문 지우기
     ++m_chat;
     for (int i = ui->layoutChat->count() - 1; i >= 0; --i) {
         QLayoutItem *item = ui->layoutChat->itemAt(i);
@@ -417,7 +412,6 @@ void Admin::onSelect()
     ui->editName->setText(p.value("name").toString());
     ui->editPrice->setText(QString::number(p.value("price").toInt()));
     ui->editStock->setText(QString::number(p.value("stock").toInt()));
-    // 지금 없는 진열대 번호(예전에 쓰던 5·6번)는 '선택 안 함'으로 (저장하면 정리됨)
     int shelf = p.value("shelf").toInt();
     ui->comboShelf->setCurrentIndex(shelf <= SHELF_COUNT ? shelf : 0);
 
@@ -456,6 +450,16 @@ void Admin::loadProducts()
             s += " (비어 있음)";
         ui->tableProduct->setItem(i, 3, cell(s));
     }
+
+    // 판매 예측의 상품 선택 목록도 같이 갱신 (상품을 추가/수정/삭제해도 바로 반영)
+    int selected = ui->comboProduct->currentData().toInt();
+    ui->comboProduct->clear();
+    ui->comboProduct->addItem("전체 상품", 0);
+    foreach (const QVariant &v, m_list) {
+        QVariantMap m = v.toMap();
+        ui->comboProduct->addItem(m.value("name").toString(), m.value("id"));
+    }
+    ui->comboProduct->setCurrentIndex(qMax(0, ui->comboProduct->findData(selected)));
 }
 
 // 매출 확인이 월별 보기인지
@@ -528,7 +532,7 @@ void Admin::loadSales()
 
     // 일별은 시간대, 월별은 날짜마다 상품별로 묶어서 결제수단별 판매량을 보여 준다.
     struct Sold { int cardQty, cardAmt, faceQty, faceAmt; };
-    QMap<QString, QMap<QString, Sold> > groups;   // 시간대(날짜) -> 상품 -> 판매량
+    QMap<QString, QMap<QString, Sold> > groups;
     int qtySum = 0;
     foreach (const QVariant &v, res.value("details").toList()) {
         QVariantMap m = v.toMap();
@@ -582,7 +586,7 @@ void Admin::loadSales()
     // 내용이 표 폭보다 넓으면 모든 칸을 표 폭에 나눠 맞춤 (가로 스크롤 없이 한 화면에 보이게)
     QHeaderView *hd = ui->tableDetail->horizontalHeader();
     hd->setSectionResizeMode(QHeaderView::Interactive);
-    ui->tableDetail->resizeColumnsToContents();   // 내용에 필요한 폭을 먼저 재 봄
+    ui->tableDetail->resizeColumnsToContents();
     int need = hd->length();
     hd->setSectionResizeMode(QHeaderView::ResizeToContents);
     hd->setSectionResizeMode(1, QHeaderView::Stretch);
@@ -640,20 +644,13 @@ static void clearLayout(QLayout *layout)
     }
 }
 
-// AI 질문/판매 예측에서 고를 회원 목록과 상품 목록 준비
+// AI 상담에서 고를 회원 목록 준비 (상품 목록은 loadProducts 가 채움)
 void Admin::loadTargets()
 {
     QVariant data;
     QString err;
     if (Net::call("MEMBERS", QVariantMap(), &data, &err))
         m_members = data.toList();
-
-    ui->comboProduct->clear();
-    ui->comboProduct->addItem("전체 상품", 0);
-    foreach (const QVariant &v, m_list) {
-        QVariantMap m = v.toMap();
-        ui->comboProduct->addItem(m.value("name").toString(), m.value("id"));
-    }
 }
 
 // AI 리포트 생성: 고른 날짜의 일별/주별/월별 리포트를 받아 표시
@@ -725,7 +722,7 @@ void Admin::ask()
         args[target == 1 ? "productId" : "userId"] = ui->comboTarget->currentData();
     }
     args["question"] = text;
-    args["token"] = Net::token();   // 백그라운드에서 토큰을 읽지 않도록 미리 넣어 둠
+    args["token"] = Net::token();
 
     // 질문과 '분석 중'을 먼저 보여 주고, AI 답은 백그라운드에서 기다림 (그동안 화면이 멈추지 않음)
     if (m_asking)
@@ -741,7 +738,7 @@ void Admin::ask()
         QVariantMap r = watcher->result();
         watcher->deleteLater();
         m_asking = false;
-        if (chat != m_chat)   // 기다리는 사이 로그아웃 등으로 대화가 지워졌으면 버림
+        if (chat != m_chat)
             return;
         if (wait) {
             ui->layoutChat->removeWidget(wait);
@@ -765,7 +762,7 @@ void Admin::ask()
     }));
 }
 
-// 대화창 배치를 바로 끝내고 맨 아래로 스크롤 (배치가 밀린 채로 그려져 말풍선이 겹쳐 보이던 문제)
+// 대화창 배치를 바로 끝내고 맨 아래로 스크롤
 void Admin::flushChat()
 {
     for (int i = 0; i < 3; ++i) {
@@ -785,7 +782,6 @@ QLabel *Admin::addBubble(const QString &text, bool mine)
     lbl->setStyleSheet(css(mine ? "background: #1f7a43; color: white; border-radius: 12px; padding: 10px; font-size: 17px;"
                                 : "background: #cdffcd; color: #17301f; border-radius: 12px; padding: 10px; font-size: 17px;"));
 
-    // 크기는 실제로 그려질 글자(배율이 적용된 17px)로 계산 (글자가 잘리거나 엉뚱하게 줄바꿈되지 않게)
     QFont f = lbl->font();
     f.setPixelSize(px(17));
     lbl->setFont(f);

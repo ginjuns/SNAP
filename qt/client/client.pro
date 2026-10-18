@@ -12,6 +12,7 @@ TEMPLATE  = app
 INCLUDEPATH += ../server
 
 DEFINES += SERVER_SOURCE_DIR=\\\"$$clean_path($$PWD/../server)\\\"
+DEFINES += MODEL_DIR=\\\"$$clean_path($$PWD/models)\\\"
 
 HEADERS += ../server/packet.h \
           util.h \

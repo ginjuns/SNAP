@@ -33,8 +33,8 @@ static bool exists(const QString &name, int except, bool *found, QString *err)
     return true;
 }
 
-static const int MIN_FACES = 5;           // 회원가입에 필요한 얼굴 사진 수
-static const int MAX_CHARGE = 1000000;    // 한 번에 충전할 수 있는 최대 금액
+static const int MIN_FACES = 5;
+static const int MAX_CHARGE = 1000000;
 
 // 아이디 중복(UNIQUE) 위반이면 알맞은 문구로 바꿔서 err 에 넣음
 static QString dupMessage(const QSqlError &e)
@@ -114,8 +114,7 @@ static bool auth(const QString &id, const QString &pw, int *userId, QString *err
     return true;
 }
 
-// 매출 기록의 상품명. 상품이 삭제되면 product_id 가 NULL 이 되므로 앞에 "(삭제) " 를 붙임
-// (같은 이름으로 새로 등록한 상품과도 구분됨)
+// 매출 기록의 상품명. 상품이 삭제되면 product_id 가 NULL 이 되므로 앞에 (삭제) 를 붙임
 #define SOLD_NAME(t) "CASE WHEN " t "product_id IS NULL THEN CONCAT('(삭제) ', " t "product_name)" \
                      " ELSE " t "product_name END"
 
@@ -345,7 +344,6 @@ bool DB::topUp(int userId, int amount, const QString &paymentKey, const QString 
     if (!checkCharge(amount, err))
         return false;
 
-    // 잔액 증가와 충전 기록 저장은 함께 성공하거나 함께 취소
     QSqlQuery q;
     QSqlDatabase::database().transaction();
     q.prepare("UPDATE users SET balance = balance + ? WHERE id = ?");
@@ -379,8 +377,6 @@ bool DB::history(int userId, const QString &from0, const QString &to0, QVariant 
     }
     QDateTime from(fromDay);
     QDateTime to(toDay);
-
-    // 결제 한 번의 상품 줄들은 sold_at 이 같으므로 sold_at 으로 묶어 합계
     QSqlQuery q;
     q.prepare("SELECT sold_at, 'use', SUM(amount) FROM sales"
               " WHERE user_id = ? AND sold_at >= ? AND sold_at < ? GROUP BY sold_at"

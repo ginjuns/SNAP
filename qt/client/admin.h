@@ -59,8 +59,8 @@ private:
     bool m_imgChanged;
     QVariantList m_list;
     QVariantList m_members;
-    bool m_asking = false;   // AI 상담 답을 기다리는 중 (그동안 다른 질문은 무시)
-    int m_chat = 0;          // 대화를 지울 때마다 증가 (지운 뒤 도착한 답은 버림)
+    bool m_asking = false;
+    int m_chat = 0;
 };
 
 #endif

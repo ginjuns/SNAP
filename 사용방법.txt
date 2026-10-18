@@ -57,6 +57,7 @@ Qt Creator 에서 실행(Ctrl+R) 하거나 터미널에서 실행합니다.
 
    ./KioskClient                       키오스크 + 서버 함께 실행 (항상 전체 화면)
    ./KioskClient --host 192.168.0.10   다른 PC 의 서버에 접속 (서버는 안 켬)
+                                       (얼굴인식 로그인/결제는 서버와 같은 PC 에서만 됨)
    ./KioskClient --scale 1.2           화면 배율 직접 지정
 
 종료: Alt+F4

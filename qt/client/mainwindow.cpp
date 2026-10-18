@@ -8,13 +8,13 @@
 #include "popup.h"
 #include "util.h"
 
-// Wayland 세션인지 확인 (모니터 끄는 방법이 X11 과 다름)
+// Wayland 세션인지 확인
 static bool wayland()
 {
     return qgetenv("XDG_SESSION_TYPE") == "wayland";
 }
 
-// 모니터 켜기/끄기 (X11: xset, Wayland: Mutter DBus)
+// 모니터 켜기/끄기
 static void screenPower(bool on)
 {
     if (wayland()) {
@@ -92,7 +92,6 @@ void MainWindow::login()
         return;
 
     QVariantMap user = data.toMap();
-    // 같은 PC 서버면 LOGIN 응답에 토큰이 옴. 없으면 비밀번호 로그인 때 받은 토큰을 그대로 씀
     if (user.contains("token"))
         Net::setToken(user.value("token").toString());
     user["pwLogin"] = face.byPassword();

@@ -5,7 +5,7 @@
 #include "popup.h"
 #include "util.h"
 
-static const int COLS = 4;        // 가로 화면: 상품 4열
+static const int COLS = 4;
 static const int IMG_SIZE = 150;
 
 // 회원 화면 초기화: 버튼 연결, 결제가 끝나면 처음 화면으로, 진열대 상태가 바뀌면 상품 목록 다시 그리기
@@ -13,7 +13,7 @@ Member::Member(QWidget *parent)
     : QWidget(parent), ui(new Ui::Member), m_down(0)
 {
     ui->setupUi(this);
-    setAttribute(Qt::WA_StyledBackground);   // 공통 스타일의 화면 배경색 적용
+    setAttribute(Qt::WA_StyledBackground);
     scaleUi(this);
     touchScroll(ui->scroll);
     ui->lblLogo->setPixmap(QPixmap(":/images/snap_logo.png")

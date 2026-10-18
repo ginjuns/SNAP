@@ -57,7 +57,6 @@ int popup(QDialog *dlg, bool full)
     if (full) {
         dlg->setGeometry(bg.rect());
     } else {
-        // .ui 의 기본 크기는 화면 배율이 반영되지 않으므로, 내용에 필요한 크기만큼은 키운 뒤 화면 안으로 제한
         dlg->resize(dlg->size().expandedTo(dlg->sizeHint()).boundedTo(bg.size()));
         QPoint p = moved ? bg.mapFromGlobal(pos) : bg.rect().center() - dlg->rect().center();
         p.setX(qBound(0, p.x(), bg.width() - dlg->width()));
@@ -78,7 +77,7 @@ static int msg(char kind, QWidget *parent, const QString &title, const QString &
 {
     QDialog dlg(parent);
     dlg.setObjectName("msgBox");
-    dlg.setProperty("card", true);   // popup() 이 사각 배경을 칠하지 않도록 (둥근 카드 모서리)
+    dlg.setProperty("card", true);
     dlg.setWindowTitle(title);
     QVBoxLayout *outer = new QVBoxLayout(&dlg);
     outer->setContentsMargins(0, 0, 0, 0);
@@ -120,7 +119,7 @@ static int msg(char kind, QWidget *parent, const QString &title, const QString &
     }
     if (!okText.isEmpty()) {
         QPushButton *ok = new QPushButton(okText);
-        ok->setObjectName("btnOk");   // 공통 스타일의 초록 강조 버튼
+        ok->setObjectName("btnOk");
         ok->setDefault(true);
         QObject::connect(ok, SIGNAL(clicked()), &dlg, SLOT(accept()));
         buttons->addWidget(ok);
