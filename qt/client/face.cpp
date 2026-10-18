@@ -16,7 +16,7 @@
 
 namespace {
 
-const double MIN_COSINE = 0.7;  //0.5랑 별차이는 없어보임
+const double MIN_COSINE = 0.75;  //0.7이랑 차이가 눈에 보임
 const int HITS = 5;
 const int MAX_TICKS = 600;
 
