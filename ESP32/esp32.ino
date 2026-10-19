@@ -1,3 +1,4 @@
+
 /*
 * 키오스크
 * 
@@ -49,6 +50,8 @@
 * - 결제 실패음 추가
 * - 키오스크 화면 깨우기 상태머신 파라미터 조정
 *
+* [2026-10-19]
+* - 화면 깨우기 센서 초음파에서 ToF로 변경하여 코드 수정
 */
 
 #include <Arduino.h>
@@ -161,7 +164,7 @@ struct SensorConfig {
   uint32_t cooldownDurationMs;                                   // COOLDOWN 유지 기간 (재접근 유예 시간)
 };
 
-const SensorConfig sensorCfg = { 90, 110, 2, 300, 100, 30, 3500, 30, 5000 }; // 0.1초*30 = 3초
+const SensorConfig sensorCfg = { 60, 80, 10, 300, 100, 20, 2500, 30, 3000 };
 
 const float FAR_DISTANCE = 999.0;                                // 측정 무효 값
 const uint32_t SUCCESS_SCREEN_TIME = 3000;                       // 결제 성공 화면 유지 시간
@@ -194,7 +197,7 @@ struct ShelfConfig {
 };
 
 constexpr ShelfConfig shelfCfg = { 0x70, 200, 3 };
-constexpr uint16_t presentMm[numSlot] = { 330, 330, 310, 293};
+constexpr uint16_t presentMm[numSlot] = { 295, 295, 310, 290};
 
 /* 슬롯 상태*/
 struct SlotState {
@@ -215,6 +218,10 @@ Adafruit_VL53L0X lox[numSlot];                                   // VL53L0X 거�
 MFRC522 mfrc522(PIN_RFID_SS, PIN_RFID_RST);                      // RFID 리더 객체
 WiFiClient espClient;                                            // Wi-Fi 통신 객체
 
+Adafruit_VL53L0X wakeLox;                                        // 화면 깨우기용 VL53L0X
+constexpr uint8_t WAKE_TOF_CH = 4;                               // 깨우기용 ToF가 연결된 PCA9548A 채널
+SemaphoreHandle_t i2cMutex;                                      // I2C 버스 순서 지키기 (진열대 ToF + 깨우기 ToF)
+
 constexpr uint8_t ledsPerPiece = 1; 
 Adafruit_NeoPixel strip[numSlot] = {
   { ledsPerPiece, PIN_NEO1, NEO_GRB + NEO_KHZ800 },
@@ -230,14 +237,16 @@ void setup() {
   initLed();
   initBuzzer();
   initRfid();
-  initPresenceHardware();
+  //initPresenceHardware();
+
+  i2cMutex = xSemaphoreCreateMutex();                            // I2C 뮤텍스 생성
 
   /*Queue 생성*/
   kioskQueue = xQueueCreate(12, sizeof(KioskEvent));
   outQueue = xQueueCreate(8, sizeof(OutCmd));
   serverQueue = xQueueCreate(12, sizeof(ServerMsg));
 
-  initPresenceInterrupt();
+  //initPresenceInterrupt();
   initWifi();
   
   /*Tasks 생성*/
@@ -265,7 +274,7 @@ void initI2C() {
 }
 
 void selectTofChannel(uint8_t bus) {
-  if (bus >= numSlot) return;
+  if (bus > 7) return;
 
   Wire.beginTransmission(shelfCfg.pcaAddr);
   Wire.write(1 << bus);
@@ -282,13 +291,18 @@ void initTof() {
     }
   }
 
+  selectTofChannel(WAKE_TOF_CH);
+  if (!wakeLox.begin(0x29, false, &Wire)) {
+    Serial.println("Wake ToF Sensor Initialization Failed");
+  }
+  
   Serial.println("ToF Sensors Initialized");
 }
 
 void initLed() {
   for (uint8_t i = 0; i < numSlot; i++) {
     strip[i].begin();
-    strip[i].setBrightness(100);                                            // LED 밝기 (최대 255)
+    strip[i].setBrightness(200);                                            // LED 밝기 (최대 255)
     strip[i].show();
   }
   Serial.println("LED Initialized");
@@ -449,11 +463,14 @@ void ShelfTask(void *pvParameters) {
       slotStates[ch].hasItem = true;                                        // 3번 칸은 항상 "상품 있음"
       continue;
       }
+      
+      xSemaphoreTake(i2cMutex, portMAX_DELAY);                              // I2C 사용 시작
       selectTofChannel(ch);
 
       /*ToF 센서 거리 측정*/
       VL53L0X_RangingMeasurementData_t measure;
       VL53L0X_Error err = lox[ch].rangingTest(&measure, false);
+      xSemaphoreGive(i2cMutex);                                             // I2C 사용 끝
 
       /*측정 데이터 검사*/
       if (err == VL53L0X_ERROR_NONE && measure.RangeStatus != 4) {
@@ -478,12 +495,12 @@ void ShelfTask(void *pvParameters) {
       }
     }
 
-    //static uint32_t lastPrintMs = 0;                                        // 시리얼 모니터 테스트용
-    if (millis() - lastPrintMs >= 1000) {
+    static uint32_t lastPrintMs = 0;
+    /*if (millis() - lastPrintMs >= 1000) { // 시리얼 모니터 테스트용
       lastPrintMs = millis();
       Serial.printf("[TOF] 1번:%dmm  2번:%dmm  4번:%dmm\n",
         slotStates[0].lastDistanceMm, slotStates[1].lastDistanceMm, slotStates[3].lastDistanceMm);
-    }
+    }*/
 
     /*진열대 비트마스크 상태 업데이트*/
     uint8_t currentMask = updateShelfMask();
@@ -515,31 +532,22 @@ void ShelfTask(void *pvParameters) {
   }
 }
 
+/*ToF 센서로 화면 깨우기*/
 void PresenceTask(void *pvParameters) {
   for (;;) {
-    /*측정 준비*/
-    sharedRes.doneFlag = false;
-    sharedRes.echoReady = true;
-
-    digitalWrite(PIN_TRIG, LOW);
-    delayMicroseconds(2);
-    digitalWrite(PIN_TRIG, HIGH);
-    delayMicroseconds(10);
-    digitalWrite(PIN_TRIG, LOW);
-
-    /*측정 완료*/
-    uint32_t waitStart = millis();
-    while (!sharedRes.doneFlag && millis() - waitStart < sensorCfg.echoTimeoutMs) {
-      vTaskDelay(pdMS_TO_TICKS(1));
-    }
+    /*깨우기용 ToF 거리 측정 (진열대 ToF와 I2C를 같이 사용하기 때문에 뮤텍스 사용)*/
+    xSemaphoreTake(i2cMutex, portMAX_DELAY);
+    selectTofChannel(WAKE_TOF_CH);
+    VL53L0X_RangingMeasurementData_t measure;
+    VL53L0X_Error err = wakeLox.rangingTest(&measure, false);
+    xSemaphoreGive(i2cMutex);
 
     /*거리 계산*/
     float distance;
-    if (sharedRes.doneFlag) {
-      distance = sharedRes.pulseDurationUs / 58.0;
+    if (err == VL53L0X_ERROR_NONE && measure.RangeStatus != 4) {
+      distance = measure.RangeMilliMeter / 10.0;
     } else {
-      sharedRes.echoReady = false;
-      distance = FAR_DISTANCE;
+      distance = FAR_DISTANCE;                                                      // 범위 밖 = 멀리 있음
     }
 
     // Serial.printf("[US] %.1fcm\n", distance); //시리얼 모니터 테스트용
@@ -723,13 +731,28 @@ void handleEvent(WakeEvent wakeEvent){
 }
 
 void updatePresence(float distance) {
+  /*[[[[시연용]]] 손으로 센서를 최소 거리 내에서 (0.1*5)초 가리면 바로 화면 끄기*/
+  static uint8_t closeCnt = 0;                                                        // 연속으로 최소 거리 미만이 나온 횟수
+  if (distance < sensorCfg.minDistanceCm) {
+    closeCnt++;
+  } else {
+    closeCnt = 0;
+  }
+  if (closeCnt >= 5 && (wake.state == WakeState::ACTIVE || wake.state == WakeState::COOLDOWN)) {
+    closeCnt = 0;
+    sendKioskEvent(KioskEvent::PERSON_ABSENT);
+    sendToServer("person:0");
+    enterState(WakeState::IDLE);
+    return;
+  }
+
   if (distance < sensorCfg.minDistanceCm || distance > sensorCfg.maxDistanceCm) {     // 측정 범위를 초과하면 무효
     distance = FAR_DISTANCE;
   }
 
   switch (wake.state) {
     case WakeState::IDLE:
-      if (distance <= sensorCfg.detectCm) {                                           // 일정 거리 이내로 감지되면 '움직임 감지' 발생
+      if (millis() - wake.enteredTimeMs > 1000 && distance <= sensorCfg.detectCm) {   // 일정 거리 이내로 감지되면 '움직임 감지' 발생
         handleEvent(WakeEvent::MOTION_DETECTED);
       }
       break;
@@ -755,7 +778,7 @@ void updatePresence(float distance) {
       break;
 
     case WakeState::COOLDOWN:
-      if (distance <= sensorCfg.detectCm) {                                           // 유예 시간 내에 사람이 다시 진입하면 '움직임 감지' 발생
+      if (distance <= sensorCfg.releaseCm) {                                           // 유예 시간 내에 사람이 다시 진입하면 '움직임 감지' 발생
         handleEvent(WakeEvent::MOTION_DETECTED); 
       } else if (millis() - wake.enteredTimeMs >= sensorCfg.cooldownDurationMs) {     // 유예 시간 내에 아무도 오지 않으면 '시간 초과' 발생
         handleEvent(WakeEvent::TIMEOUT);
@@ -763,4 +786,3 @@ void updatePresence(float distance) {
       break;
     }
 }
-
