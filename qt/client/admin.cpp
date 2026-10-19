@@ -80,7 +80,7 @@ static void setIcon(QPushButton *btn, Icon type)
 
 // 콤보박스를 터치하기 쉬운 토글 버튼 묶음(일별 | 월별)으로 바꿔 보여 줌
 // 콤보박스는 숨겨서 그대로 두고 값만 버튼과 맞춤 (선택 로직은 콤보박스 그대로 사용)
-static void segment(QComboBox *combo)
+static QFrame *segment(QComboBox *combo)
 {
     QFrame *box = new QFrame;
     box->setObjectName("segment");
@@ -101,14 +101,15 @@ static void segment(QComboBox *combo)
                      group, [group](int i) { if (group->button(i)) group->button(i)->setChecked(true); });
     combo->setProperty("segment", QVariant::fromValue<QObject *>(group));
 
-    foreach (QBoxLayout *l, combo->parentWidget()->findChildren<QBoxLayout *>()) {
-        int at = l->indexOf(combo);
-        if (at >= 0) {
-            l->insertWidget(at, box);
+    // 콤보박스가 있던 자리(가로/세로/폼 레이아웃 모두)에 토글 묶음을 넣음
+    foreach (QLayout *l, combo->parentWidget()->findChildren<QLayout *>()) {
+        if (l->indexOf(combo) >= 0) {
+            delete l->replaceWidget(combo, box);
             break;
         }
     }
     combo->hide();
+    return box;
 }
 
 // 신호를 막고 콤보박스 값을 바꿨을 때 토글 버튼도 맞춤
@@ -134,11 +135,11 @@ Admin::Admin(QWidget *parent)
     ui->editStock->setValidator(new QIntValidator(0, 1000000, ui->editStock));
     Keyboard::attach(ui->editStock, Keyboard::Number, "재고 수량 입력 (개)");
 
-    ui->comboShelf->addItem("선택 안 함");
+    // 진열대: 없음 | 1번 | 2번 | 3번 | 4번 토글 (입력 폼 폭에 맞게 버튼을 균등하게 나눔)
+    ui->comboShelf->addItem("없음");
     for (int i = 1; i <= SHELF_COUNT; ++i)
         ui->comboShelf->addItem(QString("%1번").arg(i));
-    ui->comboShelf->setView(new QListView);
-    ui->comboShelf->setStyleSheet(css("QComboBox QAbstractItemView::item { min-height: 48px; }"));
+    segment(ui->comboShelf)->setStyleSheet(css("QPushButton { padding: 0 4px; min-width: 0px; }"));
 
     ui->lblImage->setText(NO_IMAGE);
     ui->lblImage->installEventFilter(this);
