@@ -52,6 +52,7 @@
 *
 * [2026-10-19]
 * - 화면 깨우기 센서 초음파에서 ToF로 변경하여 코드 수정
+* - 시연용으로 화면 깨우기 조건문 수정
 */
 
 #include <Arduino.h>
@@ -158,13 +159,12 @@ struct SensorConfig {
   uint16_t minDistanceCm;                                        // 최소 거리
   uint16_t maxDistanceCm;                                        // 최대 거리
   uint32_t intervalMs;                                           // 측정 주기
-  uint32_t echoTimeoutMs;                                        // ECHO 대기 시간
   uint32_t preWakeMs;                                            // PRE_WAKE 유지 시간 (존재 확인 대기 시간)
   uint8_t leaveCount;                                            // 연속 이탈 확정 횟수
   uint32_t cooldownDurationMs;                                   // COOLDOWN 유지 기간 (재접근 유예 시간)
 };
 
-const SensorConfig sensorCfg = { 60, 80, 10, 300, 100, 20, 2500, 30, 3000 };
+const SensorConfig sensorCfg = { 60, 80, 10, 300, 100, 2500, 20, 3000 };
 
 const float FAR_DISTANCE = 999.0;                                // 측정 무효 값
 const uint32_t SUCCESS_SCREEN_TIME = 3000;                       // 결제 성공 화면 유지 시간
