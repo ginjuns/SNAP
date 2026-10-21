@@ -944,7 +944,7 @@ void Face::tick()
     }
 
     cv::Mat rgb;
-
+    cv::flip(img,img,1);
     cv::cvtColor(
         img,
         rgb,
