@@ -196,7 +196,7 @@ struct ShelfConfig {
   uint8_t confirmCnt;                                            // 상품 유무가 바뀌려면 필요한 연속 확인 횟수
 };
 
-constexpr ShelfConfig shelfCfg = { 0x70, 200, 3 };
+constexpr ShelfConfig shelfCfg = { 0x70, 100, 3 };
 constexpr uint16_t presentMm[numSlot] = { 295, 295, 310, 290};
 
 /* 슬롯 상태*/
