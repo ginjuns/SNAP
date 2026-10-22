@@ -48,6 +48,7 @@ private:
     int row() const;
     bool readForm(QString *name, int *price, int *stock);
     bool monthly() const;
+    void markShelves();
 
     void loadTargets();
     QLabel *addBubble(const QString &text, bool mine);

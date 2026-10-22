@@ -449,6 +449,7 @@ void Admin::del()
 // 목록에서 상품을 고르면 입력칸과 사진에 그 상품 정보를 채움
 void Admin::onSelect()
 {
+    markShelves();
     int r = row();
     if (r < 0)
         return;
@@ -467,6 +468,23 @@ void Admin::onSelect()
     } else {
         ui->lblImage->setPixmap(QPixmap());
         ui->lblImage->setText(NO_IMAGE);
+    }
+}
+
+// 다른 상품이 이미 쓰는 진열대 버튼은 못 누르게 막음 (선택한 상품 자신의 진열대는 허용)
+void Admin::markShelves()
+{
+    QButtonGroup *group = qobject_cast<QButtonGroup *>(ui->comboShelf->property("segment").value<QObject *>());
+    if (!group)
+        return;
+    int r = row();
+    for (int i = 1; i <= SHELF_COUNT; ++i) {
+        bool used = false;
+        for (int j = 0; j < m_list.size(); ++j)
+            if (j != r && m_list.at(j).toMap().value("shelf").toInt() == i)
+                used = true;
+        if (group->button(i))
+            group->button(i)->setEnabled(!used);
     }
 }
 
@@ -504,6 +522,7 @@ void Admin::loadProducts()
         ui->comboProduct->addItem(m.value("name").toString(), m.value("id"));
     }
     ui->comboProduct->setCurrentIndex(qMax(0, ui->comboProduct->findData(selected)));
+    markShelves();
 }
 
 // 매출 확인이 월별 보기인지
