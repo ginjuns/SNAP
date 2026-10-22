@@ -119,11 +119,25 @@ static bool auth(const QString &id, const QString &pw, int *userId, QString *err
                      " ELSE " t "product_name END"
 
 // 진열대 번호 검사, 0(선택 안 함)이면 DB 에 NULL 로 저장
-static bool shelfValue(int shelf, QVariant *v, QString *err)
+// 다른 상품(except 제외)이 이미 쓰는 진열대면 거부
+static bool shelfValue(int shelf, int except, QVariant *v, QString *err)
 {
     if (shelf < 0 || shelf > SHELF_COUNT) {
         *err = QString("진열대 번호는 1~%1 이어야 합니다.").arg(SHELF_COUNT);
         return false;
+    }
+    if (shelf) {
+        QSqlQuery q;
+        q.prepare("SELECT name FROM products WHERE shelf = ? AND id <> ?");
+        q.addBindValue(shelf);
+        q.addBindValue(except);
+        if (!q.exec())
+            return fail(q, err);
+        if (q.next()) {
+            *err = QString("%1번 진열대는 이미 '%2' 상품이 사용 중입니다.")
+                       .arg(shelf).arg(q.value(0).toString());
+            return false;
+        }
     }
     *v = shelf ? QVariant(shelf) : QVariant(QVariant::Int);
     return true;
@@ -456,7 +470,7 @@ bool DB::addProduct(const QString &name0, int price, int stock, int shelf, const
         return false;
     }
     QVariant shelfVal;
-    if (!shelfValue(shelf, &shelfVal, err))
+    if (!shelfValue(shelf, 0, &shelfVal, err))
         return false;
     bool found = false;
     if (!exists(name, 0, &found, err))
@@ -525,7 +539,7 @@ bool DB::editProduct(int id, const QVariantMap &f, QString *err)
     }
     if (f.contains("shelf")) {
         QVariant shelfVal;
-        if (!shelfValue(f.value("shelf").toInt(), &shelfVal, err))
+        if (!shelfValue(f.value("shelf").toInt(), id, &shelfVal, err))
             return false;
         sets << "shelf = ?";
         vals << shelfVal;
