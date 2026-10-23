@@ -1,5 +1,8 @@
 package com.example.snapapp.ui.auth
 
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
+import com.example.snapapp.R
 import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -64,9 +67,18 @@ fun LoginScreen(
         modifier = Modifier
             .fillMaxSize()
             .systemBarsPadding()
-            .padding(horizontal = 24.dp)
+            .padding(horizontal = 12.dp)
     ) {
-        Spacer(modifier = Modifier.weight(1f))
+        Spacer(modifier = Modifier.height(20.dp))
+
+        Image(
+            painter = painterResource(R.drawable.logo),
+            contentDescription = "SNAP",
+            modifier = Modifier
+                .align(Alignment.CenterHorizontally)
+                .padding(bottom = 5.dp)
+                .size(200.dp)
+        )
 
         Text( // 아이디 입력
             "ID",
