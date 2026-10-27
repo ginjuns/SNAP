@@ -80,9 +80,29 @@ void ForecastChart::paintEvent(QPaintEvent *)
     p.drawLine(QPointF(today, area.top()), QPointF(today, area.bottom()));
     p.drawText(QPointF(today + px(4), area.top() + px(14)), "오늘");
     p.setPen(GRAY);
+    // 날짜는 오늘 칸을 기준으로 step 간격마다 표시 (오늘·마지막 날이 항상 보이게)
     int step = qMax(1, n / 7);
-    for (int i = 0; i < n; i += step) {
+    int last = n - 1;
+    int start = (n1 < n ? n1 : last) % step;
+    QList<int> marks;
+    for (int i = start; i < n; i += step)
+        marks << i;
+    if (marks.last() != last) {
+        if (last - marks.last() < step / 2 + 1 && marks.size() > 1)
+            marks.removeLast();
+        marks << last;
+    }
+    foreach (int i, marks) {
         QVariantMap m = (i < n1 ? m_past[i] : m_future[i - n1]).toMap();
-        p.drawText(QRectF(X(i) - slot * step / 2, area.bottom() + px(4), slot * step, px(20)),Qt::AlignHCenter | Qt::AlignTop, m.value("label").toString());
+        bool isToday = i == n1;
+        p.setPen(isToday ? INK : GRAY);
+        QRectF r(X(i) - slot * step / 2, area.bottom() + px(6), slot * step, px(20));
+        if (r.left() < area.left())
+            r.moveLeft(area.left());
+        if (r.right() > width())
+            r.moveRight(width());
+        p.drawText(r, Qt::AlignHCenter | Qt::AlignTop, m.value("label").toString());
+        p.setPen(GRID);
+        p.drawLine(QPointF(X(i), area.bottom()), QPointF(X(i), area.bottom() + px(4)));
     }
 }

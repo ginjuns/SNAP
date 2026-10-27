@@ -31,8 +31,11 @@ void Cart::setUser(const QVariantMap &user, QList<Item> *items)
 {
     m_user = user;
     m_items = items;
+    // 비밀번호로 로그인하면 잔액을 보여 주지 않음 (얼굴인식 로그인만 표시)
+    bool pwLogin = m_user.value("pwLogin").toBool();
     ui->lblBalance->setText(QString("충전 잔액 %1").arg(won(m_user.value("balance").toInt())));
-    ui->btnFace->setVisible(!m_user.value("pwLogin").toBool());
+    ui->lblBalance->setVisible(!pwLogin);
+    ui->btnFace->setVisible(!pwLogin);
     refresh();
 }
 
