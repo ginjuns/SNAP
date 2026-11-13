@@ -1003,6 +1003,7 @@ void Esp::send(const QString &cmd)
         return;
     }
     m_sock->write(cmd.toUtf8() + '\n');
+    qDebug("[ESP32] 보냄: %s", qPrintable(cmd));
 }
 
 // 결제 성공 효과음
