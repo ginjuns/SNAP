@@ -1,4 +1,3 @@
-
 /*
 * 키오스크
 * 
@@ -53,6 +52,12 @@
 * [2026-10-19]
 * - 화면 깨우기 센서 초음파에서 ToF로 변경하여 코드 수정
 * - 시연용으로 화면 깨우기 조건문 수정
+*
+* [2026-10-22]
+* - 카드 리더기 상시 활성화로 변경 (CARD_START/CARD_STOP 알림 제거)
+*
+* [2026-10-27]
+* - 손 가리기 제스처 순환: 일반 -> 절전 -> 발표모드(화면 상시 켜짐) -> 일반
 */
 
 #include <Arduino.h>
@@ -83,8 +88,8 @@
 // Buzzer
 #define PIN_BUZZER 25
 
-#define WIFI_SSID "OneTwo"
-#define WIFI_PASSWORD "12345678"
+#define WIFI_SSID "와이파이_이름"
+#define WIFI_PASSWORD "와이파이_비밀번호"
 #define SERVER_IP "192.168.0.6"
 #define SERVER_PORT 8000
 
@@ -94,7 +99,7 @@ enum class KioskState : uint8_t {
   SLEEP,                                                         // 비활성화
   ACTIVE,                                                        // 활성화
   PAYMENT_SELECT,                                                // 결제 수단 선택 화면
-  RFID_PAYMENT,                                                  // 카드 결제 진행 중 (RC522 대기)
+  RFID_PAYMENT,                                                  // 카드 결제 진행 중
   FACE_PAYMENT,                                                  // 얼굴 인식 결제 진행 중
   PAYMENT_SUCCESS                                                // 결제 성공 안내 화면
 };
@@ -144,12 +149,6 @@ struct OutCmd {
 /*ServerTask가 서버로 보낼 메시지*/
 struct ServerMsg {
   char line[96];                                                 // 서버로 보낼 메시지 한 줄
-};
-
-/*RFIDTask 깨우기*/
-enum CardCmd : uint8_t {
-  CARD_START = 1,                                                // 카드로 결제 on
-  CARD_STOP = 2                                                  // 카드로 결제 off
 };
 
 /*초음파 설정값*/
@@ -212,7 +211,6 @@ SlotState slotStates[numSlot];
 QueueHandle_t kioskQueue;                                        // 키오스크 관련
 QueueHandle_t outQueue;                                          // 출력 데이터 전달 큐
 QueueHandle_t serverQueue;                                       // 통신 데이터 전달 큐
-TaskHandle_t  rfidTaskHandle;                                    // RFID 태스크 관리 핸들
 
 Adafruit_VL53L0X lox[numSlot];                                   // VL53L0X 거리 센서 4개
 MFRC522 mfrc522(PIN_RFID_SS, PIN_RFID_RST);                      // RFID 리더 객체
@@ -253,7 +251,7 @@ void setup() {
   xTaskCreatePinnedToCore(KioskTask, "Kiosk", 4096, NULL, 3, NULL, 1);
   xTaskCreatePinnedToCore(ShelfTask, "Shelf", 4096, NULL, 3, NULL, 1);
   xTaskCreatePinnedToCore(PresenceTask, "Presence", 3072, NULL, 2, NULL, 1);
-  xTaskCreatePinnedToCore(RFIDTask, "RFID", 4096, NULL, 2, &rfidTaskHandle, 1);
+  xTaskCreatePinnedToCore(RFIDTask, "RFID", 4096, NULL, 2, NULL, 1);
   xTaskCreatePinnedToCore(OutputTask, "Output", 3072, NULL, 4, NULL, 1);
   xTaskCreatePinnedToCore(ServerTask, "Server", 6144, NULL, 3, NULL, 0);
 }
@@ -377,7 +375,6 @@ void handleEvent(KioskEvent ev) {
       if (ev == KioskEvent::PAY_START) {
         enterState(KioskState::PAYMENT_SELECT);
       } else if (ev == KioskEvent::SELECT_CARD) {                           // PAY_START 없이 바로 CARD_SELECT를 보냄...
-        xTaskNotify(rfidTaskHandle, CARD_START, eSetValueWithOverwrite);
         enterState(KioskState::RFID_PAYMENT);
       } else if (ev == KioskEvent::PERSON_ABSENT) {
         enterState(KioskState::SLEEP);
@@ -387,7 +384,6 @@ void handleEvent(KioskEvent ev) {
       break;
     case KioskState::PAYMENT_SELECT:                                        // 결제 수단 선택 -> 카드/얼굴인식/사람 이탈/취소
       if (ev == KioskEvent::SELECT_CARD) {
-        xTaskNotify(rfidTaskHandle, CARD_START, eSetValueWithOverwrite);    // 카드 리더기 활성화
         enterState(KioskState::RFID_PAYMENT);
       } else if (ev == KioskEvent::SELECT_FACE) {
         enterState(KioskState::FACE_PAYMENT);
@@ -399,12 +395,10 @@ void handleEvent(KioskEvent ev) {
       break;
     case KioskState::RFID_PAYMENT:                                          // 카드 결제 선택 -> 성공/실패/취소
       if (ev == KioskEvent::PAYMENT_SUCCESS) {
-        xTaskNotify(rfidTaskHandle, CARD_STOP, eSetValueWithOverwrite);     // 결제 성공 -> 카드 리더기 비활성화
         enterState(KioskState::PAYMENT_SUCCESS);
       } else if (ev == KioskEvent::PAYMENT_FAILED) {
         enterState(KioskState::RFID_PAYMENT);
       } else if (ev == KioskEvent::CANCEL) {
-        xTaskNotify(rfidTaskHandle, CARD_STOP, eSetValueWithOverwrite);     // 결제 취소 -> 카드 리더기 비활성화
         enterState(KioskState::ACTIVE);
       } 
       break;
@@ -560,40 +554,34 @@ void PresenceTask(void *pvParameters) {
   }
 }
 
+/*카드 리더기 (상시 동작)*/
 void RFIDTask(void *pvParameters) {
-  uint32_t cmd;
+  //Serial.println("[RFID] 리더기 상시 ON"); // 시리얼 모니터 테스트용
+
   for (;;) {
-    xTaskNotifyWait(0, UINT32_MAX, &cmd, portMAX_DELAY);                            // CARD_START 대기
-    if (cmd != CARD_START) continue;
-    //Serial.println("[RFID] 리더기 ON"); // 시리얼 모니터 테스트용
-
-    for (;;) {
-      if (xTaskNotifyWait(0, UINT32_MAX, &cmd, 0) == pdTRUE && cmd == CARD_STOP) {  // CARD_STOP 확인
-        //Serial.println("[RFID] 리더기 OFF"); // 시리얼 모니터 테스트용
-        break;
-      }
-      if (!mfrc522.PICC_IsNewCardPresent()) {                                       // 새 카드 있어?
-        vTaskDelay(pdMS_TO_TICKS(50));
-        continue;
-      }
-      if (!mfrc522.PICC_ReadCardSerial()) {                                         // 카드 읽었어?
-        vTaskDelay(pdMS_TO_TICKS(50));
-        continue;
-      }
-      
-      String uid = "";
-      for (byte i = 0; i < mfrc522.uid.size; i++) {
-        uid.concat(String(mfrc522.uid.uidByte[i] < 0x10 ? "0" : ""));
-        uid.concat(String(mfrc522.uid.uidByte[i], HEX));
-      }
-      uid.toUpperCase();
-
-      String line = "card:" + uid;
-      //Serial.println("[CARD] " + line); // 시리얼 모니터 테스트용
-      sendToServer(line.c_str());
-
-      mfrc522.PICC_HaltA();                                                         // 카드 리더기 통신 종료
+    if (!mfrc522.PICC_IsNewCardPresent()) {                                         // 새 카드 있어?
+      vTaskDelay(pdMS_TO_TICKS(50));
+      continue;
     }
+    if (!mfrc522.PICC_ReadCardSerial()) {                                           // 카드 읽었어?
+      vTaskDelay(pdMS_TO_TICKS(50));
+      continue;
+    }
+
+    String uid = "";
+    for (byte i = 0; i < mfrc522.uid.size; i++) {
+      uid.concat(String(mfrc522.uid.uidByte[i] < 0x10 ? "0" : ""));
+      uid.concat(String(mfrc522.uid.uidByte[i], HEX));
+    }
+    uid.toUpperCase();
+
+    String line = "card:" + uid;
+    //Serial.println("[CARD] " + line); // 시리얼 모니터 테스트용
+    sendToServer(line.c_str());
+
+    mfrc522.PICC_HaltA();                                                           // 카드 통신 종료
+    mfrc522.PCD_StopCrypto1();
+    vTaskDelay(pdMS_TO_TICKS(50));
   }
 }
 
@@ -731,18 +719,37 @@ void handleEvent(WakeEvent wakeEvent){
 }
 
 void updatePresence(float distance) {
-  /*[[[[시연용]]] 손으로 센서를 최소 거리 내에서 (0.1*5)초 가리면 바로 화면 끄기*/
+  /*[[[[시연용]]] 손으로 센서를 최소 거리 내에서 (0.1*5)초 가리면 모드 전환*/
+  /* 일반(화면 켜짐) -> 절전 -> 발표모드(사람 없어도 화면 상시 켜짐) -> 일반 */
   static uint8_t closeCnt = 0;                                                        // 연속으로 최소 거리 미만이 나온 횟수
+  static bool closeLatched = false;                                                   // 제스처 처리 후 손을 뗄 때까지 재인식 막기
+  static bool presentationMode = false;                                               // 발표모드 여부
   if (distance < sensorCfg.minDistanceCm) {
-    closeCnt++;
+    if (!closeLatched) closeCnt++;
   } else {
     closeCnt = 0;
+    closeLatched = false;
   }
-  if (closeCnt >= 5 && (wake.state == WakeState::ACTIVE || wake.state == WakeState::COOLDOWN)) {
+  if (closeCnt >= 5) {
     closeCnt = 0;
-    sendKioskEvent(KioskEvent::PERSON_ABSENT);
-    sendToServer("person:0");
-    enterState(WakeState::IDLE);
+    closeLatched = true;
+    if (presentationMode) {                                                           // 발표모드 -> 일반 (화면 켜진 상태로 원래 기능 수행)
+      presentationMode = false;
+      wake.leavingCnt = 0;
+      enterState(WakeState::ACTIVE);
+    } else if (wake.state == WakeState::ACTIVE || wake.state == WakeState::COOLDOWN) { // 일반 -> 절전
+      sendKioskEvent(KioskEvent::PERSON_ABSENT);
+      sendToServer("person:0");
+      enterState(WakeState::IDLE);
+    } else {                                                                          // 절전 -> 발표모드
+      presentationMode = true;
+      sendKioskEvent(KioskEvent::PERSON_PRESENT);
+      sendToServer("person:1");
+      enterState(WakeState::ACTIVE);
+    }
+    return;
+  }
+  if (presentationMode) {                                                             // 발표모드에서는 사람 이탈 판정 안 함
     return;
   }
 
